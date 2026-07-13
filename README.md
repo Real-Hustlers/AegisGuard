@@ -140,7 +140,36 @@ AegisGuard/
 │       └── logs.json
 │
 ├── analyzer/
-├── database/
+│   ├── main.py
+│   ├── ingestion/
+│   │   ├── loader.py
+│   │   ├── validator.py
+│   │   ├── deduplicator.py
+│   │   └── importer.py
+│   │
+│   ├── detection/
+│   │   ├── engine.py
+│   │   ├── correlator.py
+│   │   ├── severity.py
+│   │   ├── recommender.py
+│   │   └── rules/
+│   │       ├── brute_force.py
+│   │       ├── privilege_escalation.py
+│   │       ├── account_compromise.py
+│   │       ├── suspicious_process.py
+│   │       └── file_tampering.py
+│   │
+│   ├── alerts/
+│   │   ├── alert.py
+│   │   └── manager.py
+│   │
+│   ├── reports/
+│   │   ├── pdf_export.py
+│   │   └── csv_export.py
+│   │
+│   └── database/
+│       ├── db_manager.py
+│       └── schema.sql
 ├── common/
 ├── config/
 ├── docs/
