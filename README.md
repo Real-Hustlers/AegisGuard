@@ -96,36 +96,52 @@ The applications communicate **only through JSON log files stored on a USB drive
 AegisGuard/
 │
 ├── collector/
+│   ├── main.py                     # Entry point
+│   │
 │   ├── collectors/
+│   │   ├── windows/
+│   │   │   ├── eventlog_reader.py
+│   │   │   ├── realtime_monitor.py
+│   │   │   └── __init__.py
+│   │   │
+│   │   ├── linux/
+│   │   │   ├── reader.py
+│   │   │   ├── monitor.py
+│   │   │   └── __init__.py
+│   │   │
+│   │   └── collector_manager.py    # Chooses Windows/Linux collector
+│   │
 │   ├── parsers/
+│   │   ├── windows/
+│   │   │   ├── parser.py
+│   │   │   └── __init__.py
+│   │   │
+│   │   ├── linux/
+│   │   │   ├── parser.py
+│   │   │   └── __init__.py
+│   │   │
+│   │   └── parser_manager.py
+│   │
 │   ├── schema/
+│   │   ├── formatter.py
+│   │   └── event_schema.py
+│   │
 │   ├── storage/
+│   │   ├── json_writer.py
+│   │   ├── usb_manager.py
+│   │   └── checksum.py
+│   │
 │   ├── utils/
-│   └── main.py
+│   │   ├── logger.py
+│   │   ├── platform_detector.py
+│   │   └── config.py
+│   │
+│   └── output/
+│       └── logs.json
 │
 ├── analyzer/
-│   ├── ingestion/
-│   ├── detection/
-│   │   ├── engine.py
-│   │   ├── correlator.py
-│   │   ├── severity.py
-│   │   ├── recommender.py
-│   │   └── rules/
-│   ├── alerts/
-│   ├── reports/
-│   ├── dashboard/
-│   └── main.py
-│
 ├── database/
-│   ├── db_manager.py
-│   ├── schema.sql
-│   └── repositories/
-│
 ├── common/
-│   ├── event_schema.py
-│   ├── constants.py
-│   └── validators.py
-│
 ├── config/
 ├── docs/
 ├── tests/
