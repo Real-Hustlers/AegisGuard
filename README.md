@@ -96,36 +96,81 @@ The applications communicate **only through JSON log files stored on a USB drive
 AegisGuard/
 │
 ├── collector/
+│   ├── main.py                     # Entry point
+│   │
 │   ├── collectors/
+│   │   ├── windows/
+│   │   │   ├── eventlog_reader.py
+│   │   │   ├── realtime_monitor.py
+│   │   │   └── __init__.py
+│   │   │
+│   │   ├── linux/
+│   │   │   ├── reader.py
+│   │   │   ├── monitor.py
+│   │   │   └── __init__.py
+│   │   │
+│   │   └── collector_manager.py    # Chooses Windows/Linux collector
+│   │
 │   ├── parsers/
+│   │   ├── windows/
+│   │   │   ├── parser.py
+│   │   │   └── __init__.py
+│   │   │
+│   │   ├── linux/
+│   │   │   ├── parser.py
+│   │   │   └── __init__.py
+│   │   │
+│   │   └── parser_manager.py
+│   │
 │   ├── schema/
+│   │   ├── formatter.py
+│   │   └── event_schema.py
+│   │
 │   ├── storage/
+│   │   ├── json_writer.py
+│   │   ├── usb_manager.py
+│   │   └── checksum.py
+│   │
 │   ├── utils/
-│   └── main.py
+│   │   ├── logger.py
+│   │   ├── platform_detector.py
+│   │   └── config.py
+│   │
+│   └── output/
+│       └── logs.json
 │
 ├── analyzer/
+│   ├── main.py
 │   ├── ingestion/
+│   │   ├── loader.py
+│   │   ├── validator.py
+│   │   ├── deduplicator.py
+│   │   └── importer.py
+│   │
 │   ├── detection/
 │   │   ├── engine.py
 │   │   ├── correlator.py
 │   │   ├── severity.py
 │   │   ├── recommender.py
 │   │   └── rules/
+│   │       ├── brute_force.py
+│   │       ├── privilege_escalation.py
+│   │       ├── account_compromise.py
+│   │       ├── suspicious_process.py
+│   │       └── file_tampering.py
+│   │
 │   ├── alerts/
+│   │   ├── alert.py
+│   │   └── manager.py
+│   │
 │   ├── reports/
-│   ├── dashboard/
-│   └── main.py
-│
-├── database/
-│   ├── db_manager.py
-│   ├── schema.sql
-│   └── repositories/
-│
+│   │   ├── pdf_export.py
+│   │   └── csv_export.py
+│   │
+│   └── database/
+│       ├── db_manager.py
+│       └── schema.sql
 ├── common/
-│   ├── event_schema.py
-│   ├── constants.py
-│   └── validators.py
-│
 ├── config/
 ├── docs/
 ├── tests/
