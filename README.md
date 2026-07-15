@@ -96,32 +96,8 @@ The applications communicate **only through JSON log files stored on a USB drive
 AegisGuard/
 │
 ├── collector/
-│   ├── main.py                     # Entry point
-│   │
 │   ├── collectors/
-│   │   ├── windows/
-│   │   │   ├── eventlog_reader.py
-│   │   │   ├── realtime_monitor.py
-│   │   │   └── __init__.py
-│   │   │
-│   │   ├── linux/
-│   │   │   ├── reader.py
-│   │   │   ├── monitor.py
-│   │   │   └── __init__.py
-│   │   │
-│   │   └── collector_manager.py    # Chooses Windows/Linux collector
-│   │
 │   ├── parsers/
-│   │   ├── windows/
-│   │   │   ├── parser.py
-│   │   │   └── __init__.py
-│   │   │
-│   │   ├── linux/
-│   │   │   ├── parser.py
-│   │   │   └── __init__.py
-│   │   │
-│   │   └── parser_manager.py
-│   │
 │   ├── schema/
 │   │   ├── formatter.py
 │   │   └── event_schema.py
@@ -140,7 +116,6 @@ AegisGuard/
 │       └── logs.json
 │
 ├── analyzer/
-│   ├── main.py
 │   ├── ingestion/
 │   │   ├── loader.py
 │   │   ├── validator.py
@@ -164,12 +139,14 @@ AegisGuard/
 │   │   └── manager.py
 │   │
 │   ├── reports/
-│   │   ├── pdf_export.py
-│   │   └── csv_export.py
-│   │
-│   └── database/
-│       ├── db_manager.py
-│       └── schema.sql
+│   ├── dashboard/
+│   └── main.py
+│
+├── database/
+│   ├── db_manager.py
+│   ├── schema.sql
+│   └── repositories/
+│
 ├── common/
 ├── config/
 ├── docs/
