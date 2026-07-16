@@ -4,7 +4,7 @@ try:
     conn = mysql.connector.connect(
         host="localhost",
         user="root",
-        password="YOUR_MYSQL_PASSWORD"
+        password="amlpayaluga"
     )
 
     print("✅ Connected to MySQL!")
