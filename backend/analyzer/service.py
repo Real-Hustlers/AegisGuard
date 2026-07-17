@@ -1,74 +1,158 @@
+from database import get_connection
+
+
 def get_dashboard_summary():
-    """Return dummy dashboard statistics and chart payloads."""
+    """Return dashboard statistics from SQLite."""
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Total events
+    cursor.execute("SELECT COUNT(*) FROM security_logs")
+    total_events = cursor.fetchone()[0]
+
+    # Total devices
+    cursor.execute("SELECT COUNT(DISTINCT hostname) FROM security_logs")
+    total_devices = cursor.fetchone()[0]
+
+    # Critical threats
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM security_logs
+        WHERE UPPER(severity)='CRITICAL'
+    """)
+    total_threats = cursor.fetchone()[0]
+
+    # Active alerts (Critical + High)
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM security_logs
+        WHERE UPPER(severity) IN ('CRITICAL','HIGH')
+    """)
+    total_alerts = cursor.fetchone()[0]
+
+    # Severity distribution
+    cursor.execute("""
+        SELECT severity, COUNT(*)
+        FROM security_logs
+        GROUP BY severity
+    """)
+
+    severity_rows = cursor.fetchall()
+
+    distribution_labels = []
+    distribution_values = []
+
+    for row in severity_rows:
+        distribution_labels.append(row["severity"])
+        distribution_values.append(row["COUNT(*)"])
+
+    # Timeline (group by hour)
+    cursor.execute("""
+        SELECT
+            strftime('%H:00', timestamp) AS hour,
+            COUNT(*) AS total
+        FROM security_logs
+        GROUP BY hour
+        ORDER BY hour
+    """)
+
+    timeline_rows = cursor.fetchall()
+
+    timeline_labels = []
+    timeline_values = []
+
+    for row in timeline_rows:
+        timeline_labels.append(row["hour"])
+        timeline_values.append(row["total"])
+
+    conn.close()
+
     return {
-        "events": 12034,
-        "threats": 24,
-        "devices": 36,
-        "alerts": 3,
+        "events": total_events,
+        "threats": total_threats,
+        "devices": total_devices,
+        "alerts": total_alerts,
+
         "timeline": {
-            "labels": ["00:00", "02:00", "04:00", "06:00", "08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00", "22:00"],
-            "values": [12, 10, 8, 12, 35, 55, 50, 65, 50, 40, 32, 28],
+            "labels": timeline_labels,
+            "values": timeline_values,
         },
+
         "distribution": {
-            "labels": ["Linux Servers", "Win Workstations", "VMs (VirtualBox)", "Network Devices"],
-            "values": [14, 22, 8, 6],
+            "labels": distribution_labels,
+            "values": distribution_values,
         },
     }
 
 
 def get_events():
-    """Return dummy event logs with the shape expected by the frontend."""
-    return [
-        {
-            "id": "LOG-7821",
-            "timestamp": "2026-07-13 14:32:07",
-            "hostname": "SRV-ALPHA",
-            "ip": "192.168.1.104",
-            "severity": "Critical",
-            "event": "SSH brute-force detected — 48 failed attempts in 60s",
-        },
-        {
-            "id": "LOG-7820",
-            "timestamp": "2026-07-13 14:31:44",
-            "hostname": "WS-003",
-            "ip": "192.168.1.87",
-            "severity": "High",
-            "event": "Nmap port scan signature identified on internal interface",
-        },
-        {
-            "id": "LOG-7819",
-            "timestamp": "2026-07-13 14:30:11",
-            "hostname": "VM-GUEST-2",
-            "ip": "192.168.2.15",
-            "severity": "High",
-            "event": "Hydra credential stuffing pattern on service port 8080",
-        },
-        {
-            "id": "LOG-7818",
-            "timestamp": "2026-07-13 14:28:56",
-            "hostname": "GW-MAIN",
-            "ip": "192.168.1.1",
-            "severity": "Medium",
-            "event": "Unusual outbound traffic spike — 3.2GB in 5 minutes",
-        },
-    ]
+    """Return event logs."""
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            log_id,
+            timestamp,
+            hostname,
+            source_ip,
+            severity,
+            raw_log
+        FROM security_logs
+        ORDER BY timestamp DESC
+    """)
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    events = []
+
+    for row in rows:
+        events.append({
+            "id": row["log_id"],
+            "timestamp": row["timestamp"],
+            "hostname": row["hostname"],
+            "ip": row["source_ip"],
+            "severity": row["severity"],
+            "event": row["raw_log"]
+        })
+
+    return events
 
 
 def get_alerts():
-    """Return dummy alert cards for the dashboard."""
-    return [
-        {
-            "id": "ALT-301",
-            "severity": "Critical",
-            "title": "SSH Brute Force in Progress",
-            "device": "SRV-ALPHA",
-            "time": "2 min ago",
-        },
-        {
-            "id": "ALT-300",
-            "severity": "High",
-            "title": "Port Scan from Internal Host",
-            "device": "WS-003",
-            "time": "3 min ago",
-        },
-    ]
+    """Return latest Critical and High alerts."""
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            log_id,
+            severity,
+            hostname,
+            raw_log,
+            timestamp
+        FROM security_logs
+        WHERE UPPER(severity) IN ('CRITICAL', 'HIGH')
+        ORDER BY timestamp DESC
+        LIMIT 5
+    """)
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    alerts = []
+
+    for row in rows:
+        alerts.append({
+            "id": row["log_id"],
+            "severity": row["severity"],
+            "title": row["raw_log"],
+            "device": row["hostname"],
+            "time": row["timestamp"]
+        })
+
+    return alerts
