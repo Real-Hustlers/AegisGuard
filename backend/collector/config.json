@@ -1,0 +1,21 @@
+{
+    "log_name": "Security",
+
+    "event_ids": [
+        4624,
+        4625,
+        4663,
+        4688,
+        4798,
+        5156,
+        5158
+    ],
+
+    "max_events": 500,
+
+    "hours": 24,
+
+    "output_file": "windows_logs.json",
+
+    "raw_output_file": "raw_security_logs.json"
+}
