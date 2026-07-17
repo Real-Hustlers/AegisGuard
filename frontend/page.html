@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEGISGUARD - Security Overview</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-base: #060b11;
+            --bg-panel: #0d1520;
+            --bg-panel-hover: #15202e;
+            --border-color: #1a2736;
+            --text-main: #94a3b8;
+            --text-light: #e2e8f0;
+            --cyan: #00f0ff;
+            --cyan-dim: rgba(0, 240, 255, 0.1);
+            --red: #ff4757;
+            --red-dim: rgba(255, 71, 87, 0.1);
+            --orange: #ffa502;
+            --orange-dim: rgba(255, 165, 2, 0.1);
+            --green: #2ed573;
+            --font-sans: 'Inter', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            font-size: 13px;
+        }
+
+        /* Typography & Utilities */
+        h1, h2, h3, h4 { color: var(--text-light); font-weight: 500; }
+        .mono { font-family: var(--font-mono); }
+        .text-cyan { color: var(--cyan); }
+        .text-red { color: var(--red); }
+        .text-orange { color: var(--orange); }
+        .text-green { color: var(--green); }
+        .text-white { color: var(--text-light); }
+        
+        .badge {
+            padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid transparent;
+        }
+        .badge-live { background: var(--cyan-dim); color: var(--cyan); border-color: var(--cyan); }
+        .badge-critical { background: var(--red-dim); color: var(--red); border-color: var(--red); }
+        .badge-high { background: var(--orange-dim); color: var(--orange); border-color: var(--orange); }
+        .badge-medium { background: rgba(255, 211, 42, 0.1); color: #ffd32a; border-color: #ffd32a; }
+        .badge-low { background: rgba(30, 144, 255, 0.1); color: #1e90ff; border-color: #1e90ff; }
+        .badge-info { border-color: var(--text-main); color: var(--text-main); }
+        
+        .btn-outline {
+            background: transparent; border: 1px solid var(--border-color); color: var(--cyan);
+            padding: 6px 12px; border-radius: 4px; font-size: 11px; font-weight: 600;
+            cursor: pointer; transition: 0.2s;
+        }
+        .btn-outline:hover { background: var(--cyan-dim); border-color: var(--cyan); }
+
+        /* Layout */
+        .sidebar {
+            width: 260px; background-color: var(--bg-base); border-right: 1px solid var(--border-color);
+            display: flex; flex-direction: column; padding: 20px 0; z-index: 10;
+        }
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* Sidebar Elements */
+        .brand { padding: 0 20px 20px; display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; letter-spacing: 1px; color: var(--cyan); border-bottom: 1px solid var(--border-color); }
+        .sys-status-small { padding: 15px 20px; font-size: 11px; font-weight: 600; color: var(--orange); display: flex; gap: 15px; border-bottom: 1px solid var(--border-color); }
+        .system-time { padding: 20px; }
+        .system-time .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
+        .system-time .time { font-size: 20px; font-weight: 700; color: var(--cyan); font-family: var(--font-mono); }
+        
+        .nav-menu { list-style: none; flex: 1; }
+        .nav-item { padding: 12px 20px; display: flex; align-items: center; gap: 12px; cursor: pointer; color: var(--text-light); border-left: 3px solid transparent; }
+        .nav-item:hover { background-color: var(--bg-panel); }
+        .nav-item.active { background-color: var(--bg-panel); border-left-color: var(--cyan); color: var(--cyan); }
+        .nav-badge { margin-left: auto; background: var(--border-color); padding: 2px 6px; border-radius: 4px; font-size: 10px; }
+
+        .sidebar-footer { padding: 20px; font-size: 10px; color: #64748b; font-family: var(--font-mono); }
+
+        /* Topbar */
+        .topbar { height: 60px; background-color: var(--bg-base); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
+        .breadcrumbs { font-size: 12px; letter-spacing: 0.5px; text-transform: uppercase;}
+        .breadcrumbs span { color: var(--text-light); margin-right: 8px;}
+        .breadcrumbs .current { color: var(--text-main); }
+        
+        .topbar-actions { display: flex; align-items: center; gap: 20px; }
+        .status-indicators { display: flex; gap: 15px; font-size: 11px; font-weight: 600; }
+        .status-dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+        .dot-green { background-color: var(--green); box-shadow: 0 0 8px var(--green); }
+        .dot-orange { background-color: var(--orange); }
+        
+        .user-profile { display: flex; align-items: center; gap: 10px; border-left: 1px solid var(--border-color); padding-left: 20px;}
+        .avatar { width: 32px; height: 32px; background: #1e293b; color: var(--cyan); display: flex; align-items: center; justify-content: center; border-radius: 4px; font-weight: 600; }
+
+        /* Shared Panel Styles */
+        .view-section { display: none; flex: 1; overflow-y: auto; padding: 24px; }
+        .view-section.active { display: block; }
+        
+        .panel { background-color: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 20px; margin-bottom: 24px; }
+        .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .panel-title { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-light); margin-bottom: 4px; }
+        .panel-subtitle { font-size: 12px; margin-bottom: 20px; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-main); padding: 12px 0; border-bottom: 1px solid var(--border-color); }
+        td { padding: 14px 0; border-bottom: 1px solid var(--border-color); font-size: 13px; }
+        
+        /* View 1: Dashboard */
+        .grid-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 24px; }
+        .stat-value { font-size: 32px; font-weight: 600; font-family: var(--font-mono); margin-bottom: 5px; }
+        .stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+        .grid-main { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 24px; }
+        
+        .alert-card { background-color: var(--bg-base); border: 1px solid var(--border-color); padding: 15px; border-radius: 6px; position: relative; margin-bottom: 12px;}
+        .alert-card.critical { border-color: var(--red-dim); }
+        .alert-card.high { border-color: var(--orange-dim); }
+
+        /* View 3: Threats */
+        .threat-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
+        .threat-box { background: var(--bg-panel); border: 1px solid var(--border-color); padding: 20px; border-radius: 6px; display: flex; align-items: center; gap: 15px;}
+        .threat-box.critical { border-color: var(--red-dim); }
+        .threat-row { display: flex; align-items: center; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid var(--border-color); }
+        
+        /* View 4: Devices */
+        .device-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        .device-card { background: var(--bg-panel); border: 1px solid var(--border-color); border-top: 3px solid var(--green); border-radius: 6px; padding: 15px; }
+        .device-card.critical { border-top-color: var(--red); background: linear-gradient(180deg, rgba(255,71,87,0.05) 0%, rgba(13,21,32,1) 100%); }
+        .device-card.warning { border-top-color: var(--orange); }
+
+        /* View 5: Settings */
+        .settings-group { margin-bottom: 30px; }
+        .settings-group-title { font-size: 11px; text-transform: uppercase; color: var(--cyan); letter-spacing: 1px; margin-bottom: 15px; }
+        .settings-row { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: var(--bg-base); border: 1px solid var(--border-color); border-bottom: none; }
+        .settings-row:first-of-type { border-radius: 6px 6px 0 0; }
+        .settings-row:last-of-type { border-bottom: 1px solid var(--border-color); border-radius: 0 0 6px 6px; }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-base); }
+        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #2d3748; }
+    </style>
+</head>
+<body>
+
+    <aside class="sidebar">
+        <div class="brand"><i class="ph ph-shield-check"></i> AEGISGUARD</div>
+        
+        <div class="sys-status-small">
+            <span><i class="ph ph-wifi-slash"></i> AIR-GAPPED</span>
+            <span>• OFFLINE</span>
+        </div>
+
+        <div class="system-time">
+            <div class="label">System Time</div>
+            <span class="time" id="clock">00:00:00</span>
+            <span class="date mono" style="font-size: 12px; margin-left: 5px;">13 Jul 2026</span>
+        </div>
+
+        <ul class="nav-menu">
+            <li class="nav-item active" data-target="view-dashboard">
+                <i class="ph ph-squares-four"></i> Dashboard
+            </li>
+            <li class="nav-item" data-target="view-logs">
+                <i class="ph ph-terminal-window"></i> Event Logs
+                <span class="nav-badge">1k+</span>
+            </li>
+            <li class="nav-item" data-target="view-threats">
+                <i class="ph ph-warning"></i> Threats
+                <span class="nav-badge" style="border: 1px solid var(--border-color)">3</span>
+            </li>
+            <li class="nav-item" data-target="view-devices">
+                <i class="ph ph-hard-drives"></i> Devices
+            </li>
+            <li class="nav-item" data-target="view-settings">
+                <i class="ph ph-gear"></i> Settings
+            </li>
+        </ul>
+
+        <div class="sidebar-footer">
+            VERSION 1.0.0-BETA<br>SIH25235 • Real Hustlers
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="topbar">
+            <div class="breadcrumbs">
+                <span>AEGISGUARD</span> > <span class="current" id="breadcrumb-current">SECURITY OVERVIEW</span>
+            </div>
+            <div class="topbar-actions">
+                <div class="status-indicators">
+                    <span class="text-green"><span class="status-dot dot-green"></span> SYSTEM ACTIVE</span>
+                    <span class="text-orange"><span class="status-dot dot-orange"></span> OFFLINE</span>
+                </div>
+                <i class="ph ph-bell" style="font-size: 18px; cursor: pointer; position:relative;">
+                    <span style="position:absolute; top:-2px; right:-2px; width:6px; height:6px; background:var(--red); border-radius:50%;"></span>
+                </i>
+                <div class="user-profile">
+                    <div class="avatar">RH</div>
+                    <div class="user-info">
+                        <div class="name text-white">Real Hustlers</div>
+                        <div class="role" style="font-size:11px">Analyst</div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <section id="view-dashboard" class="view-section active">
+            <div class="grid-stats">
+                <div class="panel" style="margin:0"><div class="panel-header"><i class="ph ph-activity text-cyan" style="font-size:20px"></i><span class="badge badge-live">• LIVE</span></div><div class="stat-value text-cyan">12,034</div><div class="stat-label">Total Events</div><div class="text-main" style="font-size:12px">↑ 847 in last hour</div></div>
+                <div class="panel" style="margin:0"><div class="panel-header"><i class="ph ph-warning-circle text-red" style="font-size:20px"></i><span class="badge text-red">• LIVE</span></div><div class="stat-value text-red">24</div><div class="stat-label">Threats Detected</div><div class="text-main" style="font-size:12px">3 critical · 8 high · 13 med</div></div>
+                <div class="panel" style="margin:0"><div class="panel-header"><i class="ph ph-hard-drives text-green" style="font-size:20px"></i></div><div class="stat-value text-green">36</div><div class="stat-label">Devices Monitored</div><div class="text-main" style="font-size:12px">33 online · 2 suspect · 1 compromised</div></div>
+                <div class="panel" style="margin:0"><div class="panel-header"><i class="ph ph-bell text-orange" style="font-size:20px"></i><span class="badge text-orange">• LIVE</span></div><div class="stat-value text-orange">3</div><div class="stat-label">Active Alerts</div><div class="text-main" style="font-size:12px">Acknowledge to clear</div></div>
+            </div>
+            <div class="grid-main">
+                <div class="panel">
+                    <div style="display:flex; justify-content:space-between;">
+                        <div><div class="panel-title">Threat Activity Timeline</div><div class="panel-subtitle">Last 24 hours — events, threats, alerts</div></div>
+                        <div style="cursor:pointer; display:flex; align-items:center; gap:5px;"><i class="ph ph-arrows-clockwise"></i> Refresh</div>
+                    </div>
+                    <div style="height: 300px; position: relative;"><canvas id="threatChart"></canvas></div>
+                </div>
+                <div class="panel">
+                    <div style="display:flex; justify-content:space-between; margin-bottom: 20px;">
+                        <div class="panel-title" style="margin:0;">Active Alerts</div>
+                        <span class="badge badge-critical" style="font-size:9px;">3 PENDING</span>
+                    </div>
+                    <div class="alert-card critical">
+                        <i class="ph ph-check-circle" style="position:absolute; right:15px; top:15px; cursor:pointer;"></i>
+                        <div style="margin-bottom:10px;"><span class="badge badge-critical">CRITICAL</span><span class="mono" style="margin-left:8px; font-size:11px;">ALT-301</span></div>
+                        <div class="text-white" style="font-weight:500; margin-bottom:4px;">SSH Brute Force in Progress</div>
+                        <div class="mono" style="font-size:11px; margin-bottom:8px;">SRV-ALPHA (192.168.1.104)</div>
+                        <div style="font-size:11px;">2 min ago</div>
+                    </div>
+                    <div class="alert-card high">
+                        <i class="ph ph-check-circle" style="position:absolute; right:15px; top:15px; cursor:pointer;"></i>
+                        <div style="margin-bottom:10px;"><span class="badge badge-high">HIGH</span><span class="mono" style="margin-left:8px; font-size:11px;">ALT-300</span></div>
+                        <div class="text-white" style="font-weight:500; margin-bottom:4px;">Port Scan from Internal Host</div>
+                        <div class="mono" style="font-size:11px; margin-bottom:8px;">WS-003 (192.168.1.87)</div>
+                        <div style="font-size:11px;">3 min ago</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="view-logs" class="view-section">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px;">
+                <div>
+                    <h2 style="font-size:16px; letter-spacing:1px; text-transform:uppercase;">Event Logs</h2>
+                    <div class="panel-subtitle">Collected from all monitored devices via syslog agent</div>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <span class="badge" style="border-color:var(--cyan); color:var(--cyan)">ALL</span>
+                    <span class="badge" style="border-color:var(--border-color)">CRITICAL</span>
+                    <span class="badge" style="border-color:var(--border-color)">HIGH</span>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px; color:var(--text-main)">
+                    <i class="ph ph-magnifying-glass"></i>
+                    <input type="text" placeholder="Search logs by device, IP, or keyword..." style="background:transparent; border:none; color:white; width:100%; outline:none; font-family:var(--font-sans)">
+                </div>
+                <div style="overflow-x:auto;">
+                    <table>
+                        <thead><tr><th>LOG ID</th><th>TIME</th><th>DEVICE</th><th>SOURCE IP</th><th>SEVERITY</th><th>EVENT</th></tr></thead>
+                        <tbody>
+                            <tr><td class="mono">LOG-7821</td><td class="mono text-cyan">14:32:07</td><td class="mono text-white">SRV-ALPHA</td><td class="mono text-white">192.168.1.104</td><td><span class="badge badge-critical">CRITICAL</span></td><td class="text-white">SSH brute-force detected — 48 failed attempts in 60s</td></tr>
+                            <tr><td class="mono">LOG-7820</td><td class="mono text-cyan">14:31:44</td><td class="mono text-white">WS-003</td><td class="mono text-white">192.168.1.87</td><td><span class="badge badge-high">HIGH</span></td><td class="text-white">Nmap port scan signature identified on internal interface</td></tr>
+                            <tr><td class="mono">LOG-7819</td><td class="mono text-cyan">14:30:11</td><td class="mono text-white">VM-GUEST-2</td><td class="mono text-white">192.168.2.15</td><td><span class="badge badge-high">HIGH</span></td><td class="text-white">Hydra credential stuffing pattern on service port 8080</td></tr>
+                            <tr><td class="mono">LOG-7818</td><td class="mono text-cyan">14:28:56</td><td class="mono text-white">GW-MAIN</td><td class="mono text-white">192.168.1.1</td><td><span class="badge badge-medium">MEDIUM</span></td><td class="text-white">Unusual outbound traffic spike — 3.2GB in 5 minutes</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">Device Status Distribution</div>
+                <div style="height: 200px; position: relative;"><canvas id="distChart"></canvas></div>
+            </div>
+        </section>
+
+        <section id="view-threats" class="view-section">
+            <h2 style="font-size:16px; letter-spacing:1px; text-transform:uppercase;">Threat Intelligence</h2>
+            <div class="panel-subtitle">Active threats requiring immediate attention</div>
+
+            <div class="threat-summary">
+                <div class="threat-box critical">
+                    <i class="ph ph-x-circle text-red" style="font-size:24px;"></i>
+                    <div><div class="text-red" style="font-size:24px; font-weight:700;">1</div><div style="font-size:11px; text-transform:uppercase; letter-spacing:1px;">Critical Threats</div></div>
+                </div>
+                <div class="threat-box">
+                    <i class="ph ph-warning text-orange" style="font-size:24px;"></i>
+                    <div><div class="text-orange" style="font-size:24px; font-weight:700;">2</div><div style="font-size:11px; text-transform:uppercase; letter-spacing:1px;">High Severity</div></div>
+                </div>
+                <div class="threat-box">
+                    <i class="ph ph-chart-line-up text-cyan" style="font-size:24px;"></i>
+                    <div><div class="text-cyan" style="font-size:24px; font-weight:700;">3</div><div style="font-size:11px; text-transform:uppercase; letter-spacing:1px;">Attack Patterns</div></div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title" style="margin-bottom:15px;">Critical & High Severity Events</div>
+                
+                <div class="threat-row">
+                    <div style="display:flex; gap:15px; align-items:flex-start;">
+                        <i class="ph ph-x-circle text-red" style="font-size:18px; margin-top:2px;"></i>
+                        <div>
+                            <div style="margin-bottom:5px;"><span class="badge badge-critical">CRITICAL</span> <span class="mono" style="font-size:11px; margin-left:8px;">LOG-7821 · 14:32:07</span></div>
+                            <div class="text-white" style="font-size:14px; margin-bottom:5px;">SSH brute-force detected — 48 failed attempts in 60s</div>
+                            <div class="mono" style="font-size:11px;">SRV-ALPHA · 192.168.1.104</div>
+                        </div>
+                    </div>
+                    <button class="btn-outline">INVESTIGATE</button>
+                </div>
+                
+                <div class="threat-row">
+                    <div style="display:flex; gap:15px; align-items:flex-start;">
+                        <i class="ph ph-warning-circle text-orange" style="font-size:18px; margin-top:2px;"></i>
+                        <div>
+                            <div style="margin-bottom:5px;"><span class="badge badge-high">HIGH</span> <span class="mono" style="font-size:11px; margin-left:8px;">LOG-7820 · 14:31:44</span></div>
+                            <div class="text-white" style="font-size:14px; margin-bottom:5px;">Nmap port scan signature identified on internal interface</div>
+                            <div class="mono" style="font-size:11px;">WS-003 · 192.168.1.87</div>
+                        </div>
+                    </div>
+                    <button class="btn-outline">INVESTIGATE</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="view-devices" class="view-section">
+            <div style="display:flex; justify-content:space-between; margin-bottom:24px;">
+                <div>
+                    <h2 style="font-size:16px; letter-spacing:1px; text-transform:uppercase;">Monitored Devices</h2>
+                    <div class="panel-subtitle" style="margin:0">Air-gapped network — 36 total devices</div>
+                </div>
+                <button class="btn-outline" style="display:flex; align-items:center; gap:5px;"><i class="ph ph-arrows-clockwise"></i> SYNC</button>
+            </div>
+
+            <div class="device-grid">
+                <div class="device-card critical">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                        <div class="text-white" style="font-weight:600; display:flex; align-items:center; gap:8px;"><span class="status-dot dot-red" style="background:var(--red)"></span> SRV-ALPHA</div>
+                        <i class="ph ph-eye text-main"></i>
+                    </div>
+                    <div style="font-size:11px; margin-bottom:2px;">Linux Server</div>
+                    <div class="mono text-cyan" style="font-size:12px; margin-bottom:20px;">192.168.1.104</div>
+                    <div style="display:flex; justify-content:space-between; font-size:11px;">
+                        <span>1,847 events</span><span class="text-white">Just now</span>
+                    </div>
+                </div>
+                <div class="device-card warning">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                        <div class="text-white" style="font-weight:600; display:flex; align-items:center; gap:8px;"><span class="status-dot dot-orange"></span> WS-003</div>
+                        <i class="ph ph-eye text-main"></i>
+                    </div>
+                    <div style="font-size:11px; margin-bottom:2px;">Win Workstation</div>
+                    <div class="mono text-cyan" style="font-size:12px; margin-bottom:20px;">192.168.1.87</div>
+                    <div style="display:flex; justify-content:space-between; font-size:11px;">
+                        <span>432 events</span><span class="text-white">1 min</span>
+                    </div>
+                </div>
+                <div class="device-card warning">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                        <div class="text-white" style="font-weight:600; display:flex; align-items:center; gap:8px;"><span class="status-dot dot-orange"></span> VM-GUEST-2</div>
+                        <i class="ph ph-eye text-main"></i>
+                    </div>
+                    <div style="font-size:11px; margin-bottom:2px;">VirtualBox VM</div>
+                    <div class="mono text-cyan" style="font-size:12px; margin-bottom:20px;">192.168.2.15</div>
+                    <div style="display:flex; justify-content:space-between; font-size:11px;">
+                        <span>678 events</span><span class="text-white">1 min</span>
+                    </div>
+                </div>
+                <div class="device-card">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                        <div class="text-white" style="font-weight:600; display:flex; align-items:center; gap:8px;"><span class="status-dot dot-green"></span> GW-MAIN</div>
+                        <i class="ph ph-eye text-main"></i>
+                    </div>
+                    <div style="font-size:11px; margin-bottom:2px;">Network Gateway</div>
+                    <div class="mono text-cyan" style="font-size:12px; margin-bottom:20px;">192.168.1.1</div>
+                    <div style="display:flex; justify-content:space-between; font-size:11px;">
+                        <span>3,241 events</span><span class="text-white">Just now</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="view-settings" class="view-section">
+            <h2 style="font-size:16px; letter-spacing:1px; text-transform:uppercase;">System Settings</h2>
+            <div class="panel-subtitle">AegisGuard configuration — SIH25235</div>
+
+            <div class="settings-group">
+                <div class="settings-group-title">Log Collection</div>
+                <div class="settings-row">
+                    <div><div class="text-white" style="font-weight:500; margin-bottom:4px;">Syslog Port</div><div style="font-size:11px;">UDP/TCP</div></div>
+                    <div style="display:flex; align-items:center; gap:15px;"><span class="mono text-cyan">514</span> <span class="badge" style="border:1px solid var(--border-color); cursor:pointer;">EDIT</span></div>
+                </div>
+                <div class="settings-row">
+                    <div><div class="text-white" style="font-weight:500; margin-bottom:4px;">Collection Interval</div><div style="font-size:11px;">Polling frequency</div></div>
+                    <div style="display:flex; align-items:center; gap:15px;"><span class="mono text-cyan">5s</span> <span class="badge" style="border:1px solid var(--border-color); cursor:pointer;">EDIT</span></div>
+                </div>
+                <div class="settings-row">
+                    <div><div class="text-white" style="font-weight:500; margin-bottom:4px;">Max Log Size</div><div style="font-size:11px;">Per device</div></div>
+                    <div style="display:flex; align-items:center; gap:15px;"><span class="mono text-cyan">500 MB</span> <span class="badge" style="border:1px solid var(--border-color); cursor:pointer;">EDIT</span></div>
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <div class="settings-group-title">Threat Detection</div>
+                <div class="settings-row">
+                    <div><div class="text-white" style="font-weight:500; margin-bottom:4px;">Pattern Engine</div><div style="font-size:11px;">Active</div></div>
+                    <div style="display:flex; align-items:center; gap:15px;"><span class="mono text-cyan">Regex + ML Heuristics</span> <span class="badge" style="border:1px solid var(--border-color); cursor:pointer;">EDIT</span></div>
+                </div>
+            </div>
+            
+        </section>
+
+    </main>
+
+    <script>
+        // Clock
+        function updateTime() {
+            const timeString = new Date().toLocaleTimeString('en-GB', { hour12: false });
+            document.getElementById('clock').textContent = timeString;
+        }
+        setInterval(updateTime, 1000); updateTime();
+
+        // Navigation Logic (SPA Tab Switching)
+        const navItems = document.querySelectorAll('.nav-item');
+        const views = document.querySelectorAll('.view-section');
+        const breadcrumb = document.getElementById('breadcrumb-current');
+
+        navItems.forEach(item => {
+            item.addEventListener('click', () => {
+                // Update Sidebar UI
+                navItems.forEach(nav => nav.classList.remove('active'));
+                item.classList.add('active');
+
+                // Update Breadcrumb
+                breadcrumb.textContent = item.textContent.trim().toUpperCase() + " OVERVIEW";
+                if(item.textContent.trim() === "Settings") breadcrumb.textContent = "SYSTEM SETTINGS";
+                if(item.textContent.trim() === "Event Logs") breadcrumb.textContent = "EVENT LOGS";
+
+                // Show corresponding section
+                const targetId = item.getAttribute('data-target');
+                views.forEach(view => {
+                    view.classList.remove('active');
+                    if(view.id === targetId) view.classList.add('active');
+                });
+            });
+        });
+
+        // Chart 1: Dashboard Line Chart
+        const ctxLine = document.getElementById('threatChart').getContext('2d');
+        let gradLine = ctxLine.createLinearGradient(0, 0, 0, 300);
+        gradLine.addColorStop(0, 'rgba(255, 165, 2, 0.2)');
+        gradLine.addColorStop(1, 'rgba(255, 165, 2, 0)');
+
+        new Chart(ctxLine, {
+            type: 'line',
+            data: {
+                labels: ['00:00', '02:00', '04:00', '06:00', '08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00'],
+                datasets: [{
+                    data: [12, 10, 8, 12, 35, 55, 50, 65, 50, 40, 32, 28],
+                    borderColor: '#ffa502', backgroundColor: gradLine, borderWidth: 2, pointRadius: 0, fill: true, tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: '#64748b', font: { family: "'JetBrains Mono'", size: 10 } } },
+                    y: { grid: { color: '#1a2736', borderDash: [5, 5] }, ticks: { color: '#64748b', font: { family: "'JetBrains Mono'", size: 10 } }, min: 0, max: 80 }
+                }
+            }
+        });
+
+        // Chart 2: Event Logs Bar Chart
+        const ctxBar = document.getElementById('distChart').getContext('2d');
+        new Chart(ctxBar, {
+            type: 'bar',
+            data: {
+                labels: ['Linux Servers', 'Win Workstations', 'VMs (VirtualBox)', 'Network Devices'],
+                datasets: [{
+                    data: [14, 22, 8, 6],
+                    backgroundColor: '#ff4757',
+                    barPercentage: 0.7
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: '#64748b', font: { family: "'JetBrains Mono'", size: 11 } } },
+                    y: { grid: { display: false }, ticks: { color: '#64748b', font: { family: "'JetBrains Mono'", size: 10 }, stepSize: 7 }, min: 0, max: 28 }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
