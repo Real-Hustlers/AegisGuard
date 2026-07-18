@@ -20,10 +20,8 @@ json_path = os.path.abspath(
         os.path.dirname(__file__),
         "..",
         "backend",
-        "analyzer",
-        "ingestion",
-        "output",
-        "merged_logs.json"
+        "collector",
+        "windows_logs.json"
     )
 )
 
