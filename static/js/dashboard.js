@@ -8,15 +8,18 @@ function setText(id, value) {
 }
 
 function severityBadgeClass(severity) {
-    if (severity === 'Critical') return 'badge-critical';
-    if (severity === 'High') return 'badge-high';
-    if (severity === 'Medium') return 'badge-medium';
+    const normalized = String(severity || '').toLowerCase();
+    if (normalized === 'critical') return 'badge-critical';
+    if (normalized === 'high') return 'badge-high';
+    if (normalized === 'medium') return 'badge-medium';
+    if (normalized === 'low') return 'badge-low';
     return 'badge-info';
 }
 
 function severityCardClass(severity) {
-    if (severity === 'Critical') return 'critical';
-    if (severity === 'High') return 'high';
+    const normalized = String(severity || '').toLowerCase();
+    if (normalized === 'critical') return 'critical';
+    if (normalized === 'high') return 'high';
     return '';
 }
 
@@ -55,16 +58,22 @@ function renderEvents(events) {
     const tableBody = document.getElementById('eventTable');
     if (!tableBody) return;
 
-    tableBody.innerHTML = events.map((event) => `
-        <tr>
-            <td class="mono">${event.id}</td>
-            <td class="mono text-cyan">${event.timestamp}</td>
-            <td class="mono text-white">${event.hostname}</td>
-            <td class="mono text-white">${event.ip}</td>
-            <td><span class="badge ${severityBadgeClass(event.severity)}">${event.severity.toUpperCase()}</span></td>
-            <td class="text-white">${event.event}</td>
-        </tr>
-    `).join('');
+    tableBody.innerHTML = events.map((event) => {
+        const threatLevel = event.threat_level || event.severity || 'LOW';
+        const mlPrediction = event.ml_prediction || 'UNKNOWN';
+        return `
+            <tr>
+                <td class="mono">${event.id}</td>
+                <td class="mono text-cyan">${event.timestamp}</td>
+                <td class="mono text-white">${event.hostname}</td>
+                <td class="mono text-white">${event.ip}</td>
+                <td><span class="badge ${severityBadgeClass(event.severity)}">${String(event.severity || 'LOW').toUpperCase()}</span></td>
+                <td><span class="badge badge-info">${String(mlPrediction).toUpperCase()}</span></td>
+                <td><span class="badge ${severityBadgeClass(threatLevel)}">${String(threatLevel).toUpperCase()}</span></td>
+                <td class="text-white">${event.event}</td>
+            </tr>
+        `;
+    }).join('');
 }
 
 function renderCharts(data) {

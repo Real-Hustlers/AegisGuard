@@ -1,3 +1,10 @@
+import sys
+from pathlib import Path
+
+CURRENT_DIR = Path(__file__).resolve().parent
+if str(CURRENT_DIR) not in sys.path:
+    sys.path.insert(0, str(CURRENT_DIR))
+
 from database import get_connection
 
 
@@ -99,7 +106,11 @@ def get_events():
             hostname,
             source_ip,
             severity,
-            raw_log
+            raw_log,
+            ml_prediction,
+            threat_level,
+            threat_score,
+            threat_category
         FROM security_logs
         ORDER BY timestamp DESC
     """)
@@ -116,7 +127,11 @@ def get_events():
             "hostname": row["hostname"],
             "ip": row["source_ip"],
             "severity": row["severity"],
-            "event": row["raw_log"]
+            "event": row["raw_log"],
+            "ml_prediction": row["ml_prediction"],
+            "threat_level": row["threat_level"],
+            "threat_score": row["threat_score"],
+            "threat_category": row["threat_category"],
         })
 
     return events
