@@ -1,0 +1,64 @@
+{
+    "machine_id": "MACHINE-140",
+    "hostname": "Finance-PC",
+    "os": "Ubuntu 24.04",
+    "collection_time": "2026-07-17T10:26:24.708305",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:27:07.708281",
+            "event_type": "FAILED_LOGIN",
+            "user": "bob",
+            "source_ip": "192.168.10.83",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:31:04.708281",
+            "event_type": "FAILED_LOGIN",
+            "user": "bob",
+            "source_ip": "192.168.10.83",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:30:31.708281",
+            "event_type": "FAILED_LOGIN",
+            "user": "bob",
+            "source_ip": "192.168.10.83",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:27:09.708281",
+            "event_type": "FAILED_LOGIN",
+            "user": "bob",
+            "source_ip": "192.168.10.83",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:29:04.708281",
+            "event_type": "FAILED_LOGIN",
+            "user": "bob",
+            "source_ip": "192.168.10.83",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:29:07.708281",
+            "event_type": "FAILED_LOGIN",
+            "user": "bob",
+            "source_ip": "192.168.10.83",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:29:03.708281",
+            "event_type": "FAILED_LOGIN",
+            "user": "bob",
+            "source_ip": "192.168.10.83",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        }
+    ]
+}

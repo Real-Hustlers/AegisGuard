@@ -1,0 +1,32 @@
+{
+    "machine_id": "MACHINE-083",
+    "hostname": "Server-01",
+    "os": "Ubuntu 24.04",
+    "collection_time": "2026-07-17T10:26:24.664205",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:28:23.664187",
+            "event_type": "SUCCESSFUL_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.4.108",
+            "severity": "LOW",
+            "message": "User logged in"
+        },
+        {
+            "timestamp": "2026-07-17T10:26:30.664187",
+            "event_type": "PASSWORD_CHANGED",
+            "user": "guest",
+            "source_ip": "192.168.4.108",
+            "severity": "LOW",
+            "message": "Password changed"
+        },
+        {
+            "timestamp": "2026-07-17T10:31:16.664187",
+            "event_type": "LOGOUT",
+            "user": "guest",
+            "source_ip": "192.168.4.108",
+            "severity": "LOW",
+            "message": "User logged out"
+        }
+    ]
+}

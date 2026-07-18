@@ -1,0 +1,40 @@
+{
+    "machine_id": "MACHINE-495",
+    "hostname": "Finance-PC",
+    "os": "Windows 11",
+    "collection_time": "2026-07-17T10:26:24.958983",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:26:49.958953",
+            "event_type": "SUCCESSFUL_LOGIN",
+            "user": "admin",
+            "source_ip": "192.168.7.192",
+            "severity": "LOW",
+            "message": "User logged in"
+        },
+        {
+            "timestamp": "2026-07-17T10:30:58.958953",
+            "event_type": "FILE_MODIFIED",
+            "user": "admin",
+            "source_ip": "192.168.7.192",
+            "severity": "MEDIUM",
+            "message": "/etc/passwd"
+        },
+        {
+            "timestamp": "2026-07-17T10:28:08.958953",
+            "event_type": "FILE_DELETED",
+            "user": "admin",
+            "source_ip": "192.168.7.192",
+            "severity": "HIGH",
+            "message": "salary.xlsx"
+        },
+        {
+            "timestamp": "2026-07-17T10:28:02.958953",
+            "event_type": "USB_CONNECTED",
+            "user": "admin",
+            "source_ip": "192.168.7.192",
+            "severity": "MEDIUM",
+            "message": "USB connected"
+        }
+    ]
+}

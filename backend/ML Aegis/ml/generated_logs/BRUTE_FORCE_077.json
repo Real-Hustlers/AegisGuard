@@ -1,0 +1,56 @@
+{
+    "machine_id": "MACHINE-177",
+    "hostname": "Finance-PC",
+    "os": "Windows 11",
+    "collection_time": "2026-07-17T10:26:24.736690",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:28:26.736665",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.7.101",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:28:46.736665",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.7.101",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:30:43.736665",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.7.101",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:26:24.736665",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.7.101",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:29:28.736665",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.7.101",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:26:41.736665",
+            "event_type": "SUCCESSFUL_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.7.101",
+            "severity": "MEDIUM",
+            "message": "Successful login after failures"
+        }
+    ]
+}

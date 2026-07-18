@@ -1,0 +1,32 @@
+{
+    "machine_id": "MACHINE-306",
+    "hostname": "Server-01",
+    "os": "Windows 10",
+    "collection_time": "2026-07-17T10:26:24.825385",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:27:41.825367",
+            "event_type": "SUCCESSFUL_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.1.209",
+            "severity": "LOW",
+            "message": "Login successful"
+        },
+        {
+            "timestamp": "2026-07-17T10:31:10.825367",
+            "event_type": "SUDO_COMMAND",
+            "user": "guest",
+            "source_ip": "192.168.1.209",
+            "severity": "HIGH",
+            "message": "sudo executed"
+        },
+        {
+            "timestamp": "2026-07-17T10:27:38.825367",
+            "event_type": "PRIVILEGE_ESCALATION",
+            "user": "guest",
+            "source_ip": "192.168.1.209",
+            "severity": "CRITICAL",
+            "message": "Root privileges obtained"
+        }
+    ]
+}

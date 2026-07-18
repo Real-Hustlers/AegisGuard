@@ -1,0 +1,56 @@
+{
+    "machine_id": "MACHINE-129",
+    "hostname": "HR-PC",
+    "os": "Ubuntu 24.04",
+    "collection_time": "2026-07-17T10:26:24.699408",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:27:01.699385",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.0.129",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:30:40.699385",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.0.129",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:29:22.699385",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.0.129",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:26:52.699385",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.0.129",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:29:58.699385",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.0.129",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:26:53.699385",
+            "event_type": "SUCCESSFUL_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.0.129",
+            "severity": "MEDIUM",
+            "message": "Successful login after failures"
+        }
+    ]
+}

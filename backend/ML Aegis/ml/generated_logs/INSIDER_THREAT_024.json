@@ -1,0 +1,40 @@
+{
+    "machine_id": "MACHINE-424",
+    "hostname": "Server-01",
+    "os": "Windows 10",
+    "collection_time": "2026-07-17T10:26:24.906631",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:27:51.906602",
+            "event_type": "SUCCESSFUL_LOGIN",
+            "user": "bob",
+            "source_ip": "192.168.9.224",
+            "severity": "LOW",
+            "message": "User logged in"
+        },
+        {
+            "timestamp": "2026-07-17T10:30:34.906602",
+            "event_type": "FILE_MODIFIED",
+            "user": "bob",
+            "source_ip": "192.168.9.224",
+            "severity": "MEDIUM",
+            "message": "system32.dll"
+        },
+        {
+            "timestamp": "2026-07-17T10:27:14.906602",
+            "event_type": "FILE_DELETED",
+            "user": "bob",
+            "source_ip": "192.168.9.224",
+            "severity": "HIGH",
+            "message": "salary.xlsx"
+        },
+        {
+            "timestamp": "2026-07-17T10:30:09.906602",
+            "event_type": "USB_CONNECTED",
+            "user": "bob",
+            "source_ip": "192.168.9.224",
+            "severity": "MEDIUM",
+            "message": "USB connected"
+        }
+    ]
+}

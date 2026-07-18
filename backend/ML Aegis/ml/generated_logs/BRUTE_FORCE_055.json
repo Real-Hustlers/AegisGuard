@@ -1,0 +1,56 @@
+{
+    "machine_id": "MACHINE-155",
+    "hostname": "Dev-Server",
+    "os": "Windows 11",
+    "collection_time": "2026-07-17T10:26:24.720216",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:26:56.720193",
+            "event_type": "FAILED_LOGIN",
+            "user": "alice",
+            "source_ip": "192.168.0.74",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:27:07.720193",
+            "event_type": "FAILED_LOGIN",
+            "user": "alice",
+            "source_ip": "192.168.0.74",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:30:12.720193",
+            "event_type": "FAILED_LOGIN",
+            "user": "alice",
+            "source_ip": "192.168.0.74",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:28:07.720193",
+            "event_type": "FAILED_LOGIN",
+            "user": "alice",
+            "source_ip": "192.168.0.74",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:28:29.720193",
+            "event_type": "FAILED_LOGIN",
+            "user": "alice",
+            "source_ip": "192.168.0.74",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:27:17.720193",
+            "event_type": "FAILED_LOGIN",
+            "user": "alice",
+            "source_ip": "192.168.0.74",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        }
+    ]
+}

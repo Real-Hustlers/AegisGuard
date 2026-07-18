@@ -1,0 +1,48 @@
+{
+    "machine_id": "MACHINE-130",
+    "hostname": "HR-PC",
+    "os": "Ubuntu 24.04",
+    "collection_time": "2026-07-17T10:26:24.700288",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:31:14.700266",
+            "event_type": "FAILED_LOGIN",
+            "user": "root",
+            "source_ip": "192.168.8.28",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:27:37.700266",
+            "event_type": "FAILED_LOGIN",
+            "user": "root",
+            "source_ip": "192.168.8.28",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:28:28.700266",
+            "event_type": "FAILED_LOGIN",
+            "user": "root",
+            "source_ip": "192.168.8.28",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:30:33.700266",
+            "event_type": "FAILED_LOGIN",
+            "user": "root",
+            "source_ip": "192.168.8.28",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:26:55.700266",
+            "event_type": "FAILED_LOGIN",
+            "user": "root",
+            "source_ip": "192.168.8.28",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        }
+    ]
+}

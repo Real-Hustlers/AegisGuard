@@ -1,0 +1,40 @@
+{
+    "machine_id": "MACHINE-496",
+    "hostname": "Finance-PC",
+    "os": "Windows 10",
+    "collection_time": "2026-07-17T10:26:24.959715",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:28:55.959695",
+            "event_type": "SUCCESSFUL_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.3.225",
+            "severity": "LOW",
+            "message": "User logged in"
+        },
+        {
+            "timestamp": "2026-07-17T10:27:27.959695",
+            "event_type": "FILE_MODIFIED",
+            "user": "john",
+            "source_ip": "192.168.3.225",
+            "severity": "MEDIUM",
+            "message": "confidential.pdf"
+        },
+        {
+            "timestamp": "2026-07-17T10:27:46.959695",
+            "event_type": "FILE_DELETED",
+            "user": "john",
+            "source_ip": "192.168.3.225",
+            "severity": "HIGH",
+            "message": "/etc/shadow"
+        },
+        {
+            "timestamp": "2026-07-17T10:31:10.959695",
+            "event_type": "USB_CONNECTED",
+            "user": "john",
+            "source_ip": "192.168.3.225",
+            "severity": "MEDIUM",
+            "message": "USB connected"
+        }
+    ]
+}

@@ -1,0 +1,40 @@
+{
+    "machine_id": "MACHINE-487",
+    "hostname": "HR-PC",
+    "os": "Windows 10",
+    "collection_time": "2026-07-17T10:26:24.952012",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:26:45.951990",
+            "event_type": "SUCCESSFUL_LOGIN",
+            "user": "root",
+            "source_ip": "192.168.8.236",
+            "severity": "LOW",
+            "message": "User logged in"
+        },
+        {
+            "timestamp": "2026-07-17T10:26:34.951990",
+            "event_type": "FILE_MODIFIED",
+            "user": "root",
+            "source_ip": "192.168.8.236",
+            "severity": "MEDIUM",
+            "message": "system32.dll"
+        },
+        {
+            "timestamp": "2026-07-17T10:28:58.951990",
+            "event_type": "FILE_DELETED",
+            "user": "root",
+            "source_ip": "192.168.8.236",
+            "severity": "HIGH",
+            "message": "confidential.pdf"
+        },
+        {
+            "timestamp": "2026-07-17T10:30:03.951990",
+            "event_type": "USB_CONNECTED",
+            "user": "root",
+            "source_ip": "192.168.8.236",
+            "severity": "MEDIUM",
+            "message": "USB connected"
+        }
+    ]
+}

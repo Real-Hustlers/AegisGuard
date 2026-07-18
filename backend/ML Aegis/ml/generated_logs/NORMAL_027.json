@@ -1,0 +1,32 @@
+{
+    "machine_id": "MACHINE-027",
+    "hostname": "Finance-PC",
+    "os": "Windows 10",
+    "collection_time": "2026-07-17T10:26:24.623501",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:27:24.623484",
+            "event_type": "SUCCESSFUL_LOGIN",
+            "user": "admin",
+            "source_ip": "192.168.1.78",
+            "severity": "LOW",
+            "message": "User logged in"
+        },
+        {
+            "timestamp": "2026-07-17T10:26:46.623484",
+            "event_type": "PASSWORD_CHANGED",
+            "user": "admin",
+            "source_ip": "192.168.1.78",
+            "severity": "LOW",
+            "message": "Password changed"
+        },
+        {
+            "timestamp": "2026-07-17T10:30:59.623484",
+            "event_type": "LOGOUT",
+            "user": "admin",
+            "source_ip": "192.168.1.78",
+            "severity": "LOW",
+            "message": "User logged out"
+        }
+    ]
+}

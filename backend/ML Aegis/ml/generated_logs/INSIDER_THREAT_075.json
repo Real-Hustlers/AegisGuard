@@ -1,0 +1,40 @@
+{
+    "machine_id": "MACHINE-475",
+    "hostname": "Dev-Server",
+    "os": "Windows 10",
+    "collection_time": "2026-07-17T10:26:24.943271",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:29:29.943250",
+            "event_type": "SUCCESSFUL_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.4.180",
+            "severity": "LOW",
+            "message": "User logged in"
+        },
+        {
+            "timestamp": "2026-07-17T10:26:34.943250",
+            "event_type": "FILE_MODIFIED",
+            "user": "guest",
+            "source_ip": "192.168.4.180",
+            "severity": "MEDIUM",
+            "message": "system32.dll"
+        },
+        {
+            "timestamp": "2026-07-17T10:28:37.943250",
+            "event_type": "FILE_DELETED",
+            "user": "guest",
+            "source_ip": "192.168.4.180",
+            "severity": "HIGH",
+            "message": "database.db"
+        },
+        {
+            "timestamp": "2026-07-17T10:30:33.943250",
+            "event_type": "USB_CONNECTED",
+            "user": "guest",
+            "source_ip": "192.168.4.180",
+            "severity": "MEDIUM",
+            "message": "USB connected"
+        }
+    ]
+}

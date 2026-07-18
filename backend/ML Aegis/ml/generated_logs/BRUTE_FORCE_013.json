@@ -1,0 +1,64 @@
+{
+    "machine_id": "MACHINE-113",
+    "hostname": "Server-01",
+    "os": "Windows 10",
+    "collection_time": "2026-07-17T10:26:24.686835",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:27:43.686799",
+            "event_type": "FAILED_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.1.129",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:31:05.686799",
+            "event_type": "FAILED_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.1.129",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:31:01.686799",
+            "event_type": "FAILED_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.1.129",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:29:53.686799",
+            "event_type": "FAILED_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.1.129",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:27:28.686799",
+            "event_type": "FAILED_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.1.129",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:27:03.686799",
+            "event_type": "FAILED_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.1.129",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:26:47.686799",
+            "event_type": "FAILED_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.1.129",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        }
+    ]
+}

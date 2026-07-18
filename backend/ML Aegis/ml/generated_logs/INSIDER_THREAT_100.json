@@ -1,0 +1,40 @@
+{
+    "machine_id": "MACHINE-500",
+    "hostname": "HR-PC",
+    "os": "Windows 11",
+    "collection_time": "2026-07-17T10:26:24.962420",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:31:00.962394",
+            "event_type": "SUCCESSFUL_LOGIN",
+            "user": "alice",
+            "source_ip": "192.168.9.249",
+            "severity": "LOW",
+            "message": "User logged in"
+        },
+        {
+            "timestamp": "2026-07-17T10:30:38.962394",
+            "event_type": "FILE_MODIFIED",
+            "user": "alice",
+            "source_ip": "192.168.9.249",
+            "severity": "MEDIUM",
+            "message": "salary.xlsx"
+        },
+        {
+            "timestamp": "2026-07-17T10:28:06.962394",
+            "event_type": "FILE_DELETED",
+            "user": "alice",
+            "source_ip": "192.168.9.249",
+            "severity": "HIGH",
+            "message": "/etc/passwd"
+        },
+        {
+            "timestamp": "2026-07-17T10:26:45.962394",
+            "event_type": "USB_CONNECTED",
+            "user": "alice",
+            "source_ip": "192.168.9.249",
+            "severity": "MEDIUM",
+            "message": "USB connected"
+        }
+    ]
+}
