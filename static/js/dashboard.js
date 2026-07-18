@@ -28,6 +28,14 @@ function renderDashboardStats(data) {
     setText('totalThreats', formatter.format(data.threats));
     setText('totalDevices', formatter.format(data.devices));
     setText('activeAlerts', formatter.format(data.alerts));
+
+    const mlSummary = data.ml_summary || {};
+    const prediction = String(mlSummary.prediction || 'UNKNOWN').toUpperCase();
+    const confidence = mlSummary.confidence != null ? `${Number(mlSummary.confidence).toFixed(1)}%` : 'N/A';
+    const count = mlSummary.count != null ? `${mlSummary.count} events` : 'No data';
+
+    setText('mlPredictionSummary', prediction);
+    setText('mlConfidenceSummary', `${confidence} • ${count}`);
 }
 
 function renderAlerts(alerts) {

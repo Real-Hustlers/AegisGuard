@@ -47,6 +47,19 @@ def get_dashboard_summary():
 
     severity_rows = cursor.fetchall()
 
+    cursor.execute("""
+        SELECT ml_prediction, COUNT(*) AS total, ROUND(AVG(COALESCE(ml_confidence, 0)), 2) AS avg_confidence
+        FROM security_logs
+        GROUP BY ml_prediction
+        ORDER BY total DESC
+        LIMIT 1
+    """)
+
+    ml_row = cursor.fetchone()
+    dominant_prediction = ml_row["ml_prediction"] if ml_row else "UNKNOWN"
+    dominant_confidence = ml_row["avg_confidence"] if ml_row else 0.0
+    dominant_count = ml_row["total"] if ml_row else 0
+
     distribution_labels = []
     distribution_values = []
 
@@ -89,6 +102,12 @@ def get_dashboard_summary():
         "distribution": {
             "labels": distribution_labels,
             "values": distribution_values,
+        },
+
+        "ml_summary": {
+            "prediction": dominant_prediction or "UNKNOWN",
+            "confidence": dominant_confidence,
+            "count": dominant_count,
         },
     }
 

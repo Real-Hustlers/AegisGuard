@@ -160,14 +160,11 @@ def classify_logs(input_file, output_file):
         model = None
         encoder = None
 
-    ml_result = None
-    if ml_available and model is not None and encoder is not None:
-        ml_result = _score_from_ml(logs, model, encoder)
-
     classified_logs = []
 
     for log in logs:
-        if ml_result is not None:
+        if ml_available and model is not None and encoder is not None:
+            ml_result = _score_from_ml([log], model, encoder)
             result = {
                 "ml_prediction": ml_result["ml_prediction"],
                 "ml_confidence": ml_result["ml_confidence"],

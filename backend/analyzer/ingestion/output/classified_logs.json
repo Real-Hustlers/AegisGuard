@@ -14,7 +14,7 @@
         "severity": "LOW",
         "raw_log": "salary.xlsx modified.",
         "ml_prediction": "NORMAL",
-        "ml_confidence": 73.0,
+        "ml_confidence": 62.0,
         "threat_category": "File Activity",
         "threat_score": 10,
         "threat_level": "LOW"
@@ -34,7 +34,7 @@
         "severity": "HIGH",
         "raw_log": "confidential.docx deleted.",
         "ml_prediction": "NORMAL",
-        "ml_confidence": 73.0,
+        "ml_confidence": 62.0,
         "threat_category": "File Activity",
         "threat_score": 10,
         "threat_level": "LOW"
@@ -54,7 +54,7 @@
         "severity": "MEDIUM",
         "raw_log": "USB storage device connected.",
         "ml_prediction": "NORMAL",
-        "ml_confidence": 73.0,
+        "ml_confidence": 62.0,
         "threat_category": "Device Activity",
         "threat_score": 10,
         "threat_level": "LOW"
@@ -74,7 +74,7 @@
         "severity": "CRITICAL",
         "raw_log": "Windows Defender detected Trojan:Win32/Emotet.",
         "ml_prediction": "NORMAL",
-        "ml_confidence": 73.0,
+        "ml_confidence": 61.0,
         "threat_category": "Malware",
         "threat_score": 10,
         "threat_level": "LOW"
@@ -94,7 +94,7 @@
         "severity": "MEDIUM",
         "raw_log": "Failed password for nisithaa from 10.12.32.108 port 59681 ssh2",
         "ml_prediction": "NORMAL",
-        "ml_confidence": 73.0,
+        "ml_confidence": 62.0,
         "threat_category": "Authentication",
         "threat_score": 10,
         "threat_level": "LOW"
@@ -114,7 +114,7 @@
         "severity": "MEDIUM",
         "raw_log": "Failed password for nisithaa from 10.12.32.108 port 59682 ssh2",
         "ml_prediction": "NORMAL",
-        "ml_confidence": 73.0,
+        "ml_confidence": 62.0,
         "threat_category": "Authentication",
         "threat_score": 10,
         "threat_level": "LOW"
@@ -134,7 +134,7 @@
         "severity": "LOW",
         "raw_log": "Accepted password for nisithaa from 10.12.32.108 port 59683 ssh2",
         "ml_prediction": "NORMAL",
-        "ml_confidence": 73.0,
+        "ml_confidence": 62.0,
         "threat_category": "Authentication",
         "threat_score": 10,
         "threat_level": "LOW"
@@ -154,7 +154,7 @@
         "severity": "HIGH",
         "raw_log": "nisithaa : USER=root ; COMMAND=/usr/bin/apt update",
         "ml_prediction": "NORMAL",
-        "ml_confidence": 73.0,
+        "ml_confidence": 62.0,
         "threat_category": "Privilege Escalation",
         "threat_score": 10,
         "threat_level": "LOW"
@@ -174,7 +174,7 @@
         "severity": "LOW",
         "raw_log": "User john logged in successfully.",
         "ml_prediction": "NORMAL",
-        "ml_confidence": 73.0,
+        "ml_confidence": 62.0,
         "threat_category": "Authentication",
         "threat_score": 10,
         "threat_level": "LOW"
@@ -194,7 +194,7 @@
         "severity": "MEDIUM",
         "raw_log": "An account failed to log on.",
         "ml_prediction": "NORMAL",
-        "ml_confidence": 73.0,
+        "ml_confidence": 62.0,
         "threat_category": "Authentication",
         "threat_score": 10,
         "threat_level": "LOW"
@@ -214,7 +214,7 @@
         "severity": "MEDIUM",
         "raw_log": "An account failed to log on.",
         "ml_prediction": "NORMAL",
-        "ml_confidence": 73.0,
+        "ml_confidence": 62.0,
         "threat_category": "Authentication",
         "threat_score": 10,
         "threat_level": "LOW"
@@ -234,7 +234,7 @@
         "severity": "HIGH",
         "raw_log": "PowerShell started with elevated privileges.",
         "ml_prediction": "NORMAL",
-        "ml_confidence": 73.0,
+        "ml_confidence": 62.0,
         "threat_category": "Privilege Escalation",
         "threat_score": 10,
         "threat_level": "LOW"
