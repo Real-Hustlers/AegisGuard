@@ -1,0 +1,32 @@
+{
+    "machine_id": "MACHINE-337",
+    "hostname": "HR-PC",
+    "os": "Ubuntu 24.04",
+    "collection_time": "2026-07-17T10:26:24.845910",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:30:51.845887",
+            "event_type": "SUCCESSFUL_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.3.116",
+            "severity": "LOW",
+            "message": "Login successful"
+        },
+        {
+            "timestamp": "2026-07-17T10:27:52.845887",
+            "event_type": "SUDO_COMMAND",
+            "user": "john",
+            "source_ip": "192.168.3.116",
+            "severity": "HIGH",
+            "message": "sudo executed"
+        },
+        {
+            "timestamp": "2026-07-17T10:31:03.845887",
+            "event_type": "PRIVILEGE_ESCALATION",
+            "user": "john",
+            "source_ip": "192.168.3.116",
+            "severity": "CRITICAL",
+            "message": "Root privileges obtained"
+        }
+    ]
+}

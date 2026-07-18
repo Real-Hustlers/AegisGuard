@@ -1,0 +1,47 @@
+[
+    {
+        "timestamp": "2026-07-16T10:25:15+05:30",
+        "event_type": "AUTHENTICATION_FAILURE",
+        "user": "nisithaa",
+        "hostname": "analyser",
+        "source_ip": "10.12.33.163",
+        "destination_ip": "",
+        "process": "sshd-session",
+        "file_path": "",
+        "severity": "HIGH",
+        "raw_log": "2026-07-16T10:25:15+05:30 analyser sshd-session[2367]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=10.12.33.163  user=nisithaa",
+        "threat_category": "Authentication",
+        "threat_score": 70,
+        "threat_level": "HIGH"
+    },
+    {
+        "timestamp": "2026-07-16T10:25:18+05:30",
+        "event_type": "FAILED_LOGIN",
+        "user": "nisithaa",
+        "hostname": "analyser",
+        "source_ip": "10.12.33.163",
+        "destination_ip": "",
+        "process": "sshd-session",
+        "file_path": "",
+        "severity": "MEDIUM",
+        "raw_log": "2026-07-16T10:25:18+05:30 analyser sshd-session[2367]: Failed password for nisithaa from 10.12.33.163 port 59418 ssh2",
+        "threat_category": "Authentication",
+        "threat_score": 30,
+        "threat_level": "MEDIUM"
+    },
+    {
+        "timestamp": "2026-07-16T10:26:02+05:30",
+        "event_type": "FAILED_LOGIN",
+        "user": "nisithaa",
+        "hostname": "analyser",
+        "source_ip": "10.12.33.163",
+        "destination_ip": "",
+        "process": "sshd-session",
+        "file_path": "",
+        "severity": "MEDIUM",
+        "raw_log": "2026-07-16T10:26:02+05:30 analyser sshd-session[2367]: Failed password for nisithaa from 10.12.33.163 port 59418 ssh2",
+        "threat_category": "Authentication",
+        "threat_score": 30,
+        "threat_level": "MEDIUM"
+    }
+]

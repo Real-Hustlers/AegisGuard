@@ -1,0 +1,40 @@
+{
+    "machine_id": "MACHINE-423",
+    "hostname": "Finance-PC",
+    "os": "Ubuntu 24.04",
+    "collection_time": "2026-07-17T10:26:24.905959",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:30:11.905938",
+            "event_type": "SUCCESSFUL_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.0.213",
+            "severity": "LOW",
+            "message": "User logged in"
+        },
+        {
+            "timestamp": "2026-07-17T10:29:06.905938",
+            "event_type": "FILE_MODIFIED",
+            "user": "guest",
+            "source_ip": "192.168.0.213",
+            "severity": "MEDIUM",
+            "message": "backup.zip"
+        },
+        {
+            "timestamp": "2026-07-17T10:28:43.905938",
+            "event_type": "FILE_DELETED",
+            "user": "guest",
+            "source_ip": "192.168.0.213",
+            "severity": "HIGH",
+            "message": "backup.zip"
+        },
+        {
+            "timestamp": "2026-07-17T10:27:12.905938",
+            "event_type": "USB_CONNECTED",
+            "user": "guest",
+            "source_ip": "192.168.0.213",
+            "severity": "MEDIUM",
+            "message": "USB connected"
+        }
+    ]
+}

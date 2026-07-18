@@ -1,0 +1,32 @@
+{
+    "machine_id": "MACHINE-033",
+    "hostname": "HR-PC",
+    "os": "Windows 10",
+    "collection_time": "2026-07-17T10:26:24.627171",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:29:03.627153",
+            "event_type": "SUCCESSFUL_LOGIN",
+            "user": "alice",
+            "source_ip": "192.168.4.220",
+            "severity": "LOW",
+            "message": "User logged in"
+        },
+        {
+            "timestamp": "2026-07-17T10:29:55.627153",
+            "event_type": "PASSWORD_CHANGED",
+            "user": "alice",
+            "source_ip": "192.168.4.220",
+            "severity": "LOW",
+            "message": "Password changed"
+        },
+        {
+            "timestamp": "2026-07-17T10:29:31.627153",
+            "event_type": "LOGOUT",
+            "user": "alice",
+            "source_ip": "192.168.4.220",
+            "severity": "LOW",
+            "message": "User logged out"
+        }
+    ]
+}

@@ -1,0 +1,96 @@
+{
+    "machine_id": "MACHINE-164",
+    "hostname": "Finance-PC",
+    "os": "Windows 10",
+    "collection_time": "2026-07-17T10:26:24.726558",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:26:43.726527",
+            "event_type": "FAILED_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.5.82",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:28:08.726527",
+            "event_type": "FAILED_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.5.82",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:30:54.726527",
+            "event_type": "FAILED_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.5.82",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:26:36.726527",
+            "event_type": "FAILED_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.5.82",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:28:45.726527",
+            "event_type": "FAILED_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.5.82",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:28:44.726527",
+            "event_type": "FAILED_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.5.82",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:27:42.726527",
+            "event_type": "FAILED_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.5.82",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:31:09.726527",
+            "event_type": "FAILED_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.5.82",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:27:20.726527",
+            "event_type": "FAILED_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.5.82",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:29:52.726527",
+            "event_type": "FAILED_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.5.82",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:27:31.726527",
+            "event_type": "FAILED_LOGIN",
+            "user": "guest",
+            "source_ip": "192.168.5.82",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        }
+    ]
+}

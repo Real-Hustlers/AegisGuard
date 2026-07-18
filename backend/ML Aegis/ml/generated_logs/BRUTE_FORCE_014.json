@@ -1,0 +1,48 @@
+{
+    "machine_id": "MACHINE-114",
+    "hostname": "Admin-PC",
+    "os": "Windows 11",
+    "collection_time": "2026-07-17T10:26:24.687572",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:30:40.687551",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.0.166",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:27:34.687551",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.0.166",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:29:02.687551",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.0.166",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:29:05.687551",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.0.166",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:27:12.687551",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.0.166",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        }
+    ]
+}

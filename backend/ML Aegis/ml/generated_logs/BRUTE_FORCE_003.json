@@ -1,0 +1,72 @@
+{
+    "machine_id": "MACHINE-103",
+    "hostname": "Finance-PC",
+    "os": "Windows 11",
+    "collection_time": "2026-07-17T10:26:24.677850",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:31:14.677821",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.4.205",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:29:23.677821",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.4.205",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:26:52.677821",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.4.205",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:28:32.677821",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.4.205",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:28:56.677821",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.4.205",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:29:09.677821",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.4.205",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:28:39.677821",
+            "event_type": "FAILED_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.4.205",
+            "severity": "HIGH",
+            "message": "Failed SSH login"
+        },
+        {
+            "timestamp": "2026-07-17T10:29:41.677821",
+            "event_type": "SUCCESSFUL_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.4.205",
+            "severity": "MEDIUM",
+            "message": "Successful login after failures"
+        }
+    ]
+}

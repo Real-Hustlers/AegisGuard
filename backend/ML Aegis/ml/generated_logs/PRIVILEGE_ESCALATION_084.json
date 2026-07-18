@@ -1,0 +1,32 @@
+{
+    "machine_id": "MACHINE-384",
+    "hostname": "Finance-PC",
+    "os": "Windows 11",
+    "collection_time": "2026-07-17T10:26:24.877380",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:27:39.877362",
+            "event_type": "SUCCESSFUL_LOGIN",
+            "user": "admin",
+            "source_ip": "192.168.1.176",
+            "severity": "LOW",
+            "message": "Login successful"
+        },
+        {
+            "timestamp": "2026-07-17T10:27:03.877362",
+            "event_type": "SUDO_COMMAND",
+            "user": "admin",
+            "source_ip": "192.168.1.176",
+            "severity": "HIGH",
+            "message": "sudo executed"
+        },
+        {
+            "timestamp": "2026-07-17T10:28:25.877362",
+            "event_type": "PRIVILEGE_ESCALATION",
+            "user": "admin",
+            "source_ip": "192.168.1.176",
+            "severity": "CRITICAL",
+            "message": "Root privileges obtained"
+        }
+    ]
+}

@@ -1,0 +1,32 @@
+{
+    "machine_id": "MACHINE-348",
+    "hostname": "Admin-PC",
+    "os": "Windows 11",
+    "collection_time": "2026-07-17T10:26:24.853335",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:28:51.853313",
+            "event_type": "SUCCESSFUL_LOGIN",
+            "user": "root",
+            "source_ip": "192.168.3.203",
+            "severity": "LOW",
+            "message": "Login successful"
+        },
+        {
+            "timestamp": "2026-07-17T10:29:22.853313",
+            "event_type": "SUDO_COMMAND",
+            "user": "root",
+            "source_ip": "192.168.3.203",
+            "severity": "HIGH",
+            "message": "sudo executed"
+        },
+        {
+            "timestamp": "2026-07-17T10:26:32.853313",
+            "event_type": "PRIVILEGE_ESCALATION",
+            "user": "root",
+            "source_ip": "192.168.3.203",
+            "severity": "CRITICAL",
+            "message": "Root privileges obtained"
+        }
+    ]
+}

@@ -1,0 +1,32 @@
+{
+    "machine_id": "MACHINE-022",
+    "hostname": "Admin-PC",
+    "os": "Ubuntu 24.04",
+    "collection_time": "2026-07-17T10:26:24.620841",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:29:56.620824",
+            "event_type": "SUCCESSFUL_LOGIN",
+            "user": "root",
+            "source_ip": "192.168.8.220",
+            "severity": "LOW",
+            "message": "User logged in"
+        },
+        {
+            "timestamp": "2026-07-17T10:28:21.620824",
+            "event_type": "PASSWORD_CHANGED",
+            "user": "root",
+            "source_ip": "192.168.8.220",
+            "severity": "LOW",
+            "message": "Password changed"
+        },
+        {
+            "timestamp": "2026-07-17T10:27:21.620824",
+            "event_type": "LOGOUT",
+            "user": "root",
+            "source_ip": "192.168.8.220",
+            "severity": "LOW",
+            "message": "User logged out"
+        }
+    ]
+}

@@ -1,0 +1,40 @@
+{
+    "machine_id": "MACHINE-449",
+    "hostname": "Server-01",
+    "os": "Windows 11",
+    "collection_time": "2026-07-17T10:26:24.924358",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:27:15.924338",
+            "event_type": "SUCCESSFUL_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.6.66",
+            "severity": "LOW",
+            "message": "User logged in"
+        },
+        {
+            "timestamp": "2026-07-17T10:30:05.924338",
+            "event_type": "FILE_MODIFIED",
+            "user": "john",
+            "source_ip": "192.168.6.66",
+            "severity": "MEDIUM",
+            "message": "/etc/shadow"
+        },
+        {
+            "timestamp": "2026-07-17T10:28:51.924338",
+            "event_type": "FILE_DELETED",
+            "user": "john",
+            "source_ip": "192.168.6.66",
+            "severity": "HIGH",
+            "message": "confidential.pdf"
+        },
+        {
+            "timestamp": "2026-07-17T10:28:59.924338",
+            "event_type": "USB_CONNECTED",
+            "user": "john",
+            "source_ip": "192.168.6.66",
+            "severity": "MEDIUM",
+            "message": "USB connected"
+        }
+    ]
+}

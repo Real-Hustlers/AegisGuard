@@ -1,0 +1,32 @@
+{
+    "machine_id": "MACHINE-087",
+    "hostname": "Dev-Server",
+    "os": "Windows 10",
+    "collection_time": "2026-07-17T10:26:24.666678",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:27:53.666661",
+            "event_type": "SUCCESSFUL_LOGIN",
+            "user": "john",
+            "source_ip": "192.168.4.234",
+            "severity": "LOW",
+            "message": "User logged in"
+        },
+        {
+            "timestamp": "2026-07-17T10:30:19.666661",
+            "event_type": "PASSWORD_CHANGED",
+            "user": "john",
+            "source_ip": "192.168.4.234",
+            "severity": "LOW",
+            "message": "Password changed"
+        },
+        {
+            "timestamp": "2026-07-17T10:26:38.666661",
+            "event_type": "LOGOUT",
+            "user": "john",
+            "source_ip": "192.168.4.234",
+            "severity": "LOW",
+            "message": "User logged out"
+        }
+    ]
+}

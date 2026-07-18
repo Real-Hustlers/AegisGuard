@@ -1,0 +1,56 @@
+{
+  "machine_id": "MACHINE-002",
+  "hostname": "Linux-Server",
+  "os": "Ubuntu 24.04",
+  "collection_time": "2026-07-14T10:31:00Z",
+  "logs": [
+    {
+      "timestamp": "2026-07-14T09:05:11Z",
+      "event_type": "FAILED_LOGIN",
+      "user": "nisithaa",
+      "hostname": "Linux-Server",
+      "source_ip": "10.12.32.108",
+      "destination_ip": "",
+      "process": "sshd",
+      "file_path": "",
+      "severity": "MEDIUM",
+      "raw_log": "Failed password for nisithaa from 10.12.32.108 port 59681 ssh2"
+    },
+    {
+      "timestamp": "2026-07-14T09:05:20Z",
+      "event_type": "FAILED_LOGIN",
+      "user": "nisithaa",
+      "hostname": "Linux-Server",
+      "source_ip": "10.12.32.108",
+      "destination_ip": "",
+      "process": "sshd",
+      "file_path": "",
+      "severity": "MEDIUM",
+      "raw_log": "Failed password for nisithaa from 10.12.32.108 port 59682 ssh2"
+    },
+    {
+      "timestamp": "2026-07-14T09:06:01Z",
+      "event_type": "SUCCESSFUL_LOGIN",
+      "user": "nisithaa",
+      "hostname": "Linux-Server",
+      "source_ip": "10.12.32.108",
+      "destination_ip": "",
+      "process": "sshd",
+      "file_path": "",
+      "severity": "LOW",
+      "raw_log": "Accepted password for nisithaa from 10.12.32.108 port 59683 ssh2"
+    },
+    {
+      "timestamp": "2026-07-14T09:08:33Z",
+      "event_type": "SUDO_EXECUTED",
+      "user": "nisithaa",
+      "hostname": "Linux-Server",
+      "source_ip": "",
+      "destination_ip": "",
+      "process": "sudo",
+      "file_path": "",
+      "severity": "HIGH",
+      "raw_log": "nisithaa : USER=root ; COMMAND=/usr/bin/apt update"
+    }
+  ]
+}

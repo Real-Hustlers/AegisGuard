@@ -1,0 +1,40 @@
+{
+    "machine_id": "MACHINE-459",
+    "hostname": "Dev-Server",
+    "os": "Ubuntu 24.04",
+    "collection_time": "2026-07-17T10:26:24.931218",
+    "logs": [
+        {
+            "timestamp": "2026-07-17T10:31:07.931197",
+            "event_type": "SUCCESSFUL_LOGIN",
+            "user": "alice",
+            "source_ip": "192.168.0.49",
+            "severity": "LOW",
+            "message": "User logged in"
+        },
+        {
+            "timestamp": "2026-07-17T10:29:25.931197",
+            "event_type": "FILE_MODIFIED",
+            "user": "alice",
+            "source_ip": "192.168.0.49",
+            "severity": "MEDIUM",
+            "message": "/etc/passwd"
+        },
+        {
+            "timestamp": "2026-07-17T10:31:14.931197",
+            "event_type": "FILE_DELETED",
+            "user": "alice",
+            "source_ip": "192.168.0.49",
+            "severity": "HIGH",
+            "message": "salary.xlsx"
+        },
+        {
+            "timestamp": "2026-07-17T10:28:21.931197",
+            "event_type": "USB_CONNECTED",
+            "user": "alice",
+            "source_ip": "192.168.0.49",
+            "severity": "MEDIUM",
+            "message": "USB connected"
+        }
+    ]
+}

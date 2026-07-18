@@ -21,7 +21,15 @@ dist/
 
 # Logs
 *.log
+backend/ML Aegis/ml/generated_logs/
 
 # OS files
 .DS_Store
 Thumbs.db
+
+
+# Models
+backend/ML Aegis/ml/model.pkl
+backend/ML Aegis/ml/label_encoder.pkl
+backend/ML Aegis/requirements.txt
+backend/ML Aegis/training_dataset.csv

@@ -1,0 +1,54 @@
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment variables
+.env
+.env.*
+
+# VS Code
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# Logs
+*.log
+generated_logs/
+
+# ML Models
+model.pkl
+label_encoder.pkl
+
+# Generated datasets
+training_dataset.csv
+classified_logs.json
+
+# Data (optional - uncomment if you don't want to track datasets)
+# data/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build files
+build/
+dist/
+*.egg-info/
+
+# Test cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Misc
+*.tmp
+*.bak
