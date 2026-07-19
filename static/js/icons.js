@@ -16,7 +16,14 @@
         'ph-eye': '👁',
         'ph-magnifying-glass': '🔍',
         'ph-chart-line-up': '📈',
-        'ph-chart-line': '📈'
+        'ph-chart-line': '📈',
+        'ph-shield-warning': '🛡️',
+        'ph-robot': '🤖',
+        'ph-play': '▶',
+        'ph-stop': '■',
+        'ph-trash': '🗑',
+        'ph-shield-alert': '🚨',
+        'ph-cpu': '💻'
     };
 
     function applyIcons() {

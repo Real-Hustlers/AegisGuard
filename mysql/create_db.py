@@ -1,27 +1,52 @@
 import sqlite3
+from pathlib import Path
 
-conn = sqlite3.connect("aegisguard.db")
-cursor = conn.cursor()
+DB_PATH = Path(__file__).resolve().parent / "aegisguard.db"
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS security_logs (
-    log_id TEXT PRIMARY KEY,
-    machine_id TEXT,
-    hostname TEXT,
-    os TEXT,
-    timestamp TEXT,
-    event_type TEXT,
-    user TEXT,
-    source_ip TEXT,
-    destination_ip TEXT,
-    process TEXT,
-    file_path TEXT,
-    severity TEXT,
-    raw_log TEXT
-)
-""")
 
-conn.commit()
-conn.close()
+def initialize_db(db_path=None):
+    conn = sqlite3.connect(db_path or DB_PATH)
+    cursor = conn.cursor()
 
-print("✅ SQLite database created successfully!")
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS security_logs (
+        log_id TEXT PRIMARY KEY,
+        machine_id TEXT,
+        hostname TEXT,
+        os TEXT,
+        timestamp TEXT,
+        event_type TEXT,
+        user TEXT,
+        source_ip TEXT,
+        destination_ip TEXT,
+        process TEXT,
+        file_path TEXT,
+        severity TEXT,
+        raw_log TEXT,
+        ml_prediction TEXT,
+        ml_confidence REAL,
+        threat_category TEXT,
+        threat_score INTEGER,
+        threat_level TEXT
+    )
+    """)
+
+    for column_sql in [
+        "ALTER TABLE security_logs ADD COLUMN ml_prediction TEXT",
+        "ALTER TABLE security_logs ADD COLUMN ml_confidence REAL",
+        "ALTER TABLE security_logs ADD COLUMN threat_category TEXT",
+        "ALTER TABLE security_logs ADD COLUMN threat_score INTEGER",
+        "ALTER TABLE security_logs ADD COLUMN threat_level TEXT",
+    ]:
+        try:
+            cursor.execute(column_sql)
+        except sqlite3.OperationalError:
+            pass
+
+    conn.commit()
+    conn.close()
+    print(f"✅ SQLite database initialized at {db_path or DB_PATH}")
+
+
+if __name__ == "__main__":
+    initialize_db()
