@@ -1,131 +1,89 @@
-import json
+﻿import json
 from collections import Counter
-import pandas as pd
+from pathlib import Path
+import sys
 import joblib
 
-# -----------------------------
-# Load ML Model
-# -----------------------------
+ROOT_DIR = None
+for candidate in Path(__file__).resolve().parents:
+    if (candidate / "backend").is_dir():
+        ROOT_DIR = candidate
+        break
 
-model = joblib.load("model.pkl")
-encoder = joblib.load("label_encoder.pkl")
+if ROOT_DIR is None:
+    raise RuntimeError("Could not resolve repository root for backend imports")
 
-# -----------------------------
-# Load Classified Logs
-# -----------------------------
+sys.path.insert(0, str(ROOT_DIR))
 
-with open("../output/classified_logs.json", "r") as f:
-    logs = json.load(f)
+from backend.analyzer.ingestion.mitre_mapper import get_mitre_mapping
 
-# -----------------------------
-# Feature Extraction
-# -----------------------------
+MODEL_PATH = Path(__file__).resolve().parent / "model.pkl"
+ENCODER_PATH = Path(__file__).resolve().parent / "label_encoder.pkl"
 
-counts = Counter()
 
-users = set()
-ips = set()
+def _load_artifacts():
+    model = joblib.load(MODEL_PATH)
+    encoder = joblib.load(ENCODER_PATH)
+    return model, encoder
 
-high = 0
-critical = 0
 
-for log in logs:
+def _build_feature_vector(logs):
+    counts = Counter(log.get("event_type", "") for log in logs)
+    users = {log.get("user") for log in logs if log.get("user")}
+    ips = {log.get("source_ip") for log in logs if log.get("source_ip")}
 
-    counts[log["event_type"]] += 1
+    high = sum(1 for log in logs if str(log.get("severity", "")).upper() == "HIGH")
+    critical = sum(1 for log in logs if str(log.get("severity", "")).upper() == "CRITICAL")
 
-    if log.get("user"):
-        users.add(log["user"])
-
-    if log.get("source_ip"):
-        ips.add(log["source_ip"])
-
-    severity = log.get("severity","").upper()
-
-    if severity == "HIGH":
-        high += 1
-
-    elif severity == "CRITICAL":
-        critical += 1
-
-# -----------------------------
-# Feature Vector
-# -----------------------------
-
-features = {
-
-    "FAILED_LOGIN":
-        counts["FAILED_LOGIN"],
-
-    "SUCCESSFUL_LOGIN":
-        counts["SUCCESSFUL_LOGIN"],
-
-    "AUTHENTICATION_FAILURE":
-        counts["AUTHENTICATION_FAILURE"],
-
-    "SUDO_COMMAND":
-        counts["SUDO_COMMAND"],
-
-    "PRIVILEGE_ESCALATION":
-        counts["PRIVILEGE_ESCALATION"],
-
-    "FILE_MODIFIED":
-        counts["FILE_MODIFIED"],
-
-    "FILE_DELETED":
-        counts["FILE_DELETED"],
-
-    "USB_CONNECTED":
-        counts["USB_CONNECTED"],
-
-    "DEFENDER_ALERT":
-        counts["DEFENDER_ALERT"],
-
-    "PASSWORD_CHANGED":
-        counts["PASSWORD_CHANGED"],
-
-    "USER_CREATED":
-        counts["USER_CREATED"],
-
-    "USER_DELETED":
-        counts["USER_DELETED"],
-
-    "KERNEL_EVENT":
-        counts["KERNEL_EVENT"],
-
-    "TOTAL_EVENTS":
+    return [
+        counts.get("FAILED_LOGIN", 0),
+        counts.get("SUCCESSFUL_LOGIN", 0),
+        counts.get("AUTHENTICATION_FAILURE", 0),
+        counts.get("SUDO_COMMAND", 0),
+        counts.get("PRIVILEGE_ESCALATION", 0),
+        counts.get("FILE_MODIFIED", 0),
+        counts.get("FILE_DELETED", 0),
+        counts.get("USB_CONNECTED", 0),
+        counts.get("DEFENDER_ALERT", 0),
+        counts.get("PASSWORD_CHANGED", 0),
+        counts.get("USER_CREATED", 0),
+        counts.get("USER_DELETED", 0),
+        counts.get("KERNEL_EVENT", 0),
         len(logs),
-
-    "HIGH_EVENTS":
         high,
-
-    "CRITICAL_EVENTS":
         critical,
-
-    "UNIQUE_USERS":
         len(users),
+        len(ips),
+    ]
 
-    "UNIQUE_SOURCE_IPS":
-        len(ips)
-}
 
-X = pd.DataFrame([features])
+def predict_logs(logs):
+    model, encoder = _load_artifacts()
+    features = _build_feature_vector(logs)
+    prediction = model.predict([features])[0]
+    confidence = max(model.predict_proba([features])[0]) * 100
+    label = encoder.inverse_transform([prediction])[0]
+    mitre = get_mitre_mapping(label)
 
-# -----------------------------
-# Prediction
-# -----------------------------
+    return {
+        "prediction": str(label).upper(),
+        "confidence": round(float(confidence), 2),
+        "mitre": mitre,
+    }
 
-prediction = model.predict(X)[0]
 
-confidence = max(model.predict_proba(X)[0]) * 100
+if __name__ == "__main__":
+    logs_path = Path(__file__).resolve().parent / "classified_logs.json"
+    with open(logs_path, "r", encoding="utf-8") as f:
+        logs = json.load(f)
 
-label = encoder.inverse_transform([prediction])[0]
+    result = predict_logs(logs)
 
-print("="*60)
-print("AEGISGUARD ML ANALYSIS")
-print("="*60)
-print()
-
-print("Prediction :",label)
-print("Confidence :",f"{confidence:.2f}%")
-
-print("="*60)
+    print("=" * 60)
+    print("AEGISGUARD ML ANALYSIS")
+    print("=" * 60)
+    print()
+    print("Prediction :", result["prediction"])
+    print("Confidence :", f"{result['confidence']:.2f}%")
+    print("MITRE Technique:", result["mitre"])
+    print("=" * 60)

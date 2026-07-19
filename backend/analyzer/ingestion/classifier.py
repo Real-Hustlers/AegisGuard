@@ -198,12 +198,16 @@ def classify_logs(input_file, output_file):
 
     classified_logs = []
 
+    from .mitre_mapper import get_mitre_mapping
+
     for log in logs:
         if ml_available and model is not None and encoder is not None:
             ml_result = _score_from_ml([log], model, encoder)
+            mitre = get_mitre_mapping(ml_result["ml_prediction"])
             result = {
                 "ml_prediction": ml_result["ml_prediction"],
                 "ml_confidence": ml_result["ml_confidence"],
+                "mitre": mitre,
                 "threat_category": CATEGORIES.get(log.get("event_type"), "Unknown"),
                 "threat_score": ml_result["threat_score"],
                 "threat_level": ml_result["threat_level"],
@@ -212,6 +216,11 @@ def classify_logs(input_file, output_file):
             result = {
                 "ml_prediction": "UNKNOWN",
                 "ml_confidence": 0.0,
+                "mitre": {
+                    "technique_id": "Unknown",
+                    "technique_name": "Unknown",
+                    "tactic": "Unknown",
+                },
             }
             result.update(_score_from_rules(log))
 

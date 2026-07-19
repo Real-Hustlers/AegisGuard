@@ -15,6 +15,11 @@
         "raw_log": "salary.xlsx modified.",
         "ml_prediction": "UNKNOWN",
         "ml_confidence": 75.5,
+        "mitre": {
+            "technique_id": "Unknown",
+            "technique_name": "Unknown",
+            "tactic": "Unknown"
+        },
         "threat_category": "File Activity",
         "threat_score": 55,
         "threat_level": "MEDIUM"
@@ -35,6 +40,11 @@
         "raw_log": "confidential.docx deleted.",
         "ml_prediction": "UNKNOWN",
         "ml_confidence": 72.0,
+        "mitre": {
+            "technique_id": "Unknown",
+            "technique_name": "Unknown",
+            "tactic": "Unknown"
+        },
         "threat_category": "File Activity",
         "threat_score": 55,
         "threat_level": "MEDIUM"
@@ -55,6 +65,11 @@
         "raw_log": "USB storage device connected.",
         "ml_prediction": "UNKNOWN",
         "ml_confidence": 70.5,
+        "mitre": {
+            "technique_id": "Unknown",
+            "technique_name": "Unknown",
+            "tactic": "Unknown"
+        },
         "threat_category": "Device Activity",
         "threat_score": 55,
         "threat_level": "MEDIUM"
@@ -75,6 +90,11 @@
         "raw_log": "Windows Defender detected Trojan:Win32/Emotet.",
         "ml_prediction": "MALWARE",
         "ml_confidence": 99.0,
+        "mitre": {
+            "technique_id": "T1204",
+            "technique_name": "User Execution",
+            "tactic": "Execution"
+        },
         "threat_category": "Malware",
         "threat_score": 95,
         "threat_level": "CRITICAL"
@@ -95,6 +115,11 @@
         "raw_log": "Failed password for nisithaa from 10.12.32.108 port 59681 ssh2",
         "ml_prediction": "UNKNOWN",
         "ml_confidence": 95.0,
+        "mitre": {
+            "technique_id": "Unknown",
+            "technique_name": "Unknown",
+            "tactic": "Unknown"
+        },
         "threat_category": "Authentication",
         "threat_score": 60,
         "threat_level": "MEDIUM"
@@ -115,6 +140,11 @@
         "raw_log": "Failed password for nisithaa from 10.12.32.108 port 59682 ssh2",
         "ml_prediction": "UNKNOWN",
         "ml_confidence": 95.0,
+        "mitre": {
+            "technique_id": "Unknown",
+            "technique_name": "Unknown",
+            "tactic": "Unknown"
+        },
         "threat_category": "Authentication",
         "threat_score": 60,
         "threat_level": "MEDIUM"
@@ -135,6 +165,11 @@
         "raw_log": "Accepted password for nisithaa from 10.12.32.108 port 59683 ssh2",
         "ml_prediction": "NORMAL",
         "ml_confidence": 99.0,
+        "mitre": {
+            "technique_id": "N/A",
+            "technique_name": "No Threat",
+            "tactic": "None"
+        },
         "threat_category": "Authentication",
         "threat_score": 10,
         "threat_level": "LOW"
@@ -155,6 +190,11 @@
         "raw_log": "nisithaa : USER=root ; COMMAND=/usr/bin/apt update",
         "ml_prediction": "UNKNOWN",
         "ml_confidence": 83.0,
+        "mitre": {
+            "technique_id": "Unknown",
+            "technique_name": "Unknown",
+            "tactic": "Unknown"
+        },
         "threat_category": "Privilege Escalation",
         "threat_score": 55,
         "threat_level": "MEDIUM"
@@ -175,6 +215,11 @@
         "raw_log": "User john logged in successfully.",
         "ml_prediction": "NORMAL",
         "ml_confidence": 99.0,
+        "mitre": {
+            "technique_id": "N/A",
+            "technique_name": "No Threat",
+            "tactic": "None"
+        },
         "threat_category": "Authentication",
         "threat_score": 10,
         "threat_level": "LOW"
@@ -195,6 +240,11 @@
         "raw_log": "An account failed to log on.",
         "ml_prediction": "UNKNOWN",
         "ml_confidence": 95.0,
+        "mitre": {
+            "technique_id": "Unknown",
+            "technique_name": "Unknown",
+            "tactic": "Unknown"
+        },
         "threat_category": "Authentication",
         "threat_score": 60,
         "threat_level": "MEDIUM"
@@ -215,6 +265,11 @@
         "raw_log": "An account failed to log on.",
         "ml_prediction": "UNKNOWN",
         "ml_confidence": 95.0,
+        "mitre": {
+            "technique_id": "Unknown",
+            "technique_name": "Unknown",
+            "tactic": "Unknown"
+        },
         "threat_category": "Authentication",
         "threat_score": 60,
         "threat_level": "MEDIUM"
@@ -235,208 +290,13 @@
         "raw_log": "PowerShell started with elevated privileges.",
         "ml_prediction": "PRIVILEGE_ESCALATION",
         "ml_confidence": 99.0,
+        "mitre": {
+            "technique_id": "T1068",
+            "technique_name": "Exploitation for Privilege Escalation",
+            "tactic": "Privilege Escalation"
+        },
         "threat_category": "Privilege Escalation",
         "threat_score": 98,
-        "threat_level": "CRITICAL"
-    },
-    {
-        "log_id": "LOG-000013",
-        "machine_id": "MACHINE-004",
-        "hostname": "Finance-PC",
-        "os": "Windows 11",
-        "timestamp": "2026-07-14T10:12:45Z",
-        "event_type": "FAILED_LOGIN",
-        "user": "john",
-        "source_ip": "192.168.10.45",
-        "destination_ip": "",
-        "process": "winlogon.exe",
-        "file_path": "",
-        "severity": "HIGH",
-        "raw_log": "Multiple failed login attempts for john.",
-        "ml_prediction": "BRUTE_FORCE",
-        "ml_confidence": 96.4,
-        "threat_category": "Authentication",
-        "threat_score": 78,
-        "threat_level": "HIGH"
-    },
-    {
-        "log_id": "LOG-000014",
-        "machine_id": "MACHINE-004",
-        "hostname": "Finance-PC",
-        "os": "Windows 11",
-        "timestamp": "2026-07-14T10:14:20Z",
-        "event_type": "SUCCESSFUL_LOGIN",
-        "user": "john",
-        "source_ip": "192.168.10.45",
-        "destination_ip": "",
-        "process": "winlogon.exe",
-        "file_path": "",
-        "severity": "MEDIUM",
-        "raw_log": "Successful login after multiple failed attempts.",
-        "ml_prediction": "SUSPICIOUS_LOGIN",
-        "ml_confidence": 91.2,
-        "threat_category": "Authentication",
-        "threat_score": 70,
-        "threat_level": "MEDIUM"
-    },
-    {
-        "log_id": "LOG-000015",
-        "machine_id": "MACHINE-005",
-        "hostname": "Dev-Server",
-        "os": "Ubuntu 24.04",
-        "timestamp": "2026-07-14T10:18:12Z",
-        "event_type": "SUDO_COMMAND",
-        "user": "developer",
-        "source_ip": "",
-        "destination_ip": "",
-        "process": "sudo",
-        "file_path": "",
-        "severity": "MEDIUM",
-        "raw_log": "User developer executed sudo apt update.",
-        "ml_prediction": "NORMAL",
-        "ml_confidence": 88.7,
-        "threat_category": "Privilege Management",
-        "threat_score": 35,
-        "threat_level": "LOW"
-    },
-    {
-        "log_id": "LOG-000016",
-        "machine_id": "MACHINE-005",
-        "hostname": "Dev-Server",
-        "os": "Ubuntu 24.04",
-        "timestamp": "2026-07-14T10:20:02Z",
-        "event_type": "PRIVILEGE_ESCALATION",
-        "user": "developer",
-        "source_ip": "",
-        "destination_ip": "",
-        "process": "sudo",
-        "file_path": "",
-        "severity": "CRITICAL",
-        "raw_log": "Unexpected privilege escalation detected.",
-        "ml_prediction": "PRIVILEGE_ESCALATION",
-        "ml_confidence": 98.6,
-        "threat_category": "Privilege Abuse",
-        "threat_score": 95,
-        "threat_level": "CRITICAL"
-    },
-    {
-        "log_id": "LOG-000017",
-        "machine_id": "MACHINE-006",
-        "hostname": "HR-PC",
-        "os": "Windows 10",
-        "timestamp": "2026-07-14T10:23:30Z",
-        "event_type": "PASSWORD_CHANGED",
-        "user": "alice",
-        "source_ip": "",
-        "destination_ip": "",
-        "process": "lsass.exe",
-        "file_path": "",
-        "severity": "LOW",
-        "raw_log": "Password changed successfully.",
-        "ml_prediction": "NORMAL",
-        "ml_confidence": 94.1,
-        "threat_category": "Account Management",
-        "threat_score": 15,
-        "threat_level": "LOW"
-    },
-    {
-        "log_id": "LOG-000018",
-        "machine_id": "MACHINE-006",
-        "hostname": "HR-PC",
-        "os": "Windows 10",
-        "timestamp": "2026-07-14T10:28:18Z",
-        "event_type": "USER_CREATED",
-        "user": "SYSTEM",
-        "source_ip": "",
-        "destination_ip": "",
-        "process": "net.exe",
-        "file_path": "",
-        "severity": "HIGH",
-        "raw_log": "New administrator account backup_admin created.",
-        "ml_prediction": "SUSPICIOUS_ACCOUNT",
-        "ml_confidence": 95.8,
-        "threat_category": "Account Management",
-        "threat_score": 82,
-        "threat_level": "HIGH"
-    },
-    {
-        "log_id": "LOG-000019",
-        "machine_id": "MACHINE-007",
-        "hostname": "Research-PC",
-        "os": "Windows 11",
-        "timestamp": "2026-07-14T10:31:56Z",
-        "event_type": "USB_CONNECTED",
-        "user": "researcher",
-        "source_ip": "",
-        "destination_ip": "",
-        "process": "USBSTOR",
-        "file_path": "",
-        "severity": "MEDIUM",
-        "raw_log": "Unknown USB storage device connected.",
-        "ml_prediction": "USB_THREAT",
-        "ml_confidence": 90.4,
-        "threat_category": "Device Activity",
-        "threat_score": 60,
-        "threat_level": "MEDIUM"
-    },
-    {
-        "log_id": "LOG-000020",
-        "machine_id": "MACHINE-007",
-        "hostname": "Research-PC",
-        "os": "Windows 11",
-        "timestamp": "2026-07-14T10:33:10Z",
-        "event_type": "DEFENDER_ALERT",
-        "user": "SYSTEM",
-        "source_ip": "",
-        "destination_ip": "",
-        "process": "MsMpEng.exe",
-        "file_path": "C:\\Users\\Research\\Downloads\\payload.exe",
-        "severity": "CRITICAL",
-        "raw_log": "Windows Defender detected Trojan:Win32/AgentTesla.",
-        "ml_prediction": "MALWARE",
-        "ml_confidence": 99.1,
-        "threat_category": "Malware",
-        "threat_score": 100,
-        "threat_level": "CRITICAL"
-    },
-    {
-        "log_id": "LOG-000021",
-        "machine_id": "MACHINE-008",
-        "hostname": "Web-Server",
-        "os": "Ubuntu 24.04",
-        "timestamp": "2026-07-14T10:40:44Z",
-        "event_type": "AUTHENTICATION_FAILURE",
-        "user": "nginx",
-        "source_ip": "185.143.22.101",
-        "destination_ip": "172.16.0.10",
-        "process": "sshd",
-        "file_path": "",
-        "severity": "HIGH",
-        "raw_log": "Authentication failure from external IP.",
-        "ml_prediction": "INTRUSION_ATTEMPT",
-        "ml_confidence": 97.5,
-        "threat_category": "Authentication",
-        "threat_score": 85,
-        "threat_level": "HIGH"
-    },
-    {
-        "log_id": "LOG-000022",
-        "machine_id": "MACHINE-008",
-        "hostname": "Web-Server",
-        "os": "Ubuntu 24.04",
-        "timestamp": "2026-07-14T10:45:09Z",
-        "event_type": "KERNEL_EVENT",
-        "user": "root",
-        "source_ip": "",
-        "destination_ip": "",
-        "process": "kernel",
-        "file_path": "",
-        "severity": "CRITICAL",
-        "raw_log": "Kernel detected possible rootkit behavior.",
-        "ml_prediction": "ROOTKIT",
-        "ml_confidence": 99.3,
-        "threat_category": "Kernel Security",
-        "threat_score": 99,
         "threat_level": "CRITICAL"
     }
 ]

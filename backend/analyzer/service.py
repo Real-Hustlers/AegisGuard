@@ -6,6 +6,10 @@ if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
 
 from database import get_connection
+try:
+    from backend.analyzer.ingestion.mitre_mapper import get_mitre_mapping
+except ImportError:
+    from ingestion.mitre_mapper import get_mitre_mapping
 
 
 def get_dashboard_summary():
@@ -59,6 +63,7 @@ def get_dashboard_summary():
     dominant_prediction = ml_row["ml_prediction"] if ml_row else "UNKNOWN"
     dominant_confidence = ml_row["avg_confidence"] if ml_row else 0.0
     dominant_count = ml_row["total"] if ml_row else 0
+    dominant_mitre = get_mitre_mapping(dominant_prediction)
 
     distribution_labels = []
     distribution_values = []
@@ -108,6 +113,7 @@ def get_dashboard_summary():
             "prediction": dominant_prediction or "UNKNOWN",
             "confidence": dominant_confidence,
             "count": dominant_count,
+            "mitre": dominant_mitre,
         },
     }
 
