@@ -1,6 +1,26 @@
 import subprocess
 import json
 from datetime import datetime, timedelta
+import requests
+import platform
+
+ANALYZER = "http://127.0.0.1:5000/api/upload_logs"
+
+def send_logs(parsed_logs):
+
+    payload = {
+        "machine_id": platform.node(),
+        "hostname": platform.node(),
+        "os": platform.platform(),
+        "logs": parsed_logs
+    }
+
+    response = requests.post(
+        ANALYZER,
+        json=payload
+    )
+
+    print(response.text)
 
 
 def collect_security_logs(hours=1, max_events=100):
