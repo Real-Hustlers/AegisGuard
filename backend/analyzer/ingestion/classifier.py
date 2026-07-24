@@ -175,7 +175,23 @@ def _score_from_rules(log):
     else:
         level = "CRITICAL"
 
+    event_type = str(log.get("event_type", "")).upper()
+    severity = str(log.get("severity", "")).upper()
+    if event_type == "SUCCESSFUL_LOGIN":
+        pred = "NORMAL"
+    elif event_type == "DEFENDER_ALERT":
+        pred = "MALWARE"
+    elif event_type in ("PRIVILEGE_ESCALATION", "SUDO_COMMAND", "SUDO_EXECUTED"):
+        pred = "PRIVILEGE_ESCALATION"
+    elif event_type in ("FAILED_LOGIN", "AUTHENTICATION_FAILURE"):
+        pred = "BRUTE_FORCE"
+    elif event_type == "USB_CONNECTED" and severity in ("HIGH", "CRITICAL"):
+        pred = "USB_THREAT"
+    else:
+        pred = "NORMAL" if level == "LOW" else "UNKNOWN"
+
     return {
+        "ml_prediction": pred,
         "threat_category": CATEGORIES.get(log.get("event_type"), "Unknown"),
         "threat_score": min(score, 100),
         "threat_level": level,
@@ -188,13 +204,20 @@ def classify_logs(input_file, output_file):
 
     model_path, encoder_path = _resolve_ml_artifacts()
     ml_available = model_path.exists() and encoder_path.exists()
+    model = None
+    encoder = None
 
     if ml_available:
-        model = joblib.load(model_path)
-        encoder = joblib.load(encoder_path)
-    else:
-        model = None
-        encoder = None
+        try:
+            model = joblib.load(model_path)
+            encoder = joblib.load(encoder_path)
+        except Exception as exc:
+            print(f"ML model could not be loaded: {exc}")
+            model = None
+            encoder = None
+
+    if model is None or encoder is None:
+        ml_available = False
 
     classified_logs = []
 
@@ -213,16 +236,15 @@ def classify_logs(input_file, output_file):
                 "threat_level": ml_result["threat_level"],
             }
         else:
+            rule_res = _score_from_rules(log)
+            pred = rule_res.get("ml_prediction", "UNKNOWN")
+            mitre = get_mitre_mapping(pred)
             result = {
-                "ml_prediction": "UNKNOWN",
+                "ml_prediction": pred,
                 "ml_confidence": 0.0,
-                "mitre": {
-                    "technique_id": "Unknown",
-                    "technique_name": "Unknown",
-                    "tactic": "Unknown",
-                },
+                "mitre": mitre,
             }
-            result.update(_score_from_rules(log))
+            result.update(rule_res)
 
         log.update(result)
         classified_logs.append(log)

@@ -1,11 +1,16 @@
 import sys
 import json
 from pathlib import Path
-
 from flask import Flask, jsonify, render_template, request
+import os
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(BASE_DIR))
+BASE_DIR = Path(__file__).resolve().parents[2]
+
+app = Flask(
+    __name__,
+    template_folder=str(BASE_DIR / "templates"),
+    static_folder=str(BASE_DIR / "static"),
+)
 
 try:
     from service import get_alerts, get_dashboard_summary, get_events
@@ -20,7 +25,6 @@ except ImportError:
     from backend.analyzer.database import get_connection
     from backend.analyzer import incident_response
 
-app = Flask(__name__, template_folder=str(BASE_DIR / "templates"), static_folder=str(BASE_DIR / "static"))
 
 
 def run_ml_classification():
