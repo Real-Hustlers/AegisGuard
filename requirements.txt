@@ -3,3 +3,4 @@ uvicorn
 flask
 mysql
 pyinstaller
+requests

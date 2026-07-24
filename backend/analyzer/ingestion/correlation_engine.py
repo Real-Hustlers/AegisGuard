@@ -11,9 +11,13 @@ except ImportError:
 # Configuration
 # --------------------------
 
-INPUT_FILE = "./output/classified_logs.json"
-OUTPUT_FILE = "./output/incidents.json"
+import os
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+
+INPUT_FILE = os.path.join(OUTPUT_DIR, "classified_logs.json")
+OUTPUT_FILE = os.path.join(OUTPUT_DIR, "incidents.json")
 TIME_WINDOW = timedelta(minutes=5)
 
 # --------------------------

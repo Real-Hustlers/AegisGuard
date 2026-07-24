@@ -5,6 +5,13 @@
         "attack_type": "Multiple Failed Login Attempts",
         "severity": "HIGH",
         "risk_score": 80,
+        "ml_prediction": "UNKNOWN",
+        "ml_confidence": 95.0,
+        "mitre": {
+            "technique_id": "Unknown",
+            "technique_name": "Unknown",
+            "tactic": "Unknown"
+        },
         "start_time": "2026-07-14T09:05:11Z",
         "end_time": "2026-07-14T09:05:20Z",
         "related_logs": [
@@ -18,6 +25,13 @@
         "attack_type": "Multiple Failed Login Attempts",
         "severity": "HIGH",
         "risk_score": 80,
+        "ml_prediction": "UNKNOWN",
+        "ml_confidence": 95.0,
+        "mitre": {
+            "technique_id": "Unknown",
+            "technique_name": "Unknown",
+            "tactic": "Unknown"
+        },
         "start_time": "2026-07-14T09:30:10Z",
         "end_time": "2026-07-14T09:31:15Z",
         "related_logs": [
