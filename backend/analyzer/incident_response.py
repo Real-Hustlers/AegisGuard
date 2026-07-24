@@ -10,10 +10,10 @@ from pathlib import Path
 # --------------------------
 try:
     from database import get_connection
-    from mitre_mapper import get_mitre_mapping
+    # from mitre_mapper import get_mitre_mapping
 except ImportError:
-    from backend.analyzer.database import get_connection
-    from backend.analyzer.ingestion.mitre_mapper import get_mitre_mapping
+    from database import get_connection
+    # from mitre_mapper import get_mitre_mapping
 
 
 def log_message(conn, incident_id, message):

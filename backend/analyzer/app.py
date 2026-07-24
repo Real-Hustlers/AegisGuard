@@ -5,6 +5,7 @@ from flask import Flask, jsonify, render_template, request
 import os
 
 BASE_DIR = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(BASE_DIR))
 
 app = Flask(
     __name__,
@@ -43,7 +44,7 @@ def upload_logs():
 
     from ingestion.import_merge import merge_logs
     from ingestion.classifier import classify_logs
-    # from ingestion.correlation_engine import run_correlation
+    from ingestion.correlation_engine import run_correlation
 
     merge_logs()
 
@@ -52,40 +53,7 @@ def upload_logs():
         "output/classified_logs.json"
     )
 
-    # run_correlation()
-
-    return jsonify({
-        "status": "success",
-        "machine": machine_id
-    })
-
-UPLOAD_FOLDER = Path(__file__).parent / "test"
-UPLOAD_FOLDER.mkdir(exist_ok=True)
-
-@app.route("/api/upload_logs", methods=["POST"])
-def upload_logs():
-
-    data = request.json
-
-    machine_id = data.get("machine_id", "UNKNOWN")
-
-    file_path = UPLOAD_FOLDER / f"{machine_id}.json"
-
-    with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
-
-    from ingestion.import_merge import merge_logs
-    from ingestion.classifier import classify_logs
-    # from ingestion.correlation_engine import run_correlation
-
-    merge_logs()
-
-    classify_logs(
-        "output/merged_logs.json",
-        "output/classified_logs.json"
-    )
-
-    # run_correlation()
+    run_correlation()
 
     return jsonify({
         "status": "success",
