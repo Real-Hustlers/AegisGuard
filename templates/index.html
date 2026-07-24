@@ -152,8 +152,9 @@
         </div>
         <ul class="nav-menu">
             <li class="nav-item active" data-target="view-dashboard"><i class="ph ph-squares-four"></i> Dashboard</li>
-            <li class="nav-item" data-target="view-logs"><i class="ph ph-terminal-window"></i> Event Logs<span class="nav-badge">1k+</span></li>
-            <li class="nav-item" data-target="view-threats"><i class="ph ph-warning"></i> Threats<span class="nav-badge" style="border: 1px solid var(--border-color)">3</span></li>
+            <li class="nav-item" data-target="view-logs"><i class="ph ph-terminal-window"></i> Event Logs<span class="nav-badge">12</span></li>
+            <li class="nav-item" data-target="view-threats"><i class="ph ph-warning"></i> Threats<span class="nav-badge" style="border: 1px solid var(--border-color)">2</span></li>
+            <li class="nav-item" data-target="view-incident-response"><i class="ph ph-shield-warning"></i> Incident Response<span id="irBadge" class="nav-badge" style="background: var(--red-dim); border: 1px solid var(--red);">0</span></li>
             <li class="nav-item" data-target="view-devices"><i class="ph ph-hard-drives"></i> Devices</li>
             <li class="nav-item" data-target="view-settings"><i class="ph ph-gear"></i> Settings</li>
         </ul>
@@ -187,6 +188,7 @@
                 <div class="panel" style="margin:0"><div class="panel-header"><i class="ph ph-warning-circle text-red" style="font-size:20px"></i><span class="badge text-red">• LIVE</span></div><div id="totalThreats" class="stat-value text-red">0</div><div class="stat-label">Threats Detected</div><div class="text-main" style="font-size:12px">Live feed</div></div>
                 <div class="panel" style="margin:0"><div class="panel-header"><i class="ph ph-hard-drives text-green" style="font-size:20px"></i></div><div id="totalDevices" class="stat-value text-green">0</div><div class="stat-label">Devices Monitored</div><div class="text-main" style="font-size:12px">Live feed</div></div>
                 <div class="panel" style="margin:0"><div class="panel-header"><i class="ph ph-bell text-orange" style="font-size:20px"></i><span class="badge text-orange">• LIVE</span></div><div id="activeAlerts" class="stat-value text-orange">0</div><div class="stat-label">Active Alerts</div><div class="text-main" style="font-size:12px">Acknowledge to clear</div></div>
+                <div class="panel" style="margin:0"><div class="panel-header"><i class="ph ph-brain text-cyan" style="font-size:20px"></i><span class="badge badge-live">ML</span></div><div id="mlPredictionSummary" class="stat-value text-cyan">UNKNOWN</div><div class="stat-label">ML Prediction</div><div id="mlConfidenceSummary" class="text-main" style="font-size:12px">No data yet</div></div>
             </div>
             <div class="grid-main">
                 <div class="panel">
@@ -225,7 +227,7 @@
                 </div>
                 <div style="overflow-x:auto;">
                     <table>
-                        <thead><tr><th>LOG ID</th><th>TIME</th><th>DEVICE</th><th>SOURCE IP</th><th>SEVERITY</th><th>EVENT</th></tr></thead>
+                        <thead><tr><th>LOG ID</th><th>TIME</th><th>DEVICE</th><th>SOURCE IP</th><th>SEVERITY</th><th>ML RESULT</th><th>THREAT LEVEL</th><th>EVENT</th></tr></thead>
                         <tbody id="eventTable"></tbody>
                     </table>
                 </div>
@@ -301,6 +303,131 @@
                 <div class="settings-row"><div><div class="text-white" style="font-weight:500; margin-bottom:4px;">Pattern Engine</div><div style="font-size:11px;">Active</div></div><div style="display:flex; align-items:center; gap:15px;"><span class="mono text-cyan">Regex + ML Heuristics</span> <span class="badge" style="border:1px solid var(--border-color); cursor:pointer;">EDIT</span></div></div>
             </div>
         </section>
+
+        <section id="view-incident-response" class="view-section">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px;">
+                <div>
+                    <h2 style="font-size:16px; letter-spacing:1px; text-transform:uppercase;">Incident Response Center</h2>
+                    <div class="panel-subtitle" style="margin:0">Automated Playbooks & Response Actions</div>
+                </div>
+                <button id="irResetBtn" class="btn-outline" style="border-color: var(--red); color: var(--red); display:flex; align-items:center; gap:5px;">
+                    <i class="ph ph-trash"></i> RESET INCIDENTS
+                </button>
+            </div>
+
+            <!-- IR Control Status Panel -->
+            <div class="panel">
+                <div class="panel-title">Response Configuration</div>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:20px; flex-wrap:wrap;">
+                    <div style="display:flex; align-items:center; gap:15px;">
+                        <span class="badge badge-live" id="irStatusText" style="padding: 6px 12px; font-size:12px;">SHIELD ACTIVE</span>
+                        <div style="font-size:12px;">
+                            <div class="text-white" style="font-weight:600;">Automated Mitigation Engine</div>
+                            <div>Playbooks execute immediately upon threat verification.</div>
+                        </div>
+                    </div>
+                    
+                    <div style="display:flex; gap:25px;">
+                        <!-- Auto-Response Toggle -->
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span style="font-size:12px; font-weight:600; color:var(--text-light)">Auto-Response:</span>
+                            <label style="position:relative; display:inline-block; width:44px; height:22px;">
+                                <input type="checkbox" id="toggleAutoResponse" style="opacity:0; width:0; height:0;" checked>
+                                <span style="position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background-color:#1e293b; transition:.4s; border-radius:34px; border: 1px solid var(--border-color);" id="sliderAuto">
+                                    <span style="position:absolute; content:''; height:14px; width:14px; left:3px; bottom:3px; background-color:var(--cyan); transition:.4s; border-radius:50%;" id="knobAuto"></span>
+                                </span>
+                            </label>
+                        </div>
+                        
+                        <!-- Simulation Mode Toggle -->
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span style="font-size:12px; font-weight:600; color:var(--text-light)">Simulation Mode:</span>
+                            <label style="position:relative; display:inline-block; width:44px; height:22px;">
+                                <input type="checkbox" id="toggleSimulationMode" style="opacity:0; width:0; height:0;" checked>
+                                <span style="position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background-color:#1e293b; transition:.4s; border-radius:34px; border: 1px solid var(--border-color);" id="sliderSim">
+                                    <span style="position:absolute; content:''; height:14px; width:14px; left:3px; bottom:3px; background-color:var(--orange); transition:.4s; border-radius:50%;" id="knobSim"></span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Highly Suspicious Entities Grid -->
+            <div style="margin-bottom:24px;">
+                <div class="panel-title" style="margin-bottom:12px;">Highly Suspicious Entities</div>
+                <div class="device-grid" id="suspiciousEntitiesGrid">
+                    <!-- Suspicious IP card -->
+                    <div class="device-card critical" style="border-top-color:var(--red);">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                            <div class="text-white" style="font-weight:600; display:flex; align-items:center; gap:8px;">
+                                <span class="status-dot dot-red" style="background:var(--red)"></span> ATTACKER SOURCE IP
+                            </div>
+                            <i class="ph ph-shield-alert text-red"></i>
+                        </div>
+                        <div style="font-size:11px; margin-bottom:2px;">Top Attacking Entity</div>
+                        <div class="mono text-cyan" style="font-size:16px; font-weight:700; margin-bottom:20px;" id="topSuspiciousIP">10.12.32.108</div>
+                        <div style="display:flex; justify-content:space-between; font-size:11px;">
+                            <span id="topSuspiciousIPCount">5 threat events</span>
+                            <span class="text-red" style="font-weight:600;">BLOCKED</span>
+                        </div>
+                    </div>
+
+                    <!-- Suspicious Machine card -->
+                    <div class="device-card critical" style="border-top-color:var(--orange);">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                            <div class="text-white" style="font-weight:600; display:flex; align-items:center; gap:8px;">
+                                <span class="status-dot dot-orange"></span> COMPROMISED SYSTEM
+                            </div>
+                            <i class="ph ph-cpu text-orange"></i>
+                        </div>
+                        <div style="font-size:11px; margin-bottom:2px;">Top Compromised Host</div>
+                        <div class="mono text-cyan" style="font-size:16px; font-weight:700; margin-bottom:20px;" id="topInfectedHost">Linux-Server</div>
+                        <div style="display:flex; justify-content:space-between; font-size:11px;">
+                            <span id="topInfectedHostCount">3 threat events</span>
+                            <span class="text-orange" style="font-weight:600;">ISOLATING</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Playbooks & Actions Table -->
+            <div class="grid-main" style="grid-template-columns: 2fr 1.2fr;">
+                <div class="panel">
+                    <div class="panel-title" style="margin-bottom:15px;">Active Incidents & Playbook Mappings</div>
+                    <div style="overflow-x:auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>INCIDENT</th>
+                                    <th>THREAT / TARGET</th>
+                                    <th>RECOMMENDED PLAYBOOK & STATUS</th>
+                                    <th style="text-align:right">REMEDIATE</th>
+                                </tr>
+                            </thead>
+                            <tbody id="irIncidentsTable">
+                                <!-- Incidents rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Selected Incident Detail Panel -->
+                <div class="panel" id="incidentDetailPanel">
+                    <div class="panel-title">Incident details</div>
+                    <div class="text-main" style="padding: 20px;">Select an incident from the table to inspect ML prediction, confidence, and MITRE mapping.</div>
+                </div>
+
+                <!-- IR Command Terminal Console -->
+                <div class="panel" style="display:flex; flex-direction:column;">
+                    <div class="panel-title" style="margin-bottom:10px;">Playbook Execution Terminal</div>
+                    <div style="background-color:#02060c; border:1px solid var(--border-color); border-radius:4px; padding:15px; font-family:var(--font-mono); font-size:11px; color:#10b981; flex:1; height:320px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;" id="irTerminal">
+                        <!-- Terminal logs -->
+                        <div style="color:#64748b;">[SYSTEM] Terminal online. Waiting for incident execution...</div>
+                    </div>
+                </div>
+            </div>
+        </section>
     </main>
 
     <script src="{{ url_for('static', filename='js/icons.js') }}"></script>
@@ -327,6 +454,7 @@
                 breadcrumb.textContent = item.textContent.trim().toUpperCase() + ' OVERVIEW';
                 if (item.textContent.trim() === 'Settings') breadcrumb.textContent = 'SYSTEM SETTINGS';
                 if (item.textContent.trim() === 'Event Logs') breadcrumb.textContent = 'EVENT LOGS';
+                if (item.textContent.trim().startsWith('Incident Response')) breadcrumb.textContent = 'INCIDENT RESPONSE CENTER';
 
                 const targetId = item.getAttribute('data-target');
                 views.forEach((view) => {

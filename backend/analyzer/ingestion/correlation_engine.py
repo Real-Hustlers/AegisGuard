@@ -2,6 +2,11 @@ import json
 from datetime import datetime, timedelta
 from collections import defaultdict
 
+try:
+    from .mitre_mapper import get_mitre_mapping
+except ImportError:
+    from backend.analyzer.ingestion.mitre_mapper import get_mitre_mapping
+
 # --------------------------
 # Configuration
 # --------------------------
@@ -36,12 +41,19 @@ incident_counter = 1
 def create_incident(machine, attack, severity, score, related_logs):
     global incident_counter
 
+    ml_prediction = related_logs[-1].get("ml_prediction", "UNKNOWN")
+    ml_confidence = related_logs[-1].get("ml_confidence", 0.0)
+    mitre = get_mitre_mapping(ml_prediction)
+
     incidents.append({
         "incident_id": f"INC-{incident_counter:04d}",
         "machine_id": machine,
         "attack_type": attack,
         "severity": severity,
         "risk_score": score,
+        "ml_prediction": ml_prediction,
+        "ml_confidence": ml_confidence,
+        "mitre": mitre,
         "start_time": related_logs[0]["timestamp"],
         "end_time": related_logs[-1]["timestamp"],
         "related_logs": [x["raw_log"] for x in related_logs]

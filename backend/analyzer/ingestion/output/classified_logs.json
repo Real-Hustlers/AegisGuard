@@ -13,9 +13,16 @@
         "file_path": "C:\\Users\\Alice\\Documents\\salary.xlsx",
         "severity": "LOW",
         "raw_log": "salary.xlsx modified.",
+        "ml_prediction": "UNKNOWN",
+        "ml_confidence": 75.5,
+        "mitre": {
+            "technique_id": "Unknown",
+            "technique_name": "Unknown",
+            "tactic": "Unknown"
+        },
         "threat_category": "File Activity",
-        "threat_score": 15,
-        "threat_level": "LOW"
+        "threat_score": 55,
+        "threat_level": "MEDIUM"
     },
     {
         "log_id": "LOG-000010",
@@ -31,9 +38,16 @@
         "file_path": "C:\\Users\\Alice\\Documents\\confidential.docx",
         "severity": "HIGH",
         "raw_log": "confidential.docx deleted.",
+        "ml_prediction": "UNKNOWN",
+        "ml_confidence": 72.0,
+        "mitre": {
+            "technique_id": "Unknown",
+            "technique_name": "Unknown",
+            "tactic": "Unknown"
+        },
         "threat_category": "File Activity",
-        "threat_score": 50,
-        "threat_level": "HIGH"
+        "threat_score": 55,
+        "threat_level": "MEDIUM"
     },
     {
         "log_id": "LOG-000011",
@@ -49,8 +63,15 @@
         "file_path": "",
         "severity": "MEDIUM",
         "raw_log": "USB storage device connected.",
+        "ml_prediction": "UNKNOWN",
+        "ml_confidence": 70.5,
+        "mitre": {
+            "technique_id": "Unknown",
+            "technique_name": "Unknown",
+            "tactic": "Unknown"
+        },
         "threat_category": "Device Activity",
-        "threat_score": 35,
+        "threat_score": 55,
         "threat_level": "MEDIUM"
     },
     {
@@ -67,6 +88,13 @@
         "file_path": "C:\\Downloads\\malware.exe",
         "severity": "CRITICAL",
         "raw_log": "Windows Defender detected Trojan:Win32/Emotet.",
+        "ml_prediction": "MALWARE",
+        "ml_confidence": 99.0,
+        "mitre": {
+            "technique_id": "T1204",
+            "technique_name": "User Execution",
+            "tactic": "Execution"
+        },
         "threat_category": "Malware",
         "threat_score": 95,
         "threat_level": "CRITICAL"
@@ -85,8 +113,15 @@
         "file_path": "",
         "severity": "MEDIUM",
         "raw_log": "Failed password for nisithaa from 10.12.32.108 port 59681 ssh2",
+        "ml_prediction": "UNKNOWN",
+        "ml_confidence": 95.0,
+        "mitre": {
+            "technique_id": "Unknown",
+            "technique_name": "Unknown",
+            "tactic": "Unknown"
+        },
         "threat_category": "Authentication",
-        "threat_score": 25,
+        "threat_score": 60,
         "threat_level": "MEDIUM"
     },
     {
@@ -103,8 +138,15 @@
         "file_path": "",
         "severity": "MEDIUM",
         "raw_log": "Failed password for nisithaa from 10.12.32.108 port 59682 ssh2",
+        "ml_prediction": "UNKNOWN",
+        "ml_confidence": 95.0,
+        "mitre": {
+            "technique_id": "Unknown",
+            "technique_name": "Unknown",
+            "tactic": "Unknown"
+        },
         "threat_category": "Authentication",
-        "threat_score": 25,
+        "threat_score": 60,
         "threat_level": "MEDIUM"
     },
     {
@@ -121,8 +163,15 @@
         "file_path": "",
         "severity": "LOW",
         "raw_log": "Accepted password for nisithaa from 10.12.32.108 port 59683 ssh2",
+        "ml_prediction": "NORMAL",
+        "ml_confidence": 99.0,
+        "mitre": {
+            "technique_id": "N/A",
+            "technique_name": "No Threat",
+            "tactic": "None"
+        },
         "threat_category": "Authentication",
-        "threat_score": 5,
+        "threat_score": 10,
         "threat_level": "LOW"
     },
     {
@@ -139,9 +188,16 @@
         "file_path": "",
         "severity": "HIGH",
         "raw_log": "nisithaa : USER=root ; COMMAND=/usr/bin/apt update",
+        "ml_prediction": "UNKNOWN",
+        "ml_confidence": 83.0,
+        "mitre": {
+            "technique_id": "Unknown",
+            "technique_name": "Unknown",
+            "tactic": "Unknown"
+        },
         "threat_category": "Privilege Escalation",
-        "threat_score": 60,
-        "threat_level": "HIGH"
+        "threat_score": 55,
+        "threat_level": "MEDIUM"
     },
     {
         "log_id": "LOG-000001",
@@ -157,8 +213,15 @@
         "file_path": "",
         "severity": "LOW",
         "raw_log": "User john logged in successfully.",
+        "ml_prediction": "NORMAL",
+        "ml_confidence": 99.0,
+        "mitre": {
+            "technique_id": "N/A",
+            "technique_name": "No Threat",
+            "tactic": "None"
+        },
         "threat_category": "Authentication",
-        "threat_score": 5,
+        "threat_score": 10,
         "threat_level": "LOW"
     },
     {
@@ -175,9 +238,16 @@
         "file_path": "",
         "severity": "MEDIUM",
         "raw_log": "An account failed to log on.",
+        "ml_prediction": "UNKNOWN",
+        "ml_confidence": 95.0,
+        "mitre": {
+            "technique_id": "Unknown",
+            "technique_name": "Unknown",
+            "tactic": "Unknown"
+        },
         "threat_category": "Authentication",
-        "threat_score": 45,
-        "threat_level": "HIGH"
+        "threat_score": 60,
+        "threat_level": "MEDIUM"
     },
     {
         "log_id": "LOG-000003",
@@ -193,9 +263,16 @@
         "file_path": "",
         "severity": "MEDIUM",
         "raw_log": "An account failed to log on.",
+        "ml_prediction": "UNKNOWN",
+        "ml_confidence": 95.0,
+        "mitre": {
+            "technique_id": "Unknown",
+            "technique_name": "Unknown",
+            "tactic": "Unknown"
+        },
         "threat_category": "Authentication",
-        "threat_score": 45,
-        "threat_level": "HIGH"
+        "threat_score": 60,
+        "threat_level": "MEDIUM"
     },
     {
         "log_id": "LOG-000004",
@@ -211,8 +288,15 @@
         "file_path": "",
         "severity": "HIGH",
         "raw_log": "PowerShell started with elevated privileges.",
+        "ml_prediction": "PRIVILEGE_ESCALATION",
+        "ml_confidence": 99.0,
+        "mitre": {
+            "technique_id": "T1068",
+            "technique_name": "Exploitation for Privilege Escalation",
+            "tactic": "Privilege Escalation"
+        },
         "threat_category": "Privilege Escalation",
-        "threat_score": 100,
+        "threat_score": 98,
         "threat_level": "CRITICAL"
     }
 ]
