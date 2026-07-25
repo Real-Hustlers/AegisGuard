@@ -8,40 +8,66 @@ AegisGuard is a portable cybersecurity solution that enables organizations to **
 
 # 📌 Project Overview
 
-AegisGuard follows a two-stage architecture:
+AegisGuard is a portable, offline cybersecurity monitoring and incident response platform designed for air-gapped and restricted environments. The system enables organizations to collect, analyze, correlate, and respond to security events without requiring internet connectivity.
 
-1. **Collector** – Collects security logs from Windows and Linux endpoints and converts them into a standardized JSON format.
-2. **Analyzer** – Processes collected logs, correlates events, detects potential threats, stores results in SQLite, and visualizes security insights through an offline dashboard.
+The project follows a modular pipeline consisting of:
 
-The applications communicate **only through JSON log files stored on a USB drive**, eliminating the need for network communication or cloud services.
+1. **Collector**
+   - Collects security logs from Windows and Linux endpoints.
+   - Normalizes logs into a common JSON schema.
+   - Stores collected logs on a portable USB drive.
+
+2. **Analyzer**
+   - Merges and validates collected logs.
+   - Performs Machine Learning-based threat classification.
+   - Maps detected threats to the MITRE ATT&CK framework.
+   - Correlates related events into multi-stage attack incidents.
+   - Generates structured incident reports with risk scores.
+   - Supports offline response playbooks and automated response simulation.
+   - Stores results in SQLite and visualizes them through an interactive offline dashboard.
+
+The Collector and Analyzer communicate exclusively through standardized JSON files, making the entire platform portable, offline, and suitable for digital forensic investigations, cyber ranges, educational laboratories, and isolated Security Operations Centers (SOCs).
 
 ---
 
 # 🏗️ System Architecture
 
 ```text
-                ┌────────────────────────────┐
-                │   Victim Machines (N)      │
-                │ Windows / Linux Endpoints  │
-                └─────────────┬──────────────┘
-                              │
-                    Collector.exe
-                              │
-             Collect & Normalize Logs
-                              │
-                    Standard JSON Files
-                              │
-                     USB Flash Drive
-                              │
-                Transfer to Analyst PC
-                              │
-                    Analyzer.exe
-                              │
-         Event Correlation & Threat Detection
-                              │
-                       SQLite Database
-                              │
-               Offline Dashboard & Reports
+              ┌──────────────────────────────┐
+              │ Windows / Linux Endpoints    │
+              └──────────────┬───────────────┘
+                             │
+                    Collector Application
+                             │
+             Collect & Normalize Security Logs
+                             │
+                  Standardized JSON Files
+                             │
+                      USB Flash Drive
+                             │
+                    Analyzer Application
+                             │
+                     Merge & Validate Logs
+                             │
+                Machine Learning Classifier
+                             │
+                Threat Score & Threat Level
+                             │
+                MITRE ATT&CK Mapping Engine
+                             │
+                 Event Correlation Engine
+                             │
+                 Multi-stage Attack Detection
+                             │
+                  Incident Generation Engine
+                             │
+               Response Playbook Assignment
+                             │
+            Offline Response Simulation Engine
+                             │
+                     SQLite Database
+                             │
+              Offline Dashboard & Reports
 ```
 
 ---
@@ -101,58 +127,53 @@ AegisGuard/
 │   ├── collectors/
 │   ├── parsers/
 │   ├── schema/
-│   │   ├── formatter.py
-│   │   └── event_schema.py
-│   │
 │   ├── storage/
-│   │   ├── json_writer.py
-│   │   ├── usb_manager.py
-│   │   └── checksum.py
-│   │
 │   ├── utils/
-│   │   ├── logger.py
-│   │   ├── platform_detector.py
-│   │   └── config.py
-│   │
-│   └── output/
-│       └── logs.json
+│   ├── output/
+│   └── collector.py
 │
-├── analyzer/
-│   ├── ingestion/
-│   │   ├── loader.py
-│   │   ├── validator.py
-│   │   ├── deduplicator.py
-│   │   └── importer.py
-│   │
-│   ├── detection/
-│   │   ├── engine.py
-│   │   ├── correlator.py
-│   │   ├── severity.py
-│   │   ├── recommender.py
-│   │   └── rules/
-│   │       ├── brute_force.py
-│   │       ├── privilege_escalation.py
-│   │       ├── account_compromise.py
-│   │       ├── suspicious_process.py
-│   │       └── file_tampering.py
-│   │
-│   ├── alerts/
-│   │   ├── alert.py
-│   │   └── manager.py
-│   │
-│   ├── reports/
-│   ├── dashboard/
-│   └── main.py
+├── backend/
+│   └── analyzer/
+│       ├── ingestion/
+│       │   ├── import_merge.py
+│       │   ├── classifier.py
+│       │   ├── correlation_engine.py
+│       │   ├── mitre_mapper.py
+│       │   ├── output/
+│       │   └── test/
+│       │
+│       ├── mysql/
+│       │   ├── merge_log_sql.py
+│       │   └── schema.sql
+│       │
+│       ├── output/
+│       │   ├── merged_logs.json
+│       │   ├── classified_logs.json
+│       │   ├── incidents.json
+│       │   └── incident_reports/
+│       │
+│       ├── app.py
+│       ├── service.py
+│       ├── database.py
+│       ├── incident_response.py
+│       └── settings.py
 │
-├── database/
-│   ├── db_manager.py
-│   ├── schema.sql
-│   └── repositories/
+├── ML Aegis/
+│   └── ml/
+│       ├── model.pkl
+│       ├── label_encoder.pkl
+│       ├── train_model.py
+│       └── dataset.csv
 │
-├── common/
-├── config/
+├── static/
+│   ├── css/
+│   ├── js/
+│   └── images/
+│
+├── templates/
+│   └── index.html
+│
 ├── docs/
-├── tests/
 ├── requirements.txt
 ├── build_collector.spec
 ├── build_analyzer.spec
