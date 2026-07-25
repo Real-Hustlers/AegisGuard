@@ -155,65 +155,65 @@ def run_correlation():
 
         machine_logs.sort(key=lambda x: x["dt"])
 
-        # ---------------------------------------------------
-        # Rule 1 : Multiple Failed Login Attempts
-        # ---------------------------------------------------
+    # ---------------------------------------------------
+    # Rule 1 : Brute Force Attack Detection
+    # ---------------------------------------------------
 
-        failed_groups = defaultdict(list)
+    failed_groups = defaultdict(list)
+
+    for log in machine_logs:
+
+        if log["event_type"] in [
+            "FAILED_LOGIN",
+            "AUTHENTICATION_FAILURE"
+        ]:
+
+            key = (
+                log["user"],
+                log["source_ip"]
+            )
+
+            failed_groups[key].append(log)
+
+    for key, failed_logs in failed_groups.items():
+
+        # ---------------------------------------
+        # Stage A
+        # Multiple failed logins
+        # ---------------------------------------
+
+        if len(failed_logs) >= 3:
+
+            create_incident(
+                machine,
+                "Multiple Failed Login Attempts",
+                "HIGH",
+                80,
+                failed_logs
+            )
+
+        # ---------------------------------------
+        # Stage B
+        # Failed logins followed by success
+        # ---------------------------------------
+
+        last_failed = failed_logs[-1]
 
         for log in machine_logs:
 
-            if log["event_type"] in [
-                "FAILED_LOGIN",
-                "AUTHENTICATION_FAILURE"
-            ]:
-
-                key = (
-                    log["user"],
-                    log["source_ip"]
-                )
-
-                failed_groups[key].append(log)
-
-        for key, failed_logs in failed_groups.items():
-
-            if len(failed_logs) >= 2:
-
-                create_incident(
-                    machine,
-                    "Multiple Failed Login Attempts",
-                    "HIGH",
-                    80,
-                    failed_logs
-                )
-
-        # ---------------------------------------------------
-        # Rule 2 : Failed Login -> Successful Login
-        # ---------------------------------------------------
-
-        for i in range(len(machine_logs)):
-
-            current = machine_logs[i]
-
-            if current["event_type"] != "SUCCESSFUL_LOGIN":
+            if log["event_type"] != "SUCCESSFUL_LOGIN":
                 continue
 
-            previous_failed = []
+            if log["user"] != last_failed["user"]:
+                continue
 
-            for j in range(i):
+            if (
+                log["dt"] >= last_failed["dt"]
+                and
+                log["dt"] - last_failed["dt"] <= TIME_WINDOW
+            ):
 
-                if current["dt"] - machine_logs[j]["dt"] > TIME_WINDOW:
-                    continue
-
-                if machine_logs[j]["event_type"] in [
-                    "FAILED_LOGIN",
-                    "AUTHENTICATION_FAILURE"
-                ]:
-                    previous_failed.append(machine_logs[j])
-
-            if len(previous_failed) >= 3:
-
-                related = previous_failed + [current]
+                related = failed_logs + [log]
 
                 create_incident(
                     machine,
@@ -223,16 +223,24 @@ def run_correlation():
                     related
                 )
 
-        # ---------------------------------------------------
-        # Rule 3 : Successful Login -> sudo
-        # ---------------------------------------------------
+                break
 
-        for i in range(len(machine_logs)):
+    # ---------------------------------------------------
+    # Rule 2 : Privilege Escalation Detection
+    # ---------------------------------------------------
 
-            current = machine_logs[i]
+    sudo_logs = []
 
-            if current["event_type"] != "SUCCESSFUL_LOGIN":
-                continue
+    for i in range(len(machine_logs)):
+
+        current = machine_logs[i]
+
+        # ---------------------------------------
+        # Stage A
+        # Login followed by sudo
+        # ---------------------------------------
+
+        if current["event_type"] == "SUCCESSFUL_LOGIN":
 
             for j in range(i + 1, len(machine_logs)):
 
@@ -251,25 +259,306 @@ def run_correlation():
                         [current, nxt]
                     )
 
+                    sudo_logs.append(nxt)
+
                     break
 
-        # ---------------------------------------------------
-        # Rule 4 : Multiple sudo commands
-        # ---------------------------------------------------
+        # Collect every sudo command
+        if current["event_type"] == "SUDO_COMMAND":
+            sudo_logs.append(current)
 
-        sudo_logs = [
-            x for x in machine_logs
-            if x["event_type"] == "SUDO_COMMAND"
-        ]
+    # ---------------------------------------
+    # Stage B
+    # Excessive administrative activity
+    # ---------------------------------------
 
-        if len(sudo_logs) >= 5:
+    if len(sudo_logs) >= 5:
+
+        create_incident(
+            machine,
+            "Suspicious Administrative Activity",
+            "HIGH",
+            75,
+            sudo_logs
+        )
+
+    # ---------------------------------------------------
+    # Rule 3 : Malware Execution Detection
+    # ---------------------------------------------------
+
+    for i in range(len(machine_logs)):
+
+        current = machine_logs[i]
+
+        if current["event_type"] != "PROCESS_CREATED":
+            continue
+
+        for j in range(i + 1, len(machine_logs)):
+
+            nxt = machine_logs[j]
+
+            if nxt["dt"] - current["dt"] > TIME_WINDOW:
+                break
+
+            if nxt["event_type"] == "NETWORK_CONNECTION":
+
+                process_name = str(
+                    current.get("process", "")
+                ).lower()
+
+                suspicious_processes = [
+                    "powershell",
+                    "cmd.exe",
+                    "wscript",
+                    "cscript",
+                    "rundll32",
+                    "mshta"
+                ]
+
+                if any(
+                    proc in process_name
+                    for proc in suspicious_processes
+                ):
+
+                    create_incident(
+                        machine,
+                        "Possible Malware Execution",
+                        "CRITICAL",
+                        95,
+                        [current, nxt]
+                    )
+
+                    break
+
+    # ---------------------------------------------------
+    # Rule 4 : Reconnaissance Detection
+    # ---------------------------------------------------
+
+    for i in range(len(machine_logs)):
+
+        current = machine_logs[i]
+
+        if current["event_type"] != "LOCAL_GROUP_ENUMERATION":
+            continue
+
+        related = [current]
+
+        process_found = False
+        network_found = False
+
+        for j in range(i + 1, len(machine_logs)):
+
+            nxt = machine_logs[j]
+
+            if nxt["dt"] - current["dt"] > TIME_WINDOW:
+                break
+
+            if (
+                not process_found
+                and
+                nxt["event_type"] == "PROCESS_CREATED"
+            ):
+
+                process_found = True
+                related.append(nxt)
+
+            elif (
+                process_found
+                and
+                nxt["event_type"] == "NETWORK_CONNECTION"
+            ):
+
+                network_found = True
+                related.append(nxt)
+                break
+
+        if process_found and network_found:
 
             create_incident(
                 machine,
-                "Suspicious Administrative Activity",
+                "Reconnaissance Activity",
                 "HIGH",
                 75,
-                sudo_logs
+                related
+            )
+
+    # ---------------------------------------------------
+    # Rule 5 : Lateral Movement Detection
+    # ---------------------------------------------------
+
+    for i in range(len(machine_logs)):
+
+        current = machine_logs[i]
+
+        if current["event_type"] != "LOGON_SUCCESS":
+            continue
+
+        related = [current]
+
+        network_found = False
+        process_found = False
+
+        for j in range(i + 1, len(machine_logs)):
+
+            nxt = machine_logs[j]
+
+            if nxt["dt"] - current["dt"] > TIME_WINDOW:
+                break
+
+            if (
+                not network_found
+                and
+                nxt["event_type"] == "NETWORK_CONNECTION"
+            ):
+
+                network_found = True
+                related.append(nxt)
+
+            elif (
+                network_found
+                and
+                nxt["event_type"] == "PROCESS_CREATED"
+            ):
+
+                process_found = True
+                related.append(nxt)
+                break
+
+        if network_found and process_found:
+
+            create_incident(
+                machine,
+                "Possible Lateral Movement",
+                "CRITICAL",
+                90,
+                related
+            )
+
+    # ---------------------------------------------------
+    # Rule 6 : Persistence Detection
+    # ---------------------------------------------------
+
+    for i in range(len(machine_logs)):
+
+        current = machine_logs[i]
+
+        if current["event_type"] != "USER_CREATED":
+            continue
+
+        related = [current]
+
+        password_changed = False
+        login_success = False
+
+        for j in range(i + 1, len(machine_logs)):
+
+            nxt = machine_logs[j]
+
+            if nxt["dt"] - current["dt"] > TIME_WINDOW:
+                break
+
+            if (
+                not password_changed
+                and
+                nxt["event_type"] == "PASSWORD_CHANGED"
+            ):
+
+                password_changed = True
+                related.append(nxt)
+
+            elif (
+                password_changed
+                and
+                nxt["event_type"] == "LOGON_SUCCESS"
+            ):
+
+                login_success = True
+                related.append(nxt)
+                break
+
+        if password_changed and login_success:
+
+            create_incident(
+                machine,
+                "Possible Persistence Established",
+                "HIGH",
+                85,
+                related
+            )
+
+    # ---------------------------------------------------
+    # Rule 7 : Data Exfiltration Detection
+    # ---------------------------------------------------
+
+    file_access_logs = []
+
+    for log in machine_logs:
+
+        if log["event_type"] == "FILE_ACCESS":
+            file_access_logs.append(log)
+
+    if len(file_access_logs) >= 5:
+
+        last_file = file_access_logs[-1]
+
+        for log in machine_logs:
+
+            if log["event_type"] != "NETWORK_CONNECTION":
+                continue
+
+            if (
+                log["dt"] >= last_file["dt"]
+                and
+                log["dt"] - last_file["dt"] <= TIME_WINDOW
+            ):
+
+                related = file_access_logs + [log]
+
+                create_incident(
+                    machine,
+                    "Possible Data Exfiltration",
+                    "CRITICAL",
+                    92,
+                    related
+                )
+
+                break
+
+    # ---------------------------------------------------
+    # Rule 8 : Ransomware Detection
+    # ---------------------------------------------------
+
+    for i in range(len(machine_logs)):
+
+        current = machine_logs[i]
+
+        if current["event_type"] != "PROCESS_CREATED":
+            continue
+
+        related = [current]
+
+        file_count = 0
+
+        for j in range(i + 1, len(machine_logs)):
+
+            nxt = machine_logs[j]
+
+            if nxt["dt"] - current["dt"] > TIME_WINDOW:
+                break
+
+            if nxt["event_type"] == "FILE_ACCESS":
+
+                related.append(nxt)
+                file_count += 1
+
+        if file_count >= 10:
+
+            create_incident(
+                machine,
+                "Possible Ransomware Activity",
+                "CRITICAL",
+                98,
+                related
             )
 
     # -------------------------------------------------------
