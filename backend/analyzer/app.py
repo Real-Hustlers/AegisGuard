@@ -18,13 +18,12 @@ try:
     from ingestion.classifier import classify_logs
     from mysql.merge_log_sql import import_classified_logs_to_db
     from database import get_connection
-    import incident_response
+
 except ImportError:
     from backend.analyzer.service import get_alerts, get_dashboard_summary, get_events
     from backend.analyzer.ingestion.classifier import classify_logs
     from mysql.merge_log_sql import import_classified_logs_to_db
     from backend.analyzer.database import get_connection
-    from backend.analyzer import incident_response
 
 
 UPLOAD_FOLDER = Path(__file__).parent / "test"
@@ -76,13 +75,6 @@ def run_ml_classification():
         if input_path.exists():
             classify_logs(str(input_path), str(output_path))
             import_classified_logs_to_db(str(output_path))
-            
-            # Run incident response scanner
-            conn = get_connection()
-            try:
-                incident_response.scan_and_generate_incidents(conn)
-            finally:
-                conn.close()
             return
 
 
@@ -160,8 +152,8 @@ def get_incidents():
     return jsonify(incidents)
 
 
-@app.route("/api/incidents/suspicious")
-def get_suspicious_entities():
+# @app.route("/api/incidents/suspicious")
+# def get_suspicious_entities():
     """Get top suspicious IPs and infected hosts."""
     conn = get_connection()
     try:
@@ -195,8 +187,8 @@ def get_incident_logs():
     return jsonify(logs)
 
 
-@app.route("/api/incidents/settings", methods=["GET", "POST"])
-def get_or_post_settings():
+# @app.route("/api/incidents/settings", methods=["GET", "POST"])
+# def get_or_post_settings():
     """Get or update automated response settings."""
     conn = get_connection()
     cursor = conn.cursor()
@@ -217,8 +209,8 @@ def get_or_post_settings():
     return jsonify(settings)
 
 
-@app.route("/api/incidents/execute", methods=["POST"])
-def execute_incident():
+# @app.route("/api/incidents/execute", methods=["POST"])
+# def execute_incident():
     """Manually run or simulate an incident playbook."""
     data = request.json or {}
     incident_id = data.get("incident_id")
@@ -238,8 +230,8 @@ def execute_incident():
     return jsonify({"error": "Incident not found"}), 404
 
 
-@app.route("/api/incidents/reset", methods=["POST"])
-def reset_incidents():
+# @app.route("/api/incidents/reset", methods=["POST"])
+# def reset_incidents():
     """Wipe incidents and logs to restore a clean state."""
     conn = get_connection()
     cursor = conn.cursor()
