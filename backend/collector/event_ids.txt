@@ -1,0 +1,19 @@
+_____________________________________________________________
+| Event ID | Meaning                  | Attack               |
+| -------- | ------------------------ | -------------------- |
+| 4624     | Successful Login         | Brute Force          |
+| 4625     | Failed Login             | Brute Force          |
+| 4663     | File Access              | Exfiltration         |
+| 4688     | Process Created          | Malware              |
+| 4720     | User Created             | Persistence          |
+| 4722     | User Enabled             | Persistence          |
+| 4723     | Password Changed         | Persistence          |
+| 4724     | Password Reset           | Persistence          |
+| 4725     | User Disabled            | Privilege Abuse      |
+| 4726     | User Deleted             | Cleanup              |
+| 4732     | Added to Admin Group     | Privilege Escalation |
+| 4733     | Removed from Admin Group | Privilege Abuse      |
+| 4798     | Group Enumeration        | Reconnaissance       |
+| 5156     | Network Connection       | Lateral Movement     |
+| 5158     | Network Bind             | Network Activity     |
+|__________|__________________________|______________________|

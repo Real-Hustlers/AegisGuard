@@ -5,13 +5,29 @@ import re
 # ----------------------------
 
 EVENT_TYPES = {
-    4624: "LOGON_SUCCESS",
-    4625: "LOGON_FAILURE",
-    4663: "FILE_ACCESS",
-    4688: "PROCESS_CREATED",
-    4798: "LOCAL_GROUP_ENUMERATION",
-    5156: "NETWORK_CONNECTION",
-    5158: "NETWORK_BIND"
+
+4624: "LOGON_SUCCESS",
+4625: "FAILED_LOGIN",
+
+4663: "FILE_ACCESS",
+
+4688: "PROCESS_CREATED",
+
+4720: "USER_CREATED",
+4722: "USER_ENABLED",
+4723: "PASSWORD_CHANGED",
+4724: "PASSWORD_RESET",
+4725: "USER_DISABLED",
+4726: "USER_DELETED",
+
+4732: "ADMIN_GROUP_ADDED",
+4733: "ADMIN_GROUP_REMOVED",
+
+4798: "LOCAL_GROUP_ENUMERATION",
+
+5156: "NETWORK_CONNECTION",
+5158: "NETWORK_BIND"
+
 }
 
 
@@ -25,11 +41,18 @@ def extract(patterns, text):
     Return the first matching value.
     """
 
+    if not text:
+        return ""
+
     for pattern in patterns:
         match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
 
         if match:
-            return match.group(1).strip()
+            value = match.group(1).strip()
+
+            # Ignore placeholder values
+            if value not in ["-", "(null)", "N/A"]:
+                return value
 
     return ""
 
@@ -74,6 +97,26 @@ def parse_event(event):
         r"Account Name:\s*([^\r\n]+)"
 
     ], message)
+
+    # ----------------------------
+    # TARGET USER (4720,4722,4723...)
+    # ----------------------------
+
+    target_user = extract([
+
+        r"Target Account:.*?Account Name:\s*([^\r\n]+)",
+
+        r"Target Account Name:\s*([^\r\n]+)",
+
+        r"Target User Name:\s*([^\r\n]+)",
+
+        r"New Account Name:\s*([^\r\n]+)"
+
+    ], message)
+
+    # If a target account exists, use it instead
+    if target_user:
+        log["user"] = target_user
 
 
     # ----------------------------
