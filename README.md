@@ -1,8 +1,10 @@
-# 🛡️ AegisGuard – Portable Offline Cybersecurity Analyzer
+# 🛡️ AegisGuard – Portable Offline Cybersecurity Monitoring & Incident Response Platform
 
-> **A lightweight, offline cybersecurity monitoring and threat analysis toolkit for air-gapped and restricted environments.**
+> **A lightweight, portable cybersecurity platform that enables offline log collection, threat detection, event correlation, incident generation, and response simulation for air-gapped and restricted environments.**
 
-AegisGuard is a portable cybersecurity solution that enables organizations to **collect, analyze, and visualize security events without requiring internet connectivity**. Designed for digital forensic investigations, security auditing, and offline SOC environments, the system operates entirely from a USB drive using two standalone desktop applications.
+AegisGuard is a portable cybersecurity solution that enables organizations to **collect, analyze, correlate, and respond to security events without requiring internet connectivity**. Designed for digital forensic investigations, security auditing, offline Security Operations Centers (SOCs), and educational cybersecurity environments, the system operates entirely from a USB drive using two standalone desktop applications.
+
+The platform combines **Machine Learning-based threat classification**, **rule-based event correlation**, **MITRE ATT&CK framework mapping**, **risk scoring**, **incident generation**, and **offline response playbooks** to detect multi-stage cyber attacks and provide actionable security insights. All processing, storage, and visualization are performed locally using standardized JSON files and an embedded SQLite database, ensuring complete operation without cloud services or external network dependencies.
 
 ---
 
