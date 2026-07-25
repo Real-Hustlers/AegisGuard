@@ -1,11 +1,17 @@
 import sys
 import json
 from pathlib import Path
-
 from flask import Flask, jsonify, render_template, request
+import os
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+BASE_DIR = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(BASE_DIR))
+
+app = Flask(
+    __name__,
+    template_folder=str(BASE_DIR / "templates"),
+    static_folder=str(BASE_DIR / "static"),
+)
 
 try:
     from service import get_alerts, get_dashboard_summary, get_events
@@ -20,7 +26,6 @@ except ImportError:
     from backend.analyzer.database import get_connection
     from backend.analyzer import incident_response
 
-app = Flask(__name__, template_folder=str(BASE_DIR / "templates"), static_folder=str(BASE_DIR / "static"))
 
 UPLOAD_FOLDER = Path(__file__).parent / "test"
 UPLOAD_FOLDER.mkdir(exist_ok=True)
@@ -39,7 +44,7 @@ def upload_logs():
 
     from ingestion.import_merge import merge_logs
     from ingestion.classifier import classify_logs
-    # from ingestion.correlation_engine import run_correlation
+    from ingestion.correlation_engine import run_correlation
 
     merge_logs()
 
@@ -48,7 +53,7 @@ def upload_logs():
         "output/classified_logs.json"
     )
 
-    # run_correlation()
+    run_correlation()
 
     return jsonify({
         "status": "success",

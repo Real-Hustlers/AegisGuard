@@ -3,22 +3,16 @@
 # Merges all machine JSON files into a single JSON while
 # preserving machine information and assigning a unique log ID.
 #
-# Folder structure:
-# analyzer/
-# ├── merge_logs.py
-# ├── usb_logs/
-# │   ├── machine1.json
-# │   ├── machine2.json
-# │   └── machine3.json
-# └── output/
-#     └── merged_logs.json
 
 import os
 import json
 from glob import glob
 
-INPUT_FOLDER = "test"
-OUTPUT_FOLDER = "output"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ANALYZER_DIR = os.path.dirname(BASE_DIR)
+
+INPUT_FOLDER = os.path.join(ANALYZER_DIR, "test")
+OUTPUT_FOLDER = os.path.join(ANALYZER_DIR, "output")
 OUTPUT_FILE = "merged_logs.json"
 
 
