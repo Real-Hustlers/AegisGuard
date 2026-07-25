@@ -257,7 +257,10 @@ def classify_logs(input_file, output_file):
 
 
 if __name__ == "__main__":
+    BASE_DIR = Path(__file__).resolve().parent
+    ANALYZER_DIR = BASE_DIR.parent
+
     classify_logs(
-        os.path.join(".", "output", "merged_logs.json"),
-        os.path.join(".", "output", "classified_logs.json"),
+        str(ANALYZER_DIR / "output" / "merged_logs.json"),
+        str(ANALYZER_DIR / "output" / "classified_logs.json"),
     )

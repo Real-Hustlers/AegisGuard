@@ -21,7 +21,8 @@ def run_correlation():
     import os
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+    ANALYZER_DIR = os.path.dirname(BASE_DIR) # backend/analyzer/output folder
+    OUTPUT_DIR = os.path.join(ANALYZER_DIR, "output")
 
     INPUT_FILE = os.path.join(OUTPUT_DIR, "classified_logs.json")
     OUTPUT_FILE = os.path.join(OUTPUT_DIR, "incidents.json")
