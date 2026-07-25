@@ -1,6 +1,6 @@
 import json
 
-from collector import collect_security_logs
+from collector import collect_security_logs, send_logs
 from parser import parse_event
 from detector import detect_threat
 from config_loader import load_config
@@ -42,6 +42,8 @@ def main():
         parsed["threat_level"] = detect_threat(parsed)
 
         parsed_logs.append(parsed)
+
+        send_logs(parsed_logs)
 
     # Save Parsed Logs
     with open(config["output_file"], "w", encoding="utf-8") as file:

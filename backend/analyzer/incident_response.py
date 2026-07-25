@@ -10,10 +10,10 @@ from pathlib import Path
 # --------------------------
 try:
     from database import get_connection
-    from mitre_mapper import get_mitre_mapping
+    # from mitre_mapper import get_mitre_mapping
 except ImportError:
-    from backend.analyzer.database import get_connection
-    from backend.analyzer.ingestion.mitre_mapper import get_mitre_mapping
+    from database import get_connection
+    # from mitre_mapper import get_mitre_mapping
 
 
 def log_message(conn, incident_id, message):
@@ -35,7 +35,7 @@ def get_settings(conn):
     return {row[0]: row[1] for row in rows}
 
 
-def scan_and_generate_incidents(conn):
+# def scan_and_generate_incidents(conn):
     """Scan security logs and generate pending incident response records."""
     cursor = conn.cursor()
 
@@ -194,13 +194,8 @@ def scan_and_generate_incidents(conn):
 
 def execute_incident_playbook(conn, incident_id, enforce=None):
     """Execute or simulate remediation command for an incident."""
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT incident_id, threat_type, hostname, os, command_executed, status, action_taken
-        FROM incidents
-        WHERE incident_id = ?
-    """, (incident_id,))
-    incident = cursor.fetchone()
+    with open("output/incidents.json","r") as f:
+        incident=json.load(f)
 
     if not incident:
         return False
