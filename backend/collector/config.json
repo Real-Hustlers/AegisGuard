@@ -27,7 +27,7 @@
 
     "max_events": 500,
 
-    "hours": 10,
+    "hours": 1,
 
     "raw_output_file": "raw_security_logs.json"
 }

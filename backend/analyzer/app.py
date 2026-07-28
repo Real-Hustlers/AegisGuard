@@ -37,7 +37,10 @@ def upload_logs():
     machine_id = data.get("machine_id", "UNKNOWN")
     logs = data.get("logs", [])
 
-    # Save uploaded payload (optional, for debugging)
+    # -----------------------------------------
+    # Save uploaded payload (optional)
+    # -----------------------------------------
+
     file_path = UPLOAD_FOLDER / f"{machine_id}.json"
 
     with open(file_path, "w", encoding="utf-8") as f:
@@ -61,7 +64,25 @@ def upload_logs():
     else:
         existing_logs = []
 
-    existing_logs.extend(logs)
+    # Build a set of existing RecordIds
+    existing_record_ids = {
+        log.get("record_id")
+        for log in existing_logs
+        if log.get("record_id") is not None
+    }
+
+    # Append only new logs
+    new_logs = 0
+
+    for log in logs:
+
+        record_id = log.get("record_id")
+
+        if record_id not in existing_record_ids:
+
+            existing_logs.append(log)
+            existing_record_ids.add(record_id)
+            new_logs += 1
 
     with open(WINDOWS_LOG_FILE, "w", encoding="utf-8") as f:
         json.dump(existing_logs, f, indent=4)
@@ -86,7 +107,8 @@ def upload_logs():
     return jsonify({
         "status": "success",
         "machine": machine_id,
-        "logs_received": len(logs)
+        "logs_received": len(logs),
+        "new_logs_added": new_logs
     })
 
 

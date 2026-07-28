@@ -2,7 +2,7 @@ def detect_threat(log):
 
     event = log["event_type"]
 
-    if event == "LOGON_FAILURE":
+    if event == "FAILED_LOGIN":
         return "MEDIUM"
 
     elif event == "PROCESS_CREATED":
