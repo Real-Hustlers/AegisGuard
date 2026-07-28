@@ -154,7 +154,17 @@ function renderIncidentDetails(incident) {
         </div>
         <div style="margin-top: 16px;">
             <div style="font-size:11px; color:#94a3b8; margin-bottom:8px;">Details</div>
-            <div class="text-main" style="background: rgba(15, 23, 42, 0.8); padding: 14px; border-radius: 6px; border:1px solid var(--border-color); min-height: 80px; white-space: pre-wrap;">${escapeHtml(incident.incident_report || 'No incident report available.')}</div>
+            <div class="text-main" style="background: rgba(15, 23, 42, 0.8); padding: 14px; border-radius: 6px; border:1px solid var(--border-color); min-height: 80px; white-space: pre-wrap;">Threat:
+            ${incident.incident_report.threat_type}
+
+            Action:
+            ${incident.incident_report.action_taken}
+
+            MITRE:
+            ${incident.mitre.technique_id}
+
+            Playbook:
+            ${incident.playbook_steps.join("\n")}</div>
         </div>
     `;
 }

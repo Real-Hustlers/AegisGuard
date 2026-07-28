@@ -1,0 +1,83 @@
+{
+  "BRUTE_FORCE": {
+    "severity": "HIGH",
+    "responses": [
+      "Block Source IP",
+      "Lock User Account",
+      "Notify Administrator",
+      "Generate Incident Report"
+    ]
+  },
+  "PRIVILEGE_ESCALATION": {
+    "severity": "CRITICAL",
+    "responses": [
+      "Terminate Suspicious Process",
+      "Lock User Account",
+      "Preserve Evidence",
+      "Notify Administrator"
+    ]
+  },
+  "MALWARE": {
+    "severity": "CRITICAL",
+    "responses": [
+      "Quarantine File",
+      "Terminate Process",
+      "Isolate Host",
+      "Notify Administrator"
+    ]
+  },
+  "USB_ATTACK": {
+    "severity": "HIGH",
+    "responses": [
+      "Disable USB",
+      "Record USB Details",
+      "Alert Administrator"
+    ]
+  },
+  "FILE_TAMPERING": {
+    "severity": "HIGH",
+    "responses": [
+      "Verify File Integrity",
+      "Preserve Evidence",
+      "Generate Incident Report"
+    ]
+  },
+  "FIREWALL_DISABLED": {
+    "severity": "CRITICAL",
+    "responses": [
+      "Re-enable Firewall",
+      "Create Critical Alert"
+    ]
+  },
+  "PORT_SCAN": {
+    "severity": "MEDIUM",
+    "responses": [
+      "Block Source IP",
+      "Increase Monitoring"
+    ]
+  },
+  "ACCOUNT_COMPROMISE": {
+    "severity": "CRITICAL",
+    "responses": [
+      "Lock User Account",
+      "Reset Credentials",
+      "Notify Administrator"
+    ]
+  },
+  "RANSOMWARE": {
+    "severity": "CRITICAL",
+    "responses": [
+      "Isolate Host",
+      "Preserve Evidence",
+      "Generate Critical Incident Report"
+    ]
+  },
+  "DEFENDER_ALERT": {
+    "severity": "HIGH",
+    "responses": [
+      "Run Full Defender Scan",
+      "Quarantine Threat",
+      "Notify Administrator"
+    ]
+  }
+}

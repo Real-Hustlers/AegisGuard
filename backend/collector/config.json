@@ -29,7 +29,5 @@
 
     "hours": 10,
 
-    "output_file": "windows_logs.json",
-
     "raw_output_file": "raw_security_logs.json"
 }
