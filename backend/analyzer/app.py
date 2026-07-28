@@ -142,25 +142,16 @@ def get_incidents():
             "command_executed": r["command_executed"],
             "playbook_steps": json.loads(r["playbook_steps"]) if r["playbook_steps"] else [],
             "incident_report": incident_report,
+            "ml_prediction": incident_report.get("ml_prediction") if isinstance(incident_report, dict) else None,
+            "ml_confidence": incident_report.get("ml_confidence") if isinstance(incident_report, dict) else None,
             "alert_status": r["alert_status"],
             "mitre": json.loads(r["mitre"]) if r["mitre"] else {
                 "technique_id": "Unknown",
-                "technique_name": "Unknown",
+                "technique": "Unknown",
                 "tactic": "Unknown"
             }
         })
     return jsonify(incidents)
-
-
-# @app.route("/api/incidents/suspicious")
-# def get_suspicious_entities():
-    """Get top suspicious IPs and infected hosts."""
-    conn = get_connection()
-    try:
-        res = incident_response.get_highly_suspicious_entities(conn)
-    finally:
-        conn.close()
-    return jsonify(res)
 
 
 @app.route("/api/incidents/logs")
@@ -186,66 +177,75 @@ def get_incident_logs():
         })
     return jsonify(logs)
 
-
-# @app.route("/api/incidents/settings", methods=["GET", "POST"])
-# def get_or_post_settings():
-    """Get or update automated response settings."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    if request.method == "POST":
-        data = request.json or {}
-        for key in ["auto_response_enabled", "simulation_mode"]:
-            if key in data:
-                val = "true" if data[key] else "false"
-                cursor.execute("""
-                    INSERT OR REPLACE INTO settings (key, value)
-                    VALUES (?, ?)
-                """, (key, val))
-        conn.commit()
-    
-    cursor.execute("SELECT key, value FROM settings")
-    settings = {r["key"]: (r["value"] == "true") for r in cursor.fetchall()}
-    conn.close()
-    return jsonify(settings)
-
-
-# @app.route("/api/incidents/execute", methods=["POST"])
-# def execute_incident():
-    """Manually run or simulate an incident playbook."""
-    data = request.json or {}
-    incident_id = data.get("incident_id")
-    enforce = data.get("enforce", False)
-    
-    if not incident_id:
-        return jsonify({"error": "Missing incident_id"}), 400
-        
-    conn = get_connection()
-    try:
-        success = incident_response.execute_incident_playbook(conn, incident_id, enforce=enforce)
-    finally:
-        conn.close()
-        
-    if success:
-        return jsonify({"success": True})
-    return jsonify({"error": "Incident not found"}), 404
-
-
-# @app.route("/api/incidents/reset", methods=["POST"])
-# def reset_incidents():
-    """Wipe incidents and logs to restore a clean state."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM incidents")
-    cursor.execute("DELETE FROM response_logs")
-    conn.commit()
-    
-    # Re-run log scan to populate
-    incident_response.scan_and_generate_incidents(conn)
-    conn.close()
-    return jsonify({"success": True})
-
-
 run_ml_classification()
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)
+
+# @app.route("/api/incidents/suspicious")
+# def get_suspicious_entities():
+    # """Get top suspicious IPs and infected hosts."""
+    # conn = get_connection()
+    # try:
+    #     res = incident_response.get_highly_suspicious_entities(conn)
+    # finally:
+    #     conn.close()
+    # return jsonify(res)
+
+
+# @app.route("/api/incidents/settings", methods=["GET", "POST"])
+# def get_or_post_settings():
+#     """Get or update automated response settings."""
+#     conn = get_connection()
+#     cursor = conn.cursor()
+#     if request.method == "POST":
+#         data = request.json or {}
+#         for key in ["auto_response_enabled", "simulation_mode"]:
+#             if key in data:
+#                 val = "true" if data[key] else "false"
+#                 cursor.execute("""
+#                     INSERT OR REPLACE INTO settings (key, value)
+#                     VALUES (?, ?)
+#                 """, (key, val))
+#         conn.commit()
+    
+#     cursor.execute("SELECT key, value FROM settings")
+#     settings = {r["key"]: (r["value"] == "true") for r in cursor.fetchall()}
+#     conn.close()
+#     return jsonify(settings)
+
+
+# # @app.route("/api/incidents/execute", methods=["POST"])
+# # def execute_incident():
+#     """Manually run or simulate an incident playbook."""
+#     data = request.json or {}
+#     incident_id = data.get("incident_id")
+#     enforce = data.get("enforce", False)
+    
+#     if not incident_id:
+#         return jsonify({"error": "Missing incident_id"}), 400
+        
+#     conn = get_connection()
+#     try:
+#         success = incident_response.execute_incident_playbook(conn, incident_id, enforce=enforce)
+#     finally:
+#         conn.close()
+        
+#     if success:
+#         return jsonify({"success": True})
+#     return jsonify({"error": "Incident not found"}), 404
+
+
+# # @app.route("/api/incidents/reset", methods=["POST"])
+# # def reset_incidents():
+#     """Wipe incidents and logs to restore a clean state."""
+#     conn = get_connection()
+#     cursor = conn.cursor()
+#     cursor.execute("DELETE FROM incidents")
+#     cursor.execute("DELETE FROM response_logs")
+#     conn.commit()
+    
+#     # Re-run log scan to populate
+#     incident_response.scan_and_generate_incidents(conn)
+#     conn.close()
+#     return jsonify({"success": True})
