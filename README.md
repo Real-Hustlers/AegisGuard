@@ -1,47 +1,75 @@
-# 🛡️ AegisGuard – Portable Offline Cybersecurity Analyzer
+# 🛡️ AegisGuard – Portable Offline Cybersecurity Monitoring & Incident Response Platform
 
-> **A lightweight, offline cybersecurity monitoring and threat analysis toolkit for air-gapped and restricted environments.**
+> **A lightweight, portable cybersecurity platform that enables offline log collection, threat detection, event correlation, incident generation, and response simulation for air-gapped and restricted environments.**
 
-AegisGuard is a portable cybersecurity solution that enables organizations to **collect, analyze, and visualize security events without requiring internet connectivity**. Designed for digital forensic investigations, security auditing, and offline SOC environments, the system operates entirely from a USB drive using two standalone desktop applications.
+AegisGuard is a portable cybersecurity solution that enables organizations to **collect, analyze, correlate, and respond to security events without requiring internet connectivity**. Designed for digital forensic investigations, security auditing, offline Security Operations Centers (SOCs), and educational cybersecurity environments, the system operates entirely from a USB drive using two standalone desktop applications.
+
+The platform combines **Machine Learning-based threat classification**, **rule-based event correlation**, **MITRE ATT&CK framework mapping**, **risk scoring**, **incident generation**, and **offline response playbooks** to detect multi-stage cyber attacks and provide actionable security insights. All processing, storage, and visualization are performed locally using standardized JSON files and an embedded SQLite database, ensuring complete operation without cloud services or external network dependencies.
 
 ---
 
 # 📌 Project Overview
 
-AegisGuard follows a two-stage architecture:
+AegisGuard is a portable, offline cybersecurity monitoring and incident response platform designed for air-gapped and restricted environments. The system enables organizations to collect, analyze, correlate, and respond to security events without requiring internet connectivity.
 
-1. **Collector** – Collects security logs from Windows and Linux endpoints and converts them into a standardized JSON format.
-2. **Analyzer** – Processes collected logs, correlates events, detects potential threats, stores results in SQLite, and visualizes security insights through an offline dashboard.
+The project follows a modular pipeline consisting of:
 
-The applications communicate **only through JSON log files stored on a USB drive**, eliminating the need for network communication or cloud services.
+1. **Collector**
+   - Collects security logs from Windows and Linux endpoints.
+   - Normalizes logs into a common JSON schema.
+   - Stores collected logs on a portable USB drive.
+
+2. **Analyzer**
+   - Merges and validates collected logs.
+   - Performs Machine Learning-based threat classification.
+   - Maps detected threats to the MITRE ATT&CK framework.
+   - Correlates related events into multi-stage attack incidents.
+   - Generates structured incident reports with risk scores.
+   - Supports offline response playbooks and automated response simulation.
+   - Stores results in SQLite and visualizes them through an interactive offline dashboard.
+
+The Collector and Analyzer communicate exclusively through standardized JSON files, making the entire platform portable, offline, and suitable for digital forensic investigations, cyber ranges, educational laboratories, and isolated Security Operations Centers (SOCs).
 
 ---
 
 # 🏗️ System Architecture
 
 ```text
-                ┌────────────────────────────┐
-                │   Victim Machines (N)      │
-                │ Windows / Linux Endpoints  │
-                └─────────────┬──────────────┘
-                              │
-                    Collector.exe
-                              │
-             Collect & Normalize Logs
-                              │
-                    Standard JSON Files
-                              │
-                     USB Flash Drive
-                              │
-                Transfer to Analyst PC
-                              │
-                    Analyzer.exe
-                              │
-         Event Correlation & Threat Detection
-                              │
-                       SQLite Database
-                              │
-               Offline Dashboard & Reports
+              ┌──────────────────────────────┐
+              │ Windows / Linux Endpoints    │
+              └──────────────┬───────────────┘
+                             │
+                    Collector Application
+                             │
+             Collect & Normalize Security Logs
+                             │
+                  Standardized JSON Files
+                             │
+                      USB Flash Drive
+                             │
+                    Analyzer Application
+                             │
+                     Merge & Validate Logs
+                             │
+                Machine Learning Classifier
+                             │
+                Threat Score & Threat Level
+                             │
+                MITRE ATT&CK Mapping Engine
+                             │
+                 Event Correlation Engine
+                             │
+                 Multi-stage Attack Detection
+                             │
+                  Incident Generation Engine
+                             │
+               Response Playbook Assignment
+                             │
+            Offline Response Simulation Engine
+                             │
+                     SQLite Database
+                             │
+              Offline Dashboard & Reports
 ```
 
 ---
@@ -77,14 +105,16 @@ The applications communicate **only through JSON log files stored on a USB drive
 
 ## Analyzer
 
+- Log merging and normalization
 - JSON log ingestion
-- Event validation
-- Duplicate detection
-- Rule-based threat detection
-- Event correlation
-- Risk scoring
-- Recommendation engine
-- SQLite storage
+- Machine Learning-based threat classification
+- Rule-based threat scoring
+- MITRE ATT&CK technique mapping
+- Event correlation engine
+- Multi-stage attack detection
+- Incident generation
+- SQLite database storage
+- Offline incident response workflow
 - Interactive dashboard
 - Offline reporting
 
@@ -99,58 +129,53 @@ AegisGuard/
 │   ├── collectors/
 │   ├── parsers/
 │   ├── schema/
-│   │   ├── formatter.py
-│   │   └── event_schema.py
-│   │
 │   ├── storage/
-│   │   ├── json_writer.py
-│   │   ├── usb_manager.py
-│   │   └── checksum.py
-│   │
 │   ├── utils/
-│   │   ├── logger.py
-│   │   ├── platform_detector.py
-│   │   └── config.py
-│   │
-│   └── output/
-│       └── logs.json
+│   ├── output/
+│   └── collector.py
 │
-├── analyzer/
-│   ├── ingestion/
-│   │   ├── loader.py
-│   │   ├── validator.py
-│   │   ├── deduplicator.py
-│   │   └── importer.py
-│   │
-│   ├── detection/
-│   │   ├── engine.py
-│   │   ├── correlator.py
-│   │   ├── severity.py
-│   │   ├── recommender.py
-│   │   └── rules/
-│   │       ├── brute_force.py
-│   │       ├── privilege_escalation.py
-│   │       ├── account_compromise.py
-│   │       ├── suspicious_process.py
-│   │       └── file_tampering.py
-│   │
-│   ├── alerts/
-│   │   ├── alert.py
-│   │   └── manager.py
-│   │
-│   ├── reports/
-│   ├── dashboard/
-│   └── main.py
+├── backend/
+│   └── analyzer/
+│       ├── ingestion/
+│       │   ├── import_merge.py
+│       │   ├── classifier.py
+│       │   ├── correlation_engine.py
+│       │   ├── mitre_mapper.py
+│       │   ├── output/
+│       │   └── test/
+│       │
+│       ├── mysql/
+│       │   ├── merge_log_sql.py
+│       │   └── schema.sql
+│       │
+│       ├── output/
+│       │   ├── merged_logs.json
+│       │   ├── classified_logs.json
+│       │   ├── incidents.json
+│       │   └── incident_reports/
+│       │
+│       ├── app.py
+│       ├── service.py
+│       ├── database.py
+│       ├── incident_response.py
+│       └── settings.py
 │
-├── database/
-│   ├── db_manager.py
-│   ├── schema.sql
-│   └── repositories/
+├── ML Aegis/
+│   └── ml/
+│       ├── model.pkl
+│       ├── label_encoder.pkl
+│       ├── train_model.py
+│       └── dataset.csv
 │
-├── common/
-├── config/
+├── static/
+│   ├── css/
+│   ├── js/
+│   └── images/
+│
+├── templates/
+│   └── index.html
+│
 ├── docs/
-├── tests/
 ├── requirements.txt
 ├── build_collector.spec
 ├── build_analyzer.spec
@@ -185,49 +210,83 @@ This standardized schema ensures compatibility between all supported operating s
 
 ---
 
-# 🔍 Threat Detection
+# 🔍 Threat Detection & Correlation
 
-The Analyzer uses rule-based detection and event correlation to identify suspicious activities.
+AegisGuard combines Machine Learning classification with rule-based event correlation to detect complex attack scenarios.
 
-### Authentication
+## Machine Learning Classification
 
-- Successful Login
-- Failed Login
-- Multiple Failed Logins
-- SSH Brute Force
-- Account Compromise
-- Password Change
-- User Creation
-- User Deletion
+Each incoming event is classified into a threat category using a trained ML model and assigned:
 
-### Privilege Events
+- Threat Prediction
+- Confidence Score
+- Threat Score
+- Threat Level
+- MITRE ATT&CK Mapping
 
-- Sudo Execution
-- Administrator Login
-- Privilege Escalation
+## Event Correlation Engine
 
-### File Activity
+The Correlation Engine groups related events occurring within configurable time windows to identify multi-stage attacks.
 
-- File Creation
-- File Modification
-- File Deletion
-- File Rename
+Currently supported correlation patterns include:
 
-### System Events
+| Rule | Attack |
+|------|---------|
+| Rule 1 | Brute Force Attack |
+| Rule 2 | Privilege Escalation |
+| Rule 3 | Malware Execution |
+| Rule 4 | Reconnaissance |
+| Rule 5 | Lateral Movement |
+| Rule 6 | Persistence |
+| Rule 7 | Data Exfiltration |
+| Rule 8 | Ransomware Activity |
 
-- Service Started
-- Service Stopped
-- Firewall Disabled
-- Firewall Enabled
-- USB Connected
-- USB Removed
+Each detected attack generates an incident containing:
 
-### Network Events
+- Incident ID
+- Risk Score
+- Severity
+- Timeline
+- Related Logs
+- MITRE ATT&CK Technique
+- Machine Learning Prediction
 
-- SSH Login
-- Remote Desktop Login
-- Suspicious Port Access
-- Unknown Network Connections
+---
+
+# ⚡ Incident Response Workflow
+
+Each detected incident follows an automated offline response workflow.
+
+Raw Logs
+↓
+Collector
+↓
+Merged Logs
+↓
+ML Classification
+↓
+Correlation Engine
+↓
+Incident Generation
+↓
+MITRE ATT&CK Mapping
+↓
+Response Playbook
+↓
+Incident Response Package
+↓
+Dashboard
+
+
+## Each incident contains:
+
+- Incident metadata
+- Timeline
+- Threat score
+- MITRE ATT&CK mapping
+- Suggested response playbook
+- Remediation commands
+- Related evidence
 
 ---
 
@@ -270,36 +329,29 @@ The Analyzer stores processed information in an offline SQLite database.
 
 Tables include:
 
-- Events
-- Alerts
-- Recommendations
-- Hosts
-- Users
-- Statistics
+- security_logs
+- incidents
+- response_logs
+- settings
 
 ---
 
 # 📊 Dashboard
 
-The PySide6 desktop dashboard provides:
+The offline dashboard provides:
 
 - Security Overview
-- Event Explorer
-- Alert Management
 - Threat Timeline
-- Host Statistics
-- User Activity
-- Search & Filters
-- Report Generation
-
-Charts include:
-
-- Alerts by Severity
-- Event Categories
-- Authentication Timeline
+- Incident Explorer
+- MITRE ATT&CK Mapping
+- Threat Severity Distribution
+- Host Activity
+- Authentication Activity
 - Top Source IPs
-- Daily Event Trends
-- Threat Distribution
+- Event Explorer
+- Incident Details
+- Response Logs
+- Automated Response Status
 
 ---
 
@@ -423,15 +475,58 @@ pytest tests/
 
 ---
 
+# 🎥 Demonstration Workflow
+
+The project demonstration follows the complete Security Operations Center (SOC) workflow:
+
+1. Collect security logs from Windows/Linux endpoints.
+2. Merge and normalize collected logs.
+3. Perform Machine Learning-based threat classification.
+4. Assign threat scores and MITRE ATT&CK mappings.
+5. Correlate related events into attack incidents.
+6. Generate structured incident reports.
+7. Load incidents into the offline dashboard.
+8. Display recommended response playbooks.
+9. Simulate automated incident response actions.
+10. Review response logs and mitigation status.
+
+The entire workflow operates without requiring an internet connection.
+
+---
+
 # 🎯 Future Enhancements
 
-- MITRE ATT&CK technique mapping
-- YARA rule integration
+The current implementation focuses on offline log analysis and automated incident generation. Future work includes:
+
+- Graph-based event correlation
 - Sigma rule support
+- YARA rule integration
 - Offline IOC database
-- Machine learning anomaly detection
-- Multi-language support
-- Automated USB synchronization
+- Threat intelligence synchronization
+- Machine Learning-based anomaly detection
+- UEBA (User & Entity Behavior Analytics)
+- Multi-host attack graph visualization
+- Digital forensic artifact collection
+- Portable incident response toolkit
+- Automatic PDF incident report generation
+- Multi-language dashboard support
+
+---
+
+# ✅ Current Capabilities
+
+- Offline operation
+- Cross-platform log collection
+- Machine Learning threat classification
+- MITRE ATT&CK mapping
+- Threat scoring
+- Event correlation
+- Multi-stage attack detection
+- Incident generation
+- SQLite backend
+- Offline dashboard
+- Response playbook support
+- Automated response simulation
 
 ---
 

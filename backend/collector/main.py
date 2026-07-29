@@ -5,6 +5,9 @@ from parser import parse_event
 from detector import detect_threat
 from config_loader import load_config
 
+# NEW
+from live_monitoring import start_live_monitor
+
 
 def main():
 
@@ -12,12 +15,13 @@ def main():
     print("Windows Security Log Collector")
     print("=" * 60)
 
-    # Load configuration
     config = load_config()
 
     print("Configuration Loaded Successfully\n")
 
-    # Collect Security Logs
+    # -------------------------
+    # Import Historical Logs
+    # -------------------------
     raw_logs = collect_security_logs(
         hours=config["hours"],
         max_events=config["max_events"]
@@ -25,38 +29,37 @@ def main():
 
     print(f"Collected {len(raw_logs)} Security Events.\n")
 
-    # Save Raw Logs
     with open(config["raw_output_file"], "w", encoding="utf-8") as file:
         json.dump(raw_logs, file, indent=4, default=str)
 
-    print(f"Raw logs saved to '{config['raw_output_file']}'\n")
-
     parsed_logs = []
 
-    # Parse each event
     for event in raw_logs:
 
         parsed = parse_event(event)
-
-        # Detect threat level
         parsed["threat_level"] = detect_threat(parsed)
 
         parsed_logs.append(parsed)
 
-        send_logs(parsed_logs)
+    # Upload historical logs once
+    send_logs(parsed_logs)
 
-    # Save Parsed Logs
-    with open(config["output_file"], "w", encoding="utf-8") as file:
-        json.dump(parsed_logs, file, indent=4)
+    # Find highest RecordId imported
+    if raw_logs:
+        last_record = max(
+            event["RecordId"]
+            for event in raw_logs
+        )
+    else:
+        last_record = 0
 
     print("=" * 60)
-    print("Windows Log Collection Completed Successfully")
+    print(f"Imported {len(parsed_logs)} historical logs.")
+    print("Starting Live Monitoring...")
     print("=" * 60)
 
-    print(f"Total Raw Events      : {len(raw_logs)}")
-    print(f"Total Parsed Events   : {len(parsed_logs)}")
-    print(f"Raw Output File       : {config['raw_output_file']}")
-    print(f"Parsed Output File    : {config['output_file']}")
+    # Start monitoring only NEW events
+    start_live_monitor(last_record)
 
 
 if __name__ == "__main__":

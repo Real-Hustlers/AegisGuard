@@ -47,7 +47,8 @@ Get-WinEvent -FilterHashtable @{{
         5158
     )
 }} -MaxEvents {max_events} |
-Select-Object Id,
+Select-Object RecordId,
+              Id,
               TimeCreated,
               MachineName,
               LevelDisplayName,
