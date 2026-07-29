@@ -4,9 +4,9 @@
     "severity": "CRITICAL",
     "risk_score": 95,
     "mitre": {
-        "technique_id": "N/A",
-        "technique_name": "No Threat",
-        "tactic": "None"
+        "tactic": "Credential Access",
+        "technique": "Brute Force",
+        "technique_id": "T1110"
     },
     "timeline": {
         "start_time": "2026-07-14T09:05:11Z",
@@ -29,5 +29,5 @@
         "Administrator notified"
     ],
     "status": "SIMULATED",
-    "generated_at": "2026-07-28T22:54:21.234182"
+    "generated_at": "2026-07-29T21:09:42.771170"
 }
