@@ -47,6 +47,12 @@ ConvertTo-Json
         errors="ignore"
     )
 
+    print("PowerShell stdout:")
+    print(result.stdout)
+
+    print("PowerShell stderr:")
+    print(result.stderr)
+
     if not result.stdout.strip():
         return 0
 

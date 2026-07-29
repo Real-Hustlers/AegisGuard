@@ -1,4 +1,4 @@
-from mitre.mitre_mapper import MitreMapper
+from backend.analyzer.ingestion.mitre.mitre_mapper import MitreMapper
 from response.playbook_loader import PlaybookLoader
 
 class IncidentEnricher:

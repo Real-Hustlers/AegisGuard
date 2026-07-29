@@ -5,12 +5,12 @@
         "attack_type": "Possible Brute Force Attack",
         "severity": "CRITICAL",
         "risk_score": 95,
-        "ml_prediction": "NORMAL",
+        "ml_prediction": "BRUTE_FORCE",
         "ml_confidence": 99.0,
         "mitre": {
-            "technique_id": "N/A",
-            "technique_name": "No Threat",
-            "tactic": "None"
+            "tactic": "Credential Access",
+            "technique": "Brute Force",
+            "technique_id": "T1110"
         },
         "hostname": "Linux-Server",
         "os": "Ubuntu 24.04",

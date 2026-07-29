@@ -1,5 +1,6 @@
 import re
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 # ----------------------------
 # Event ID Mapping
@@ -52,11 +53,10 @@ def normalize_timestamp(value):
 
         dt = datetime.fromtimestamp(
             milliseconds / 1000,
-            tz=timezone.utc
+            tz=ZoneInfo("Asia/Kolkata")
         )
 
-        return dt.isoformat()
-
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
     return str(value)
 
 

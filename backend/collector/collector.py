@@ -32,29 +32,15 @@ def collect_security_logs(hours=1, max_events=100):
     start_time = (datetime.now() - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%S")
 
     powershell_command = f"""
-$start = Get-Date "{start_time}"
-
-Get-WinEvent -FilterHashtable @{{
-    LogName='Security'
-    StartTime=$start
-    Id=@(
-        4624,
-        4625,
-        4663,
-        4688,
-        4798,
-        5156,
-        5158
-    )
-}} -MaxEvents {max_events} |
-Select-Object RecordId,
-              Id,
-              TimeCreated,
-              MachineName,
-              LevelDisplayName,
-              Message |
-ConvertTo-Json -Depth 4
-"""
+    Get-WinEvent -LogName Security -MaxEvents {max_events} |
+    Select-Object RecordId,
+                Id,
+                TimeCreated,
+                MachineName,
+                LevelDisplayName,
+                Message |
+    ConvertTo-Json -Depth 4
+    """
 
     result = subprocess.run(
         [
@@ -71,10 +57,20 @@ ConvertTo-Json -Depth 4
         errors="ignore"
     )
 
+    print("Start Time:", start_time)
+    print("PowerShell Command:")
+    print(powershell_command)
+
     if result.returncode != 0:
         print("PowerShell Error:")
         print(result.stderr)
         return []
+
+    print("STDOUT:")
+    print(result.stdout)
+
+    print("STDERR:")
+    print(result.stderr)
 
     if not result.stdout.strip():
         return []
