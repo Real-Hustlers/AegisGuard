@@ -152,8 +152,8 @@
         </div>
         <ul class="nav-menu">
             <li class="nav-item active" data-target="view-dashboard"><i class="ph ph-squares-four"></i> Dashboard</li>
-            <li class="nav-item" data-target="view-logs"><i class="ph ph-terminal-window"></i> Event Logs<span class="nav-badge">12</span></li>
-            <li class="nav-item" data-target="view-threats"><i class="ph ph-warning"></i> Threats<span class="nav-badge" style="border: 1px solid var(--border-color)">2</span></li>
+            <li class="nav-item" data-target="view-logs"><i class="ph ph-terminal-window"></i> Event Logs<span id="navEventsBadge" class="nav-badge">0</span></li>
+            <li class="nav-item" data-target="view-threats"><i class="ph ph-warning"></i> Threats <span id="navThreatsBadge" class="nav-badge" style="border: 1px solid var(--border-color)">0</span></li>
             <li class="nav-item" data-target="view-incident-response"><i class="ph ph-shield-warning"></i> Incident Response<span id="irBadge" class="nav-badge" style="background: var(--red-dim); border: 1px solid var(--red);">0</span></li>
             <li class="nav-item" data-target="view-devices"><i class="ph ph-hard-drives"></i> Devices</li>
             <li class="nav-item" data-target="view-settings"><i class="ph ph-gear"></i> Settings</li>
@@ -242,33 +242,14 @@
             <h2 style="font-size:16px; letter-spacing:1px; text-transform:uppercase;">Threat Intelligence</h2>
             <div class="panel-subtitle">Active threats requiring immediate attention</div>
             <div class="threat-summary">
-                <div class="threat-box critical"><i class="ph ph-x-circle text-red" style="font-size:24px;"></i><div><div class="text-red" style="font-size:24px; font-weight:700;">1</div><div style="font-size:11px; text-transform:uppercase; letter-spacing:1px;">Critical Threats</div></div></div>
-                <div class="threat-box"><i class="ph ph-warning text-orange" style="font-size:24px;"></i><div><div class="text-orange" style="font-size:24px; font-weight:700;">2</div><div style="font-size:11px; text-transform:uppercase; letter-spacing:1px;">High Severity</div></div></div>
-                <div class="threat-box"><i class="ph ph-chart-line-up text-cyan" style="font-size:24px;"></i><div><div class="text-cyan" style="font-size:24px; font-weight:700;">3</div><div style="font-size:11px; text-transform:uppercase; letter-spacing:1px;">Attack Patterns</div></div></div>
+                <div class="threat-box critical"><i class="ph ph-x-circle text-red" style="font-size:24px;"></i><div><div id="criticalCount" class="text-red" style="font-size:24px; font-weight:700;">0</div><div style="font-size:11px; text-transform:uppercase; letter-spacing:1px;">Critical Threats</div></div></div>
+                <div class="threat-box"><i class="ph ph-warning text-orange" style="font-size:24px;"></i><div><div id="highCount" class="text-orange" style="font-size:24px; font-weight:700;">0</div><div style="font-size:11px; text-transform:uppercase; letter-spacing:1px;">High Severity</div></div></div>
+                <div class="threat-box"><i class="ph ph-chart-line-up text-cyan" style="font-size:24px;"></i><div><div id="attackPatternsCount" class="text-cyan" style="font-size:24px; font-weight:700;">0</div><div style="font-size:11px; text-transform:uppercase; letter-spacing:1px;">Attack Patterns</div></div></div>
             </div>
-            <div class="panel">
-                <div class="panel-title" style="margin-bottom:15px;">Critical & High Severity Events</div>
-                <div class="threat-row">
-                    <div style="display:flex; gap:15px; align-items:flex-start;">
-                        <i class="ph ph-x-circle text-red" style="font-size:18px; margin-top:2px;"></i>
-                        <div>
-                            <div style="margin-bottom:5px;"><span class="badge badge-critical">CRITICAL</span> <span class="mono" style="font-size:11px; margin-left:8px;">LOG-7821 · 14:32:07</span></div>
-                            <div class="text-white" style="font-size:14px; margin-bottom:5px;">SSH brute-force detected — 48 failed attempts in 60s</div>
-                            <div class="mono" style="font-size:11px;">SRV-ALPHA · 192.168.1.104</div>
-                        </div>
-                    </div>
-                    <button class="btn-outline">INVESTIGATE</button>
-                </div>
-                <div class="threat-row">
-                    <div style="display:flex; gap:15px; align-items:flex-start;">
-                        <i class="ph ph-warning-circle text-orange" style="font-size:18px; margin-top:2px;"></i>
-                        <div>
-                            <div style="margin-bottom:5px;"><span class="badge badge-high">HIGH</span> <span class="mono" style="font-size:11px; margin-left:8px;">LOG-7820 · 14:31:44</span></div>
-                            <div class="text-white" style="font-size:14px; margin-bottom:5px;">Nmap port scan signature identified on internal interface</div>
-                            <div class="mono" style="font-size:11px;">WS-003 · 192.168.1.87</div>
-                        </div>
-                    </div>
-                    <button class="btn-outline">INVESTIGATE</button>
+                <div class="panel">
+                <div id="threatPanelTitle" class="panel-title" style="margin-bottom:15px;">Critical & High Severity Events (0)</div>
+                <div id="threatList">
+                    <!-- Filled dynamically from /api/alerts -->
                 </div>
             </div>
         </section>
@@ -277,15 +258,12 @@
             <div style="display:flex; justify-content:space-between; margin-bottom:24px;">
                 <div>
                     <h2 style="font-size:16px; letter-spacing:1px; text-transform:uppercase;">Monitored Devices</h2>
-                    <div class="panel-subtitle" style="margin:0">Air-gapped network — 36 total devices</div>
+                    <div id="deviceCountText" class="panel-subtitle" style="margin:0">Air-gapped network — 0 total devices</div>
                 </div>
-                <button class="btn-outline" style="display:flex; align-items:center; gap:5px;"><i class="ph ph-arrows-clockwise"></i> SYNC</button>
+                <button id="deviceSyncBtn" class="btn-outline" style="display:flex; align-items:center; gap:5px;"><i class="ph ph-arrows-clockwise"></i> SYNC</button>
             </div>
-            <div class="device-grid">
-                <div class="device-card critical"><div style="display:flex; justify-content:space-between; margin-bottom:15px;"><div class="text-white" style="font-weight:600; display:flex; align-items:center; gap:8px;"><span class="status-dot dot-red" style="background:var(--red)"></span> SRV-ALPHA</div><i class="ph ph-eye text-main"></i></div><div style="font-size:11px; margin-bottom:2px;">Linux Server</div><div class="mono text-cyan" style="font-size:12px; margin-bottom:20px;">192.168.1.104</div><div style="display:flex; justify-content:space-between; font-size:11px;"><span>1,847 events</span><span class="text-white">Just now</span></div></div>
-                <div class="device-card warning"><div style="display:flex; justify-content:space-between; margin-bottom:15px;"><div class="text-white" style="font-weight:600; display:flex; align-items:center; gap:8px;"><span class="status-dot dot-orange"></span> WS-003</div><i class="ph ph-eye text-main"></i></div><div style="font-size:11px; margin-bottom:2px;">Win Workstation</div><div class="mono text-cyan" style="font-size:12px; margin-bottom:20px;">192.168.1.87</div><div style="display:flex; justify-content:space-between; font-size:11px;"><span>432 events</span><span class="text-white">1 min</span></div></div>
-                <div class="device-card warning"><div style="display:flex; justify-content:space-between; margin-bottom:15px;"><div class="text-white" style="font-weight:600; display:flex; align-items:center; gap:8px;"><span class="status-dot dot-orange"></span> VM-GUEST-2</div><i class="ph ph-eye text-main"></i></div><div style="font-size:11px; margin-bottom:2px;">VirtualBox VM</div><div class="mono text-cyan" style="font-size:12px; margin-bottom:20px;">192.168.2.15</div><div style="display:flex; justify-content:space-between; font-size:11px;"><span>678 events</span><span class="text-white">1 min</span></div></div>
-                <div class="device-card"><div style="display:flex; justify-content:space-between; margin-bottom:15px;"><div class="text-white" style="font-weight:600; display:flex; align-items:center; gap:8px;"><span class="status-dot dot-green"></span> GW-MAIN</div><i class="ph ph-eye text-main"></i></div><div style="font-size:11px; margin-bottom:2px;">Network Gateway</div><div class="mono text-cyan" style="font-size:12px; margin-bottom:20px;">192.168.1.1</div><div style="display:flex; justify-content:space-between; font-size:11px;"><span>3,241 events</span><span class="text-white">Just now</span></div></div>
+            <div id="deviceGrid" class="device-grid">
+                <div class="device-card"><div style="display:flex; justify-content:space-between; margin-bottom:15px;"><div class="text-white" style="font-weight:600; display:flex; align-items:center; gap:8px;"><span class="status-dot dot-green"></span> Loading devices...</div></div><div style="font-size:11px; margin-bottom:2px;">Please wait</div></div>
             </div>
         </section>
 
@@ -394,7 +372,7 @@
             <!-- Active Playbooks & Actions Table -->
             <div class="grid-main" style="grid-template-columns: 2fr 1.2fr;">
                 <div class="panel">
-                    <div class="panel-title" style="margin-bottom:15px;">Active Incidents & Playbook Mappings</div>
+                    <div class="panel-title" style="margin-bottom:15px;">Active Incidents & Playbook Mappings <span id="irIncidentCount" style="font-size:11px; color:var(--text-main);">(0)</span></div>
                     <div style="overflow-x:auto;">
                         <table>
                             <thead>
@@ -414,7 +392,7 @@
 
                 <!-- Selected Incident Detail Panel -->
                 <div class="panel" id="incidentDetailPanel">
-                    <div class="panel-title">Incident details</div>
+                    <div class="panel-title">Incident details <span id="irSelectedIncident" style="font-size:11px; color:var(--text-main);">(none selected)</span></div>
                     <div class="text-main" style="padding: 20px;">Select an incident from the table to inspect ML prediction, confidence, and MITRE mapping.</div>
                 </div>
 
@@ -467,5 +445,21 @@
         setInterval(updateTime, 1000);
         updateTime();
     </script>
+    <!-- Alert summary modal -->
+    <div id="alertModal" class="modal" role="dialog" aria-hidden="true">
+        <div class="modal-content" id="alertModalContent">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <div style="font-weight:700;">Alert Summary</div>
+                <button id="alertModalClose" class="btn-outline" style="padding:6px 10px; font-size:12px;">CLOSE</button>
+            </div>
+            <div id="alertModalBody"></div>
+        </div>
+    </div>
+    <style>
+        .modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); z-index: 9999; }
+        .modal.active { display: flex; }
+        .modal-content { width: 820px; max-width: 96%; background: var(--bg-base); border: 1px solid var(--border-color); padding: 18px; border-radius: 8px; color: var(--text-main); }
+        #alertModalBody { max-height: 60vh; overflow: auto; }
+    </style>
 </body>
 </html>

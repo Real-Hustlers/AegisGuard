@@ -14,16 +14,23 @@ app = Flask(
 )
 
 try:
-    from service import get_alerts, get_dashboard_summary, get_events
-    from ingestion.classifier import classify_logs
+    from service import get_alerts, get_dashboard_summary, get_events, get_devices
     from mysql.merge_log_sql import import_classified_logs_to_db
     from database import get_connection
-
+    import incident_response
 except ImportError:
-    from backend.analyzer.service import get_alerts, get_dashboard_summary, get_events
-    from backend.analyzer.ingestion.classifier import classify_logs
+    from backend.analyzer.service import get_alerts, get_dashboard_summary, get_events, get_devices
     from mysql.merge_log_sql import import_classified_logs_to_db
     from backend.analyzer.database import get_connection
+    from backend.analyzer import incident_response
+
+try:
+    from ingestion.classifier import classify_logs
+except ImportError:
+    try:
+        from backend.analyzer.ingestion.classifier import classify_logs
+    except Exception:
+        classify_logs = None
 
 
 UPLOAD_FOLDER = Path(__file__).parent / "test"
@@ -114,6 +121,9 @@ def upload_logs():
 
 def run_ml_classification():
     """Classify merged logs with the trained ML model when the backend starts."""
+    if classify_logs is None:
+        return
+
     candidate_inputs = [
         BASE_DIR / "backend" / "analyzer" / "ingestion" / "output" / "merged_logs.json",
         BASE_DIR / "backend" / "analyzer" / "output" / "merged_logs.json",
@@ -151,7 +161,14 @@ def alerts():
 @app.route("/api/events")
 def events():
     """Return normalized event log records for the table."""
-    return jsonify(get_events())
+    hostname = request.args.get('hostname')
+    return jsonify(get_events(hostname))
+
+
+@app.route("/api/devices")
+def devices():
+    """Return monitored device summaries for the devices dashboard."""
+    return jsonify(get_devices())
 
 
 @app.route("/api/incidents")
@@ -228,6 +245,172 @@ def get_incident_logs():
             "message": r["message"]
         })
     return jsonify(logs)
+
+
+@app.route('/api/incidents/suspicious')
+def get_suspicious_entities():
+    """Get top suspicious IPs and infected hosts."""
+    conn = get_connection()
+    try:
+        res = incident_response.get_highly_suspicious_entities(conn)
+    finally:
+        conn.close()
+    return jsonify(res)
+
+
+@app.route('/api/incidents/settings', methods=["GET", "POST"])
+def get_or_post_settings():
+    """Get or update automated response settings."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    if request.method == "POST":
+        data = request.json or {}
+        for key in ["auto_response_enabled", "simulation_mode"]:
+            if key in data:
+                val = "true" if data[key] else "false"
+                cursor.execute("""
+                    INSERT OR REPLACE INTO settings (key, value)
+                    VALUES (?, ?)
+                """, (key, val))
+        conn.commit()
+
+    cursor.execute("SELECT key, value FROM settings")
+    settings = {r["key"]: (r["value"] == "true") for r in cursor.fetchall()}
+    conn.close()
+    return jsonify(settings)
+
+
+@app.route('/api/incidents/execute', methods=["POST"])
+def execute_incident():
+    data = request.json or {}
+    incident_id = data.get("incident_id")
+    enforce = data.get("enforce", False)
+
+    if not incident_id:
+        return jsonify({"error": "Missing incident_id"}), 400
+
+    conn = get_connection()
+    try:
+        success = incident_response.execute_incident_playbook(conn, incident_id, enforce=enforce)
+    finally:
+        conn.close()
+
+    if success:
+        return jsonify({"success": True})
+    return jsonify({"error": "Incident not found"}), 404
+
+
+@app.route('/api/incidents/reset', methods=["POST"])
+def reset_incidents():
+    """Wipe incidents and logs to restore a clean state."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM incidents")
+    cursor.execute("DELETE FROM response_logs")
+    conn.commit()
+
+    # Re-run log scan to populate
+    incident_response.scan_and_generate_incidents(conn)
+    conn.close()
+    return jsonify({"success": True})
+
+
+@app.route('/api/alerts/summary')
+def alert_summary():
+    """Return a simple correlation summary for a given log_id."""
+    log_id = request.args.get('log_id')
+    if not log_id:
+        return jsonify({'error': 'missing log_id'}), 400
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM security_logs WHERE log_id = ?", (log_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': 'log not found'}), 404
+
+    # Convert row to dict for safe access
+    row_dict = dict(row)
+
+    # Try to resolve MITRE mapping for the ML prediction
+    try:
+        from ingestion.mitre_mapper import get_mitre_mapping
+    except Exception:
+        try:
+            from backend.analyzer.ingestion.mitre_mapper import get_mitre_mapping
+        except Exception:
+            def get_mitre_mapping(x):
+                return {"technique_id": "Unknown", "technique": "Unknown", "tactic": "Unknown"}
+
+    mitre = get_mitre_mapping(row_dict.get('ml_prediction'))
+
+    # Build basic summary (include additional fields available in security_logs)
+    event = {
+        'id': row_dict.get('log_id'),
+        'timestamp': row_dict.get('timestamp'),
+        'hostname': row_dict.get('hostname'),
+        'ip': row_dict.get('source_ip'),
+        'os': row_dict.get('os'),
+        'user': row_dict.get('user'),
+        'process': row_dict.get('process'),
+        'file_path': row_dict.get('file_path'),
+        'destination_ip': row_dict.get('destination_ip'),
+        'severity': row_dict.get('severity'),
+        'ml_prediction': row_dict.get('ml_prediction'),
+        'ml_confidence': row_dict.get('ml_confidence'),
+        'raw_log': row_dict.get('raw_log'),
+        'threat_category': row_dict.get('threat_category'),
+        'threat_score': row_dict.get('threat_score')
+    }
+
+    # Find nearby related logs (same host within +/- 5 minutes)
+    try:
+        from datetime import datetime, timedelta
+        ts = datetime.fromisoformat(row['timestamp'].replace('Z', '+00:00'))
+        start = (ts - timedelta(minutes=5)).isoformat()
+        end = (ts + timedelta(minutes=5)).isoformat()
+    except Exception:
+        start = None; end = None
+
+    related = []
+    if start and end:
+        cursor.execute("""
+            SELECT log_id, timestamp, raw_log, severity
+            FROM security_logs
+            WHERE hostname = ? AND timestamp BETWEEN ? AND ?
+            ORDER BY timestamp ASC
+            LIMIT 50
+        """, (row_dict.get('hostname'), start, end))
+        for r in cursor.fetchall():
+            rr = dict(r)
+            related.append({
+                'id': rr.get('log_id'),
+                'timestamp': rr.get('timestamp'),
+                'raw_log': rr.get('raw_log'),
+                'severity': rr.get('severity')
+            })
+
+    # Simple heuristic correlation findings
+    findings = []
+    raw = (row_dict.get('raw_log') or '').lower()
+    if 'failed' in raw and 'login' in raw:
+        findings.append('Multiple failed login attempts detected')
+    if 'sudo' in raw or 'privilege' in raw or 'elevat' in raw:
+        findings.append('Possible privilege escalation activity')
+    if 'powershell' in raw or 'cmd.exe' in raw or 'rundll32' in raw:
+        findings.append('Suspicious process execution (script interpreter)')
+    if not findings:
+        findings.append('No immediate correlation findings; inspect related logs')
+
+    conn.close()
+
+    return jsonify({
+        'event': event,
+        'related': related,
+        'findings': findings,
+        'mitre': mitre
+    })
 
 run_ml_classification()
 

@@ -323,5 +323,30 @@
         "threat_category": "Unknown",
         "threat_score": 10,
         "threat_level": "LOW"
+    },
+    {
+        "log_id": "LOG-000014",
+        "machine_id": "Nish",
+        "hostname": "Nish",
+        "os": "Windows-11-10.0.26200-SP0",
+        "timestamp": "2026-07-29T04:41:20.460000+00:00",
+        "event_type": "LOCAL_GROUP_ENUMERATION",
+        "user": "CodexSandboxOnline",
+        "source_ip": "",
+        "destination_ip": "",
+        "process": "C:\\Windows\\System32\\svchost.exe",
+        "file_path": "",
+        "severity": "Information",
+        "raw_log": "A user's local group membership was enumerated.\r\n\r\nSubject:\r\n\tSecurity ID:\t\tS-1-5-18\r\n\tAccount Name:\t\tNISH$\r\n\tAccount Domain:\t\tWORKGROUP\r\n\tLogon ID:\t\t0x3E7\r\n\r\nUser:\r\n\tSecurity ID:\t\tS-1-5-21-362189039-2697129851-2754481102-1019\r\n\tAccount Name:\t\tCodexSandboxOnline\r\n\tAccount Domain:\t\tNISH\r\n\r\nProcess Information:\r\n\tProcess ID:\t\t0x40c8\r\n\tProcess Name:\t\tC:\\Windows\\System32\\svchost.exe",
+        "ml_prediction": "NORMAL",
+        "ml_confidence": 59.0,
+        "mitre": {
+            "technique_id": "N/A",
+            "technique_name": "No Threat",
+            "tactic": "None"
+        },
+        "threat_category": "Unknown",
+        "threat_score": 10,
+        "threat_level": "LOW"
     }
 ]
