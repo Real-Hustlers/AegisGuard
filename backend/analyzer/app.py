@@ -35,11 +35,40 @@ def upload_logs():
     data = request.json
 
     machine_id = data.get("machine_id", "UNKNOWN")
+    logs = data.get("logs", [])
 
+    # Save uploaded payload (optional, for debugging)
     file_path = UPLOAD_FOLDER / f"{machine_id}.json"
 
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
+
+    # -----------------------------------------
+    # Append uploaded logs to windows_logs.json
+    # -----------------------------------------
+
+    WINDOWS_LOG_FILE = (
+        BASE_DIR
+        / "backend"
+        / "analyzer"
+        / "output"
+        / "windows_logs.json"
+    )
+
+    if WINDOWS_LOG_FILE.exists():
+        with open(WINDOWS_LOG_FILE, "r", encoding="utf-8") as f:
+            existing_logs = json.load(f)
+    else:
+        existing_logs = []
+
+    existing_logs.extend(logs)
+
+    with open(WINDOWS_LOG_FILE, "w", encoding="utf-8") as f:
+        json.dump(existing_logs, f, indent=4)
+
+    # -----------------------------------------
+    # Run backend pipeline
+    # -----------------------------------------
 
     from ingestion.import_merge import merge_logs
     from ingestion.classifier import classify_logs
@@ -56,7 +85,8 @@ def upload_logs():
 
     return jsonify({
         "status": "success",
-        "machine": machine_id
+        "machine": machine_id,
+        "logs_received": len(logs)
     })
 
 
@@ -248,4 +278,10 @@ if __name__ == "__main__":
 #     # Re-run log scan to populate
 #     incident_response.scan_and_generate_incidents(conn)
 #     conn.close()
+<<<<<<< HEAD
 #     return jsonify({"success": True})
+=======
+#     return jsonify({"success": True})
+
+
+>>>>>>> ad0e9e8fe09482d4b19e2e367bc92e9a069baca0

@@ -38,16 +38,15 @@ def main():
 
         parsed = parse_event(event)
 
-        # Detect threat level
         parsed["threat_level"] = detect_threat(parsed)
 
         parsed_logs.append(parsed)
 
-        send_logs(parsed_logs)
+    send_logs(parsed_logs)
 
-    # Save Parsed Logs
-    with open(config["output_file"], "w", encoding="utf-8") as file:
-        json.dump(parsed_logs, file, indent=4)
+    # # Save Parsed Logs
+    # with open(config["output_file"], "w", encoding="utf-8") as file:
+    #     json.dump(parsed_logs, file, indent=4)
 
     print("=" * 60)
     print("Windows Log Collection Completed Successfully")
