@@ -1,4 +1,6 @@
 import re
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 # ----------------------------
 # Event ID Mapping
@@ -29,6 +31,33 @@ EVENT_TYPES = {
 5158: "NETWORK_BIND"
 
 }
+
+# ----------------------------
+# Time Helper
+# ----------------------------
+
+def normalize_timestamp(value):
+    """
+    Convert Windows PowerShell timestamp:
+    /Date(1785247847657)/
+    into ISO format
+    """
+
+    if not value:
+        return ""
+
+    match = re.search(r"/Date\((\d+)\)/", str(value))
+
+    if match:
+        milliseconds = int(match.group(1))
+
+        dt = datetime.fromtimestamp(
+            milliseconds / 1000,
+            tz=ZoneInfo("Asia/Kolkata")
+        )
+
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    return str(value)
 
 
 # ----------------------------
@@ -68,7 +97,10 @@ def parse_event(event):
     event_id = event.get("Id", 0)
 
     log = {
-        "timestamp": str(event.get("TimeCreated", "")),
+        "record_id": event.get("RecordId", 0),
+        "timestamp": normalize_timestamp(
+            event.get("TimeCreated", "")
+        ),
         "event_type": EVENT_TYPES.get(event_id, "OTHER"),
         "user": "",
         "hostname": event.get("MachineName", ""),

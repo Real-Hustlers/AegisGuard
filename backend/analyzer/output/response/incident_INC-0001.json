@@ -1,0 +1,33 @@
+{
+    "incident_id": "INC-0001",
+    "attack_type": "Possible Brute Force Attack",
+    "severity": "CRITICAL",
+    "risk_score": 95,
+    "mitre": {
+        "tactic": "Credential Access",
+        "technique": "Brute Force",
+        "technique_id": "T1110"
+    },
+    "timeline": {
+        "start_time": "2026-07-14T09:05:11Z",
+        "end_time": "2026-07-14T09:06:01Z",
+        "related_logs": [
+            "Failed password for nisithaa from 10.12.32.108 port 59681 ssh2",
+            "Failed password for nisithaa from 10.12.32.108 port 59682 ssh2",
+            "Accepted password for nisithaa from 10.12.32.108 port 59683 ssh2"
+        ]
+    },
+    "playbook": [
+        "Investigate Incident",
+        "Contain Threat",
+        "Notify Administrator",
+        "Generate Report"
+    ],
+    "commands": [
+        "Simulated response executed",
+        "Incident recorded",
+        "Administrator notified"
+    ],
+    "status": "SIMULATED",
+    "generated_at": "2026-07-29T10:02:02.867254"
+}

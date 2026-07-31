@@ -1,0 +1,32 @@
+[
+    {
+        "incident_id": "INC-0001",
+        "machine_id": "Linux-Server",
+        "attack_type": "Possible Brute Force Attack",
+        "severity": "CRITICAL",
+        "risk_score": 95,
+        "ml_prediction": "BRUTE_FORCE",
+        "ml_confidence": 99.0,
+        "mitre": {
+            "tactic": "Credential Access",
+            "technique": "Brute Force",
+            "technique_id": "T1110"
+        },
+        "hostname": "Linux-Server",
+        "os": "Ubuntu 24.04",
+        "source_ip": "10.12.32.108",
+        "destination_ip": "",
+        "user": "nisithaa",
+        "process": "sshd",
+        "file_path": "",
+        "threat_category": "Authentication",
+        "detection_method": "Rule Correlation + ML",
+        "start_time": "2026-07-14T09:05:11Z",
+        "end_time": "2026-07-14T09:06:01Z",
+        "related_logs": [
+            "Failed password for nisithaa from 10.12.32.108 port 59681 ssh2",
+            "Failed password for nisithaa from 10.12.32.108 port 59682 ssh2",
+            "Accepted password for nisithaa from 10.12.32.108 port 59683 ssh2"
+        ]
+    }
+]
