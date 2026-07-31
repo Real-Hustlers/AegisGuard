@@ -118,27 +118,45 @@ def get_dashboard_summary():
     }
 
 
-def get_events():
-    """Return event logs."""
+def get_events(hostname=None):
+    """Return event logs. If `hostname` is provided, filter by that hostname."""
 
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT
-            log_id,
-            timestamp,
-            hostname,
-            source_ip,
-            severity,
-            raw_log,
-            ml_prediction,
-            threat_level,
-            threat_score,
-            threat_category
-        FROM security_logs
-        ORDER BY timestamp DESC
-    """)
+    if hostname:
+        cursor.execute("""
+            SELECT
+                log_id,
+                timestamp,
+                hostname,
+                source_ip,
+                severity,
+                raw_log,
+                ml_prediction,
+                threat_level,
+                threat_score,
+                threat_category
+            FROM security_logs
+            WHERE hostname = ?
+            ORDER BY timestamp DESC
+        """, (hostname,))
+    else:
+        cursor.execute("""
+            SELECT
+                log_id,
+                timestamp,
+                hostname,
+                source_ip,
+                severity,
+                raw_log,
+                ml_prediction,
+                threat_level,
+                threat_score,
+                threat_category
+            FROM security_logs
+            ORDER BY timestamp DESC
+        """)
 
     rows = cursor.fetchall()
     conn.close()
@@ -196,3 +214,52 @@ def get_alerts():
         })
 
     return alerts
+
+
+def get_devices():
+    """Return monitored device summaries from security logs."""
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            hostname,
+            source_ip,
+            os,
+            COUNT(*) AS event_count,
+            MAX(timestamp) AS last_seen,
+            MAX(
+                CASE
+                    WHEN UPPER(severity) = 'CRITICAL' THEN 3
+                    WHEN UPPER(severity) = 'HIGH' THEN 2
+                    ELSE 1
+                END
+            ) AS severity_rank
+        FROM security_logs
+        GROUP BY hostname
+        ORDER BY severity_rank DESC, last_seen DESC
+    """)
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    devices = []
+    for row in rows:
+        if row["severity_rank"] == 3:
+            status = "critical"
+        elif row["severity_rank"] == 2:
+            status = "warning"
+        else:
+            status = "normal"
+
+        devices.append({
+            "hostname": row["hostname"] or "Unknown",
+            "ip": row["source_ip"] or "Unknown",
+            "os": row["os"] or "Unknown",
+            "event_count": row["event_count"],
+            "last_seen": row["last_seen"],
+            "status": status,
+        })
+
+    return devices

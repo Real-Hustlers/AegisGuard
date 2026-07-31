@@ -1,0 +1,21 @@
+{
+    "machine_id": "Nish",
+    "hostname": "Nish",
+    "os": "Windows-11-10.0.26200-SP0",
+    "logs": [
+        {
+            "record_id": 3161417,
+            "timestamp": "2026-07-29T13:05:42.203000+00:00",
+            "event_type": "LOCAL_GROUP_ENUMERATION",
+            "user": "rish2",
+            "hostname": "Nish",
+            "source_ip": "",
+            "destination_ip": "",
+            "process": "C:\\Windows\\System32\\svchost.exe",
+            "file_path": "",
+            "severity": "Information",
+            "raw_log": "A user's local group membership was enumerated.\r\n\r\nSubject:\r\n\tSecurity ID:\t\tS-1-5-18\r\n\tAccount Name:\t\tNISH$\r\n\tAccount Domain:\t\tWORKGROUP\r\n\tLogon ID:\t\t0x3E7\r\n\r\nUser:\r\n\tSecurity ID:\t\tS-1-5-21-362189039-2697129851-2754481102-1001\r\n\tAccount Name:\t\trish2\r\n\tAccount Domain:\t\tNISH\r\n\r\nProcess Information:\r\n\tProcess ID:\t\t0x40c8\r\n\tProcess Name:\t\tC:\\Windows\\System32\\svchost.exe",
+            "threat_level": "MEDIUM"
+        }
+    ]
+}
