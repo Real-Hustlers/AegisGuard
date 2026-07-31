@@ -55,11 +55,27 @@ def run_correlation():
 
     def create_incident(machine, attack, severity, score, related_logs):
         nonlocal incident_counter
+
+        attack_to_prediction = {
+            "Possible Brute Force Attack": "BRUTE_FORCE",
+            "Multiple Failed Login Attempts": "BRUTE_FORCE",
+            "Privilege Escalation": "PRIVILEGE_ESCALATION",
+            "Suspicious Administrative Activity": "PRIVILEGE_ESCALATION",
+            "Possible Malware Execution": "MALWARE",
+            "Possible Ransomware Activity": "RANSOMWARE"
+        }
+
         latest = related_logs[-1]
 
-        ml_prediction = latest.get("ml_prediction", "UNKNOWN")
+        ml_prediction = attack_to_prediction.get(
+            attack,
+            latest.get("ml_prediction", "UNKNOWN")
+        )
+
         ml_confidence = latest.get("ml_confidence", 0.0)
+
         mitre = get_mitre_mapping(ml_prediction)
+
         for inc in incidents:
             if (
                 inc["attack_type"] == attack and

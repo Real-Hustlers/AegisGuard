@@ -48,5 +48,10 @@
     "tactic": "Execution",
     "technique": "Malicious File",
     "technique_id": "N/A"
+  },
+  "NORMAL": {
+      "technique_id": "N/A",
+      "technique": "No Threat",
+      "tactic": "None"
   }
 }
