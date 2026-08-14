@@ -317,7 +317,7 @@
         "ml_confidence": 59.0,
         "mitre": {
             "technique_id": "N/A",
-            "technique_name": "No Threat",
+            "technique": "No Threat",
             "tactic": "None"
         },
         "threat_category": "Unknown",
@@ -342,7 +342,7 @@
         "ml_confidence": 59.0,
         "mitre": {
             "technique_id": "N/A",
-            "technique_name": "No Threat",
+            "technique": "No Threat",
             "tactic": "None"
         },
         "threat_category": "Unknown",

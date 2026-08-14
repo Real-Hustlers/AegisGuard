@@ -1,12 +1,47 @@
 import sqlite3
+import sys
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+# ============================================================
+# DATABASE PATH
+# ============================================================
+
+if getattr(sys, "frozen", False):
+    # Running from PyInstaller EXE
+    BASE_DIR = Path(sys.executable).resolve().parent
+else:
+    # Running normally from source
+    BASE_DIR = Path(__file__).resolve().parents[2]
+
 DB_PATH = BASE_DIR / "mysql" / "aegisguard.db"
 
+# Make sure the database directory exists
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+
+# ============================================================
+# DATABASE CONNECTION
+# ============================================================
+
+def get_connection():
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+
+    ensure_schema(conn)
+
+    return conn
+
+# ---------------------------------------------------------
+# Database schema
+# ---------------------------------------------------------
 
 def ensure_schema(conn):
+
     cursor = conn.cursor()
+
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS security_logs (
         log_id TEXT PRIMARY KEY,
@@ -30,20 +65,26 @@ def ensure_schema(conn):
     )
     """)
 
+    # -----------------------------------------------------
+    # Existing database migrations
+    # -----------------------------------------------------
+
     for column_sql in [
         "ALTER TABLE security_logs ADD COLUMN ml_prediction TEXT",
         "ALTER TABLE security_logs ADD COLUMN ml_confidence REAL",
         "ALTER TABLE security_logs ADD COLUMN threat_category TEXT",
         "ALTER TABLE security_logs ADD COLUMN threat_score INTEGER",
         "ALTER TABLE security_logs ADD COLUMN threat_level TEXT",
-        "ALTER TABLE incidents ADD COLUMN incident_report TEXT",
-        "ALTER TABLE incidents ADD COLUMN alert_status TEXT",
-        "ALTER TABLE incidents ADD COLUMN mitre TEXT",
     ]:
+
         try:
             cursor.execute(column_sql)
         except sqlite3.OperationalError:
             pass
+
+    # -----------------------------------------------------
+    # Incidents
+    # -----------------------------------------------------
 
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS incidents (
@@ -68,6 +109,25 @@ def ensure_schema(conn):
     )
     """)
 
+    # -----------------------------------------------------
+    # Incident migrations
+    # -----------------------------------------------------
+
+    for column_sql in [
+        "ALTER TABLE incidents ADD COLUMN incident_report TEXT",
+        "ALTER TABLE incidents ADD COLUMN alert_status TEXT",
+        "ALTER TABLE incidents ADD COLUMN mitre TEXT",
+    ]:
+
+        try:
+            cursor.execute(column_sql)
+        except sqlite3.OperationalError:
+            pass
+
+    # -----------------------------------------------------
+    # Response logs
+    # -----------------------------------------------------
+
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS response_logs (
         log_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -77,6 +137,10 @@ def ensure_schema(conn):
     )
     """)
 
+    # -----------------------------------------------------
+    # Settings
+    # -----------------------------------------------------
+
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
@@ -84,14 +148,16 @@ def ensure_schema(conn):
     )
     """)
 
-    cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('auto_response_enabled', 'true')")
-    cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('simulation_mode', 'true')")
+    cursor.execute("""
+    INSERT OR IGNORE INTO settings
+    (key, value)
+    VALUES ('auto_response_enabled', 'true')
+    """)
+
+    cursor.execute("""
+    INSERT OR IGNORE INTO settings
+    (key, value)
+    VALUES ('simulation_mode', 'true')
+    """)
 
     conn.commit()
-
-
-def get_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    ensure_schema(conn)
-    return conn
