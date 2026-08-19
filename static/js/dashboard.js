@@ -900,9 +900,6 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Setup periodic polling
-    setInterval(loadDashboardData, 5000);
-    setInterval(loadIncidentResponseData, 3000);
 
     // Register event listeners
     const toggleAuto = document.getElementById('toggleAutoResponse');
@@ -940,7 +937,153 @@ window.addEventListener('DOMContentLoaded', () => {
             if (ev.target === alertModal) closeModal();
         });
     }
-    window.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Escape') closeModal();
+   window.addEventListener('DOMContentLoaded', () => {
+    // =========================================================
+    // INITIAL DATA LOAD
+    // =========================================================
+    loadDashboardData();
+    loadDeviceData();
+    loadIncidentResponseData();
+
+
+    // =========================================================
+    // PERIODIC DATA REFRESH
+    // =========================================================
+    // Dashboard contains a large /api/events response (~722 KB),
+    // so don't request it every 5 seconds.
+    setInterval(() => {
+        loadDashboardData();
+    }, 15000); // every 15 seconds
+
+    setInterval(() => {
+        loadDeviceData();
+    }, 30000); // every 30 seconds
+
+    setInterval(() => {
+        loadIncidentResponseData();
+    }, 10000); // every 10 seconds
+
+
+    // =========================================================
+    // DEVICE SYNC BUTTON
+    // =========================================================
+    const deviceSyncBtn = document.getElementById('deviceSyncBtn');
+
+    if (deviceSyncBtn) {
+        deviceSyncBtn.addEventListener('click', () => {
+            loadDeviceData();
+        });
+    }
+
+
+    // =========================================================
+    // AUTO RESPONSE / SIMULATION MODE
+    // =========================================================
+    const toggleAuto = document.getElementById('toggleAutoResponse');
+    const toggleSim = document.getElementById('toggleSimulationMode');
+    const resetBtn = document.getElementById('irResetBtn');
+
+
+    if (toggleAuto) {
+        toggleAuto.addEventListener('change', () => {
+            updateSettings(
+                toggleAuto.checked,
+                toggleSim ? toggleSim.checked : false
+            );
+        });
+    }
+
+
+    if (toggleSim) {
+        toggleSim.addEventListener('change', () => {
+            updateSettings(
+                toggleAuto ? toggleAuto.checked : false,
+                toggleSim.checked
+            );
+        });
+    }
+
+
+    // =========================================================
+    // RESET INCIDENTS
+    // =========================================================
+    if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+
+            const confirmed = confirm(
+                'Are you sure you want to reset all incidents and execution logs?'
+            );
+
+            if (!confirmed) {
+                return;
+            }
+
+            fetch('/api/incidents/reset', {
+                method: 'POST'
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(
+                            `Reset request failed: ${response.status}`
+                        );
+                    }
+
+                    return response.json();
+                })
+                .then(result => {
+                    console.log('Incident reset:', result);
+
+                    // Reload incident data after reset
+                    loadIncidentResponseData();
+                })
+                .catch(error => {
+                    console.error(
+                        'Failed to reset incidents:',
+                        error
+                    );
+
+                    alert(
+                        'Failed to reset incidents. Check the server console.'
+                    );
+                });
+        });
+    }
+
+
+    // =========================================================
+    // ALERT MODAL
+    // =========================================================
+    const alertModal = document.getElementById('alertModal');
+    const alertModalClose = document.getElementById('alertModalClose');
+
+
+    if (alertModalClose) {
+        alertModalClose.addEventListener('click', closeModal);
+    }
+
+
+    if (alertModal) {
+        alertModal.addEventListener('click', (event) => {
+            if (event.target === alertModal) {
+                closeModal();
+            }
+        });
+    }
+
+
+    // =========================================================
+    // ESC KEY → CLOSE MODAL
+    // =========================================================
+    window.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            closeModal();
+        }
     });
+
+
+    console.log(
+        '%cAegisGuard dashboard initialized successfully',
+        'color:#22d3ee;font-weight:bold;'
+    );
+});
 });

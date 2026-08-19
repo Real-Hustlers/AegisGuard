@@ -18,13 +18,18 @@ def run_correlation():
     # --------------------------
     # Configuration
     # --------------------------
-
     import os
+    import sys
 
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    ANALYZER_DIR = os.path.dirname(BASE_DIR) # backend/analyzer/output folder
+    if getattr(sys, "frozen", False):
+        # Packaged Analyzer EXE
+        ANALYZER_DIR = os.path.dirname(sys.executable)
+    else:
+        # Running from source
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        ANALYZER_DIR = os.path.dirname(os.path.dirname(BASE_DIR))
+
     OUTPUT_DIR = os.path.join(ANALYZER_DIR, "output")
-
     INPUT_FILE = os.path.join(OUTPUT_DIR, "classified_logs.json")
     OUTPUT_FILE = os.path.join(OUTPUT_DIR, "incidents.json")
     RESPONSE_DIR = os.path.join(OUTPUT_DIR, "response")

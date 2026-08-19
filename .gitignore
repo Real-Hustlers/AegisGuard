@@ -2,6 +2,10 @@
 __pycache__/
 *.py[cod]
 *.pyo
+backend/analyzer/__pycache__/database.cpython-314.pyc
+backend/analyzer/__pycache__/service.cpython-314.pyc
+backend/analyzer/__pycache__/app.cpython-311.pyc
+backend/__pycache__/
 
 # Virtual environments
 venv/

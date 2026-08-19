@@ -4,13 +4,114 @@ from pathlib import Path
 from flask import Flask, jsonify, render_template, request
 import os
 
-BASE_DIR = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(BASE_DIR))
+
+def debug_print(message):
+    print(message, flush=True)
+
+# ============================================================
+# PATH HELPERS
+# ============================================================
+
+def resource_path(relative_path):
+    """
+    Get path to bundled read-only resources.
+    """
+
+    if getattr(sys, "frozen", False):
+        base_path = Path(sys._MEIPASS)
+        debug_print(f"[FROZEN] _MEIPASS = {base_path}")
+    else:
+        base_path = Path(__file__).resolve().parents[2]
+        debug_print(f"[SOURCE] BASE = {base_path}")
+
+    path = base_path / relative_path
+
+    debug_print(f"[RESOURCE] {relative_path}")
+    debug_print(f"[RESOURCE PATH] {path}")
+    debug_print(f"[RESOURCE EXISTS] {path.exists()}")
+
+    return path
+
+
+def app_data_path(relative_path):
+    """
+    Files that the application creates or modifies.
+    """
+
+    if getattr(sys, "frozen", False):
+        base_path = Path(sys.executable).resolve().parent
+    else:
+        base_path = Path(__file__).resolve().parents[2]
+
+    path = base_path / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    return path
+
+
+# ============================================================
+# BASE DIRECTORY
+# ============================================================
+
+if getattr(sys, "frozen", False):
+    BASE_DIR = Path(sys.executable).resolve().parent
+else:
+    BASE_DIR = Path(__file__).resolve().parents[2]
+
+
+# ============================================================
+# PYTHON PATH
+# ============================================================
+
+if not getattr(sys, "frozen", False):
+    sys.path.insert(0, str(BASE_DIR))
+
+
+# ============================================================
+# FLASK RESOURCE PATHS
+# ============================================================
+
+TEMPLATE_PATH = resource_path("templates")
+STATIC_PATH = resource_path("static")
+
+
+# ============================================================
+# DEBUG INFORMATION
+# ============================================================
+
+debug_print("=" * 70)
+debug_print("AEGISGUARD RESOURCE DEBUG")
+debug_print(f"Frozen              : {getattr(sys, 'frozen', False)}")
+debug_print(f"Executable          : {sys.executable}")
+debug_print(f"__file__            : {__file__}")
+
+if getattr(sys, "frozen", False):
+    debug_print(f"_MEIPASS            : {sys._MEIPASS}")
+
+debug_print(f"BASE_DIR            : {BASE_DIR}")
+debug_print(f"TEMPLATE_PATH       : {TEMPLATE_PATH}")
+debug_print(f"TEMPLATE_EXISTS     : {TEMPLATE_PATH.exists()}")
+debug_print(f"INDEX_PATH          : {TEMPLATE_PATH / 'index.html'}")
+debug_print(f"INDEX_EXISTS        : {(TEMPLATE_PATH / 'index.html').exists()}")
+debug_print(f"STATIC_PATH         : {STATIC_PATH}")
+debug_print(f"STATIC_EXISTS       : {STATIC_PATH.exists()}")
+
+if TEMPLATE_PATH.exists():
+    debug_print("TEMPLATE CONTENTS:")
+    for item in TEMPLATE_PATH.iterdir():
+        debug_print(f"  -> {item}")
+
+debug_print("=" * 70)
+
+
+# ============================================================
+# FLASK
+# ============================================================
 
 app = Flask(
     __name__,
-    template_folder=str(BASE_DIR / "templates"),
-    static_folder=str(BASE_DIR / "static"),
+    template_folder=str(TEMPLATE_PATH),
+    static_folder=str(STATIC_PATH),
 )
 
 try:
@@ -33,111 +134,218 @@ except ImportError:
         classify_logs = None
 
 
-UPLOAD_FOLDER = Path(__file__).parent / "test"
-UPLOAD_FOLDER.mkdir(exist_ok=True)
+UPLOAD_FOLDER = app_data_path("test")
+UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 
 @app.route("/api/upload_logs", methods=["POST"])
 def upload_logs():
 
-    data = request.json
+    data = request.json or {}
 
     machine_id = data.get("machine_id", "UNKNOWN")
     logs = data.get("logs", [])
 
     # -----------------------------------------
-    # Save uploaded payload (optional)
+    # Save uploaded payload
     # -----------------------------------------
 
     file_path = UPLOAD_FOLDER / f"{machine_id}.json"
 
     with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
+        json.dump(data, f, indent=4, default=str)
 
     # -----------------------------------------
-    # Append uploaded logs to windows_logs.json
+    # Windows logs file
     # -----------------------------------------
 
-    WINDOWS_LOG_FILE = (
-        BASE_DIR
-        / "backend"
-        / "analyzer"
-        / "output"
-        / "windows_logs.json"
+    WINDOWS_LOG_FILE = app_data_path(
+        "data/windows_logs.json"
     )
 
-    if WINDOWS_LOG_FILE.exists():
-        with open(WINDOWS_LOG_FILE, "r", encoding="utf-8") as f:
-            existing_logs = json.load(f)
-    else:
-        existing_logs = []
+    # Make sure parent directory exists
+    WINDOWS_LOG_FILE.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
 
-    # Build a set of existing RecordIds
+    existing_logs = []
+
+    # -----------------------------------------
+    # Load existing logs
+    # -----------------------------------------
+
+    if WINDOWS_LOG_FILE.exists():
+
+        try:
+
+            with open(
+                WINDOWS_LOG_FILE,
+                "r",
+                encoding="utf-8"
+            ) as f:
+
+                existing_logs = json.load(f)
+
+            if not isinstance(existing_logs, list):
+                existing_logs = []
+
+        except json.JSONDecodeError as e:
+
+            print("WARNING: windows_logs.json is corrupted.")
+            print("JSON error:", e)
+
+            backup_file = WINDOWS_LOG_FILE.with_name(
+                "windows_logs_corrupted_backup.json"
+            )
+
+            try:
+
+                WINDOWS_LOG_FILE.replace(
+                    backup_file
+                )
+
+                print(
+                    "Corrupted file backed up to:",
+                    backup_file
+                )
+
+            except Exception as backup_error:
+
+                print(
+                    "Backup failed:",
+                    backup_error
+                )
+
+            existing_logs = []
+
+    # -----------------------------------------
+    # Build existing RecordId set
+    # -----------------------------------------
+
     existing_record_ids = {
-        log.get("record_id")
+        log.get("RecordId")
         for log in existing_logs
-        if log.get("record_id") is not None
+        if log.get("RecordId") is not None
     }
 
+    # -----------------------------------------
     # Append only new logs
+    # -----------------------------------------
+
     new_logs = 0
 
     for log in logs:
 
-        record_id = log.get("record_id")
+        record_id = log.get("RecordId")
 
         if record_id not in existing_record_ids:
 
             existing_logs.append(log)
-            existing_record_ids.add(record_id)
+
+            if record_id is not None:
+                existing_record_ids.add(record_id)
+
             new_logs += 1
 
-    with open(WINDOWS_LOG_FILE, "w", encoding="utf-8") as f:
-        json.dump(existing_logs, f, indent=4)
+    # -----------------------------------------
+    # Save Windows logs
+    # -----------------------------------------
+
+    with open(
+        WINDOWS_LOG_FILE,
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        json.dump(
+            existing_logs,
+            f,
+            indent=4,
+            default=str
+        )
+
+    print(
+        f"Received {len(logs)} logs, "
+        f"added {new_logs} new logs."
+    )
 
     # -----------------------------------------
     # Run backend pipeline
     # -----------------------------------------
 
-    from ingestion.import_merge import merge_logs
-    from ingestion.classifier import classify_logs
-    from ingestion.correlation_engine import run_correlation
+    try:
 
-    merge_logs()
+        from ingestion.import_merge import merge_logs
+        from ingestion.classifier import classify_logs
+        from ingestion.correlation_engine import run_correlation
 
-    classify_logs(
-        "output/merged_logs.json",
-        "output/classified_logs.json"
-    )
+        MERGED_LOGS = app_data_path(
+            "output/merged_logs.json"
+        )
 
-    run_correlation()
+        CLASSIFIED_LOGS = app_data_path(
+            "output/classified_logs.json"
+        )
+
+        merge_logs()
+
+        classify_logs(
+            str(MERGED_LOGS),
+            str(CLASSIFIED_LOGS)
+        )
+
+        print("Importing classified logs into database...", flush=True)
+
+        import_classified_logs_to_db(
+            str(CLASSIFIED_LOGS)
+        )
+
+        print("Classified logs imported into database.", flush=True)
+
+        run_correlation()
+
+    except Exception as e:
+
+        print("Pipeline error:", e)
+
+        return jsonify({
+            "status": "error",
+            "message": "Logs received but backend pipeline failed",
+            "error": str(e),
+            "machine": machine_id,
+            "logs_received": len(logs),
+            "new_logs_added": new_logs
+        }), 500
+
+    # -----------------------------------------
+    # SUCCESS RESPONSE
+    # -----------------------------------------
 
     return jsonify({
         "status": "success",
         "machine": machine_id,
         "logs_received": len(logs),
         "new_logs_added": new_logs
-    })
+    }), 200
+
 
 
 def run_ml_classification():
-    """Classify merged logs with the trained ML model when the backend starts."""
+    """Classify merged logs with the trained ML model."""
+
     if classify_logs is None:
         return
 
-    candidate_inputs = [
-        BASE_DIR / "backend" / "analyzer" / "ingestion" / "output" / "merged_logs.json",
-        BASE_DIR / "backend" / "analyzer" / "output" / "merged_logs.json",
-    ]
-    candidate_outputs = [
-        BASE_DIR / "backend" / "analyzer" / "ingestion" / "output" / "classified_logs.json",
-        BASE_DIR / "backend" / "analyzer" / "output" / "classified_logs.json",
-    ]
+    input_path = app_data_path("output/merged_logs.json")
+    output_path = app_data_path("output/classified_logs.json")
 
-    for input_path, output_path in zip(candidate_inputs, candidate_outputs):
-        if input_path.exists():
-            classify_logs(str(input_path), str(output_path))
-            import_classified_logs_to_db(str(output_path))
-            return
+    if input_path.exists():
+        classify_logs(
+            str(input_path),
+            str(output_path)
+        )
+
+        import_classified_logs_to_db(str(output_path))
 
 
 @app.route("/")
@@ -415,7 +623,12 @@ def alert_summary():
 run_ml_classification()
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    app.run(
+        host="0.0.0.0",
+        port=5000,
+        debug=False,
+        use_reloader=False
+    )
 
 # @app.route("/api/incidents/suspicious")
 # def get_suspicious_entities():
@@ -484,5 +697,3 @@ if __name__ == "__main__":
 #     incident_response.scan_and_generate_incidents(conn)
 #     conn.close()
 #     return jsonify({"success": True})
-
-

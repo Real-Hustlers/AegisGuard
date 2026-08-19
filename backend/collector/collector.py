@@ -3,8 +3,10 @@ import json
 from datetime import datetime, timedelta
 import requests
 import platform
+from config_loader import load_config
 
-ANALYZER = "http://127.0.0.1:5000/api/upload_logs"
+config = load_config()
+ANALYZER = config["analyzer_url"]
 
 def send_logs(parsed_logs):
 
@@ -23,7 +25,7 @@ def send_logs(parsed_logs):
     print(response.text)
 
 
-def collect_security_logs(hours=1, max_events=100):
+def collect_security_logs(hours=HOURS, max_events=MAX_EVENTS):
     """
     Collect important Windows Security logs from the last 'hours' hours.
     """
@@ -101,8 +103,9 @@ def save_raw_logs(logs, filename="raw_security_logs.json"):
 
 if __name__ == "__main__":
 
-    HOURS = 1          # Collect logs from the last 1 hour
-    MAX_EVENTS = 100   # Maximum number of logs
+
+    HOURS = config["hours"]
+    MAX_EVENTS = config["max_events"]
 
     print("=" * 50)
     print("Windows Security Log Collector")
@@ -116,12 +119,20 @@ if __name__ == "__main__":
     print(f"\nCollected {len(logs)} Security Events\n")
 
     if logs:
-
         print("First Event:\n")
-        print(json.dumps(logs[0], indent=4, default=str))
+        print(
+            json.dumps(
+                logs[0],
+                indent=4,
+                default=str
+            )
+        )
 
+        # Save locally
         save_raw_logs(logs)
 
-    else:
+        # Send to Analyzer
+        send_logs(logs)
 
+    else:
         print("No matching Security events found.")
