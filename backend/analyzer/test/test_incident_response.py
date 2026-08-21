@@ -57,8 +57,8 @@ class IncidentResponseTestCase(unittest.TestCase):
 
         # Check playbook steps
         steps = json.loads(incident["playbook_steps"])
-        self.assertIn("Block the attacker's IP", steps)
-
+        self.assertIn("Block Source IP", steps)
+        
     def test_malware_incident_generation(self):
         cursor = self.conn.cursor()
         cursor.execute("""

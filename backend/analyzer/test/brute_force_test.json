@@ -1,0 +1,62 @@
+[
+  {
+    "log_id": "TEST-BF-001",
+    "machine_id": "TEST-MACHINE",
+    "hostname": "TEST-PC",
+    "os": "Windows 11",
+    "timestamp": "2026-08-18T10:00:00Z",
+    "event_type": "FAILED_LOGIN",
+    "user": "testuser",
+    "source_ip": "192.168.1.50",
+    "destination_ip": "",
+    "process": "",
+    "file_path": "",
+    "severity": "HIGH",
+    "raw_log": "Failed login attempt"
+  },
+  {
+    "log_id": "TEST-BF-002",
+    "machine_id": "TEST-MACHINE",
+    "hostname": "TEST-PC",
+    "os": "Windows 11",
+    "timestamp": "2026-08-18T10:00:10Z",
+    "event_type": "FAILED_LOGIN",
+    "user": "testuser",
+    "source_ip": "192.168.1.50",
+    "destination_ip": "",
+    "process": "",
+    "file_path": "",
+    "severity": "HIGH",
+    "raw_log": "Failed login attempt"
+  },
+  {
+    "log_id": "TEST-BF-003",
+    "machine_id": "TEST-MACHINE",
+    "hostname": "TEST-PC",
+    "os": "Windows 11",
+    "timestamp": "2026-08-18T10:00:20Z",
+    "event_type": "FAILED_LOGIN",
+    "user": "testuser",
+    "source_ip": "192.168.1.50",
+    "destination_ip": "",
+    "process": "",
+    "file_path": "",
+    "severity": "HIGH",
+    "raw_log": "Failed login attempt"
+  },
+  {
+    "log_id": "TEST-BF-004",
+    "machine_id": "TEST-MACHINE",
+    "hostname": "TEST-PC",
+    "os": "Windows 11",
+    "timestamp": "2026-08-18T10:00:30Z",
+    "event_type": "LOGON_SUCCESS",
+    "user": "testuser",
+    "source_ip": "192.168.1.50",
+    "destination_ip": "",
+    "process": "",
+    "file_path": "",
+    "severity": "HIGH",
+    "raw_log": "Successful login"
+  }
+]

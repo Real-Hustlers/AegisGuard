@@ -1,39 +1,85 @@
-# Python
+# ============================================================
+# PYTHON
+# ============================================================
+
 __pycache__/
 *.py[cod]
 *.pyo
-backend/analyzer/__pycache__/database.cpython-314.pyc
-backend/analyzer/__pycache__/service.cpython-314.pyc
-backend/analyzer/__pycache__/app.cpython-311.pyc
-backend/__pycache__/
+*.pyd
 
-# Virtual environments
-venv/
+# ============================================================
+# VIRTUAL ENVIRONMENTS
+# ============================================================
+
 .venv/
+venv/
 env/
 
-# PyInstaller
-build/
-dist/
+# ============================================================
+# DATABASE FILES
+# ============================================================
 
-# SQLite database
 *.db
+*.db-journal
+*.sqlite
 *.sqlite3
 
-# VS Code
-.vscode/
+# ============================================================
+# AEGISGUARD RUNTIME / GENERATED DATA
+# ============================================================
 
-# Logs
+data/windows_logs.json
+
+output/
+backend/analyzer/output/
+
+# ============================================================
+# RUNTIME TEST PAYLOADS
+# ============================================================
+
+test/*.json
+
+# ============================================================
+# LOCAL BACKUPS
+# ============================================================
+
+*_backup.py
+*_backup.json
+
+# ============================================================
+# TEMP FILES
+# ============================================================
+
+*.tmp
+*.temp
 *.log
-backend/ML Aegis/ml/generated_logs/
 
-# OS files
-.DS_Store
+# ============================================================
+# PYTEST / CACHE
+# ============================================================
+
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ============================================================
+# IDE FILES
+# ============================================================
+
+.vscode/
+.idea/
+
+# ============================================================
+# WINDOWS / OS FILES
+# ============================================================
+
 Thumbs.db
+Desktop.ini
+.DS_Store
+# ============================================================
+# BUILD / PACKAGING OUTPUT
+# ============================================================
 
-
-# Models
-backend/ML Aegis/ml/model.pkl
-backend/ML Aegis/ml/label_encoder.pkl
-backend/ML Aegis/requirements.txt
-backend/ML Aegis/training_dataset.csv
+build/
+dist/
+installer/

@@ -11,7 +11,7 @@ from backend.analyzer.ingestion.classifier import classify_logs
 def test_successful_login_is_classified_as_normal():
     sample = [{
         "timestamp": "2026-07-14T09:31:10Z",
-        "event_type": "SUCCESSFUL_LOGIN",
+        "event_type": "LOGON_SUCCESS",
         "user": "admin",
         "hostname": "Dev-Server",
         "source_ip": "192.168.1.10",

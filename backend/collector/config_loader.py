@@ -6,22 +6,32 @@ from pathlib import Path
 def load_config():
 
     if getattr(sys, "frozen", False):
-        # Running as PyInstaller EXE
-        base_dir = Path(sys._MEIPASS)
+        # Look for config.json next to the EXE
+        config_path = (
+            Path(sys.executable).resolve().parent
+            / "config.json"
+        )
     else:
-        # Running normally from Python
-        base_dir = Path(__file__).resolve().parent
+        # Normal Python development
+        config_path = (
+            Path(__file__).resolve().parent
+            / "config.json"
+        )
 
-    config_path = base_dir / "config.json"
-
-    print(f"Loading config from: {config_path}", flush=True)
+    print(
+        f"Loading config from: {config_path}",
+        flush=True
+    )
 
     if not config_path.exists():
         raise FileNotFoundError(
-            f"config.json not found at: {config_path}"
+            f"config.json not found: {config_path}"
         )
 
-    with open(config_path, "r", encoding="utf-8") as file:
-        config = json.load(file)
+    with open(
+        config_path,
+        "r",
+        encoding="utf-8"
+    ) as file:
 
-    return config
+        return json.load(file)

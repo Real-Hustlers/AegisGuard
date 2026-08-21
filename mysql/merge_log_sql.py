@@ -16,14 +16,14 @@ if getattr(sys, "frozen", False):
 else:
     # Source project:
     # C:\Users\saran\makethon
-    APP_ROOT = Path(__file__).resolve().parents[3]
+    APP_ROOT = Path(__file__).resolve().parent.parent
 
 
 # ============================================================
 # DATABASE / INPUT PATHS
 # ============================================================
 
-DB_PATH = APP_ROOT / "mysql" / "aegisguard.db"
+DB_PATH = APP_ROOT / "aegisguard.db"
 
 DEFAULT_JSON_PATH = (
     APP_ROOT

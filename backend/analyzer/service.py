@@ -1,16 +1,24 @@
 import sys
+import json
 from pathlib import Path
 
 CURRENT_DIR = Path(__file__).resolve().parent
+
 if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
 
+
 from database import get_connection
+
 try:
     from backend.analyzer.ingestion.mitre_mapper import get_mitre_mapping
 except ImportError:
     from ingestion.mitre_mapper import get_mitre_mapping
 
+
+# =========================================================
+# DASHBOARD SUMMARY
+# =========================================================
 
 def get_dashboard_summary():
     """Return dashboard statistics from SQLite."""
@@ -18,41 +26,116 @@ def get_dashboard_summary():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Total events
-    cursor.execute("SELECT COUNT(*) FROM security_logs")
+    # =====================================================
+    # TOTAL EVENTS
+    # Source: security_logs
+    # =====================================================
+
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM security_logs
+    """)
+
     total_events = cursor.fetchone()[0]
 
-    # Total devices
-    cursor.execute("SELECT COUNT(DISTINCT hostname) FROM security_logs")
+    # =====================================================
+    # TOTAL DEVICES
+    # Source: security_logs
+    # =====================================================
+
+    cursor.execute("""
+        SELECT COUNT(DISTINCT hostname)
+        FROM security_logs
+        WHERE hostname IS NOT NULL
+        AND hostname != ''
+    """)
+
     total_devices = cursor.fetchone()[0]
 
-    # Critical threats
+    # =====================================================
+    # TOTAL THREATS
+    #
+    # A threat here means an OPEN correlated incident.
+    # Source: incidents
+    # =====================================================
+
     cursor.execute("""
         SELECT COUNT(*)
-        FROM security_logs
-        WHERE UPPER(severity)='CRITICAL'
+        FROM incidents
+        WHERE UPPER(status) = 'OPEN'
     """)
+
     total_threats = cursor.fetchone()[0]
 
-    # Active alerts (Critical + High)
+    # =====================================================
+    # ACTIVE ALERTS
+    #
+    # HIGH / CRITICAL incidents whose alert status
+    # is still pending.
+    # =====================================================
+
     cursor.execute("""
         SELECT COUNT(*)
-        FROM security_logs
-        WHERE UPPER(severity) IN ('CRITICAL','HIGH')
+        FROM incidents
+        WHERE UPPER(severity) IN (
+            'CRITICAL',
+            'HIGH'
+        )
+        AND (
+            alert_status IS NULL
+            OR UPPER(alert_status) = 'PENDING'
+        )
     """)
+
     total_alerts = cursor.fetchone()[0]
 
-    # Severity distribution
+    # =====================================================
+    # EVENT SEVERITY DISTRIBUTION
+    # Source: security_logs
+    # =====================================================
+
     cursor.execute("""
-        SELECT severity, COUNT(*)
+        SELECT
+            severity,
+            COUNT(*) AS total
         FROM security_logs
         GROUP BY severity
+        ORDER BY total DESC
     """)
 
     severity_rows = cursor.fetchall()
 
+    distribution_labels = []
+    distribution_values = []
+
+    for row in severity_rows:
+
+        distribution_labels.append(
+            row["severity"] or "Unknown"
+        )
+
+        distribution_values.append(
+            row["total"]
+        )
+
+    # =====================================================
+    # DOMINANT ML PREDICTION
+    # Source: security_logs
+    # =====================================================
+
     cursor.execute("""
-        SELECT ml_prediction, COUNT(*) AS total, ROUND(AVG(COALESCE(ml_confidence, 0)), 2) AS avg_confidence
+        SELECT
+            ml_prediction,
+            COUNT(*) AS total,
+            ROUND(
+                AVG(
+                    COALESCE(
+                        ml_confidence,
+                        0
+                    )
+                ),
+                2
+            ) AS avg_confidence
         FROM security_logs
         GROUP BY ml_prediction
         ORDER BY total DESC
@@ -60,22 +143,45 @@ def get_dashboard_summary():
     """)
 
     ml_row = cursor.fetchone()
-    dominant_prediction = ml_row["ml_prediction"] if ml_row else "UNKNOWN"
-    dominant_confidence = ml_row["avg_confidence"] if ml_row else 0.0
-    dominant_count = ml_row["total"] if ml_row else 0
-    dominant_mitre = get_mitre_mapping(dominant_prediction)
 
-    distribution_labels = []
-    distribution_values = []
+    if ml_row:
 
-    for row in severity_rows:
-        distribution_labels.append(row["severity"])
-        distribution_values.append(row["COUNT(*)"])
+        dominant_prediction = (
+            ml_row["ml_prediction"]
+            or "UNKNOWN"
+        )
 
-    # Timeline (group by hour)
+        dominant_confidence = (
+            ml_row["avg_confidence"]
+            or 0.0
+        )
+
+        dominant_count = (
+            ml_row["total"]
+            or 0
+        )
+
+    else:
+
+        dominant_prediction = "UNKNOWN"
+        dominant_confidence = 0.0
+        dominant_count = 0
+
+    dominant_mitre = get_mitre_mapping(
+        dominant_prediction
+    )
+
+    # =====================================================
+    # EVENT TIMELINE
+    # Source: security_logs
+    # =====================================================
+
     cursor.execute("""
         SELECT
-            strftime('%H:00', timestamp) AS hour,
+            strftime(
+                '%H:00',
+                timestamp
+            ) AS hour,
             COUNT(*) AS total
         FROM security_logs
         GROUP BY hour
@@ -88,10 +194,20 @@ def get_dashboard_summary():
     timeline_values = []
 
     for row in timeline_rows:
-        timeline_labels.append(row["hour"])
-        timeline_values.append(row["total"])
+
+        timeline_labels.append(
+            row["hour"] or "Unknown"
+        )
+
+        timeline_values.append(
+            row["total"]
+        )
 
     conn.close()
+
+    # =====================================================
+    # DASHBOARD RESPONSE
+    # =====================================================
 
     return {
         "events": total_events,
@@ -110,7 +226,7 @@ def get_dashboard_summary():
         },
 
         "ml_summary": {
-            "prediction": dominant_prediction or "UNKNOWN",
+            "prediction": dominant_prediction,
             "confidence": dominant_confidence,
             "count": dominant_count,
             "mitre": dominant_mitre,
@@ -118,13 +234,23 @@ def get_dashboard_summary():
     }
 
 
+# =========================================================
+# EVENTS
+# =========================================================
+
 def get_events(hostname=None):
-    """Return event logs. If `hostname` is provided, filter by that hostname."""
+    """
+    Return security event logs.
+
+    If hostname is supplied,
+    only events from that host are returned.
+    """
 
     conn = get_connection()
     cursor = conn.cursor()
 
     if hostname:
+
         cursor.execute("""
             SELECT
                 log_id,
@@ -141,7 +267,9 @@ def get_events(hostname=None):
             WHERE hostname = ?
             ORDER BY timestamp DESC
         """, (hostname,))
+
     else:
+
         cursor.execute("""
             SELECT
                 log_id,
@@ -159,62 +287,166 @@ def get_events(hostname=None):
         """)
 
     rows = cursor.fetchall()
+
     conn.close()
 
     events = []
 
     for row in rows:
+
         events.append({
-            "id": row["log_id"],
-            "timestamp": row["timestamp"],
-            "hostname": row["hostname"],
-            "ip": row["source_ip"],
-            "severity": row["severity"],
-            "event": row["raw_log"],
-            "ml_prediction": row["ml_prediction"],
-            "threat_level": row["threat_level"],
-            "threat_score": row["threat_score"],
-            "threat_category": row["threat_category"],
+
+            "id":
+                row["log_id"],
+
+            "timestamp":
+                row["timestamp"],
+
+            "hostname":
+                row["hostname"],
+
+            "ip":
+                row["source_ip"],
+
+            "severity":
+                row["severity"],
+
+            "event":
+                row["raw_log"],
+
+            "ml_prediction":
+                row["ml_prediction"],
+
+            "threat_level":
+                row["threat_level"],
+
+            "threat_score":
+                row["threat_score"],
+
+            "threat_category":
+                row["threat_category"],
         })
 
     return events
 
 
+# =========================================================
+# ALERTS
+# =========================================================
+
 def get_alerts():
-    """Return latest Critical and High alerts."""
+    """
+    Return latest active incident alerts.
+
+    Alerts come from correlated incidents,
+    not directly from individual security logs.
+    """
 
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
         SELECT
-            log_id,
+            incident_id,
+            threat_type,
             severity,
             hostname,
-            raw_log,
-            timestamp
-        FROM security_logs
-        WHERE UPPER(severity) IN ('CRITICAL', 'HIGH')
+            source_ip,
+            user,
+            timestamp,
+            status,
+            alert_status,
+            mitre
+        FROM incidents
+        WHERE UPPER(severity) IN (
+            'CRITICAL',
+            'HIGH'
+        )
+        AND (
+            alert_status IS NULL
+            OR UPPER(alert_status) = 'PENDING'
+        )
         ORDER BY timestamp DESC
-        LIMIT 5
+        LIMIT 10
     """)
 
     rows = cursor.fetchall()
+
     conn.close()
 
     alerts = []
 
     for row in rows:
+
+        # -------------------------------------------------
+        # Parse MITRE mapping
+        # -------------------------------------------------
+
+        mitre = {}
+
+        try:
+
+            if row["mitre"]:
+
+                mitre = json.loads(
+                    row["mitre"]
+                )
+
+        except Exception:
+
+            mitre = {}
+
+        # -------------------------------------------------
+        # Build dashboard alert
+        # -------------------------------------------------
+
         alerts.append({
-            "id": row["log_id"],
-            "severity": row["severity"],
-            "title": row["raw_log"],
-            "device": row["hostname"],
-            "time": row["timestamp"]
+
+            "id":
+                row["incident_id"],
+
+            "incident_id":
+                row["incident_id"],
+
+            "severity":
+                row["severity"],
+
+            "title":
+                row["threat_type"],
+
+            "device":
+                row["hostname"]
+                or "UNKNOWN",
+
+            "hostname":
+                row["hostname"]
+                or "UNKNOWN",
+
+            "source_ip":
+                row["source_ip"],
+
+            "user":
+                row["user"],
+
+            "time":
+                row["timestamp"],
+
+            "status":
+                row["status"],
+
+            "alert_status":
+                row["alert_status"],
+
+            "mitre":
+                mitre,
         })
 
     return alerts
 
+
+# =========================================================
+# DEVICES
+# =========================================================
 
 def get_devices():
     """Return monitored device summaries from security logs."""
@@ -242,24 +474,47 @@ def get_devices():
     """)
 
     rows = cursor.fetchall()
+
     conn.close()
 
     devices = []
+
     for row in rows:
+
         if row["severity_rank"] == 3:
+
             status = "critical"
+
         elif row["severity_rank"] == 2:
+
             status = "warning"
+
         else:
+
             status = "normal"
 
         devices.append({
-            "hostname": row["hostname"] or "Unknown",
-            "ip": row["source_ip"] or "Unknown",
-            "os": row["os"] or "Unknown",
-            "event_count": row["event_count"],
-            "last_seen": row["last_seen"],
-            "status": status,
+
+            "hostname":
+                row["hostname"]
+                or "Unknown",
+
+            "ip":
+                row["source_ip"]
+                or "Unknown",
+
+            "os":
+                row["os"]
+                or "Unknown",
+
+            "event_count":
+                row["event_count"],
+
+            "last_seen":
+                row["last_seen"],
+
+            "status":
+                status,
         })
 
     return devices

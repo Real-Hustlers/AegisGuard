@@ -57,19 +57,6 @@ if len(df) == 0:
     exit()
 
 # ==========================================================
-# Column Mapping
-# ==========================================================
-
-rename_map = {
-    "TOTAL_EVENTS": "TOTAL_EVENT",
-    "HIGH_EVENTS": "HIGH_EVENT",
-    "CRITICAL_EVENTS": "CRITICAL_EVENT",
-    "UNIQUE_USERS": "UNIQUE_USER",
-}
-
-df.rename(columns=rename_map, inplace=True)
-
-# ==========================================================
 # Remove non-feature columns automatically
 # ==========================================================
 

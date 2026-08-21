@@ -1,24 +1,24 @@
 {
-    "log_name": "Security",
-    "analyzer_url": "http://10.15.63.126:5000/api/upload_logs",
-    "event_ids": [
-        4624,
-        4625,
-        4663,
-        4688,
-        4720,
-        4722,
-        4723,
-        4724,
-        4725,
-        4726,
-        4732,
-        4733,
-        4798,
-        5156,
-        5158
-    ],
-    "max_events": 500,
-    "hours": 10,
-    "raw_output_file": "raw_security_logs.json"
+  "log_name": "Security",
+  "analyzer_url": "http://127.0.0.1:5000/api/upload_logs",
+  "event_ids": [
+    4624,
+    4625,
+    4663,
+    4688,
+    4720,
+    4722,
+    4723,
+    4724,
+    4725,
+    4726,
+    4732,
+    4733,
+    4798,
+    5156,
+    5158
+  ],
+  "max_events": 500,
+  "hours": 10,
+  "raw_output_file": "raw_security_logs.json"
 }

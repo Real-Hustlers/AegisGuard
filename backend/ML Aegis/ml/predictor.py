@@ -37,7 +37,7 @@ def _build_feature_vector(logs):
 
     return [
         counts.get("FAILED_LOGIN", 0),
-        counts.get("SUCCESSFUL_LOGIN", 0),
+        counts.get("LOGON_SUCCESS", 0),
         counts.get("AUTHENTICATION_FAILURE", 0),
         counts.get("SUDO_COMMAND", 0),
         counts.get("PRIVILEGE_ESCALATION", 0),

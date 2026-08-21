@@ -37,85 +37,299 @@ def get_settings(conn):
 
 def execute_incident_playbook(conn, incident_id, enforce=None):
     """Execute or simulate remediation command for an incident."""
-    with open("output/incidents.json","r") as f:
-        incident=json.load(f)
 
-    if not incident:
+    cursor = conn.cursor()
+
+    # -------------------------------------------------
+    # Retrieve the requested incident from the database
+    # -------------------------------------------------
+
+    cursor.execute("""
+        SELECT
+            incident_id,
+            threat_type,
+            hostname,
+            os,
+            command_executed,
+            status,
+            action_taken
+        FROM incidents
+        WHERE incident_id = ?
+    """, (incident_id,))
+
+    row = cursor.fetchone()
+
+    if not row:
+        log_message(
+            conn,
+            incident_id,
+            f"[ERROR] Incident {incident_id} not found."
+        )
         return False
 
-    inc_id, threat_type, hostname, os_name, command, current_status, action_taken = incident
+    (
+        inc_id,
+        threat_type,
+        hostname,
+        os_name,
+        command,
+        current_status,
+        action_taken
+    ) = row
 
-    # Retrieve simulation vs enforcement config
+    # -------------------------------------------------
+    # Retrieve settings
+    # -------------------------------------------------
+
     settings = get_settings(conn)
-    simulation_mode = settings.get("simulation_mode", "true") == "true"
 
-    # Allow overriding simulation mode
+    simulation_mode = (
+        str(settings.get("simulation_mode", "true")).lower()
+        == "true"
+    )
+
+    # Allow explicit override
     if enforce is not None:
         simulation_mode = not enforce
 
-    log_message(conn, inc_id, f"[EXEC] Starting execution for incident {inc_id}...")
+    # -------------------------------------------------
+    # Start execution
+    # -------------------------------------------------
+
+    log_message(
+        conn,
+        inc_id,
+        f"[EXEC] Starting execution for incident {inc_id}..."
+    )
+
+    # -------------------------------------------------
+    # Simulation Mode
+    # -------------------------------------------------
 
     if simulation_mode:
-        log_message(conn, inc_id, f"[SIMULATION] Dry-run mode active. No host changes made.")
-        log_message(conn, inc_id, f"[SIMULATION] Executing command: `{command}`")
-        log_message(conn, inc_id, f"[SIMULATION] SUCCESS: Playbook action '{action_taken}' completed.")
-        log_message(conn, inc_id, f"[ALERT] Administrator notification simulated.")
-        cursor.execute("UPDATE incidents SET status = 'SIMULATED', alert_status = 'ALERT_SENT' WHERE incident_id = ?", (inc_id,))
+
+        log_message(
+            conn,
+            inc_id,
+            "[SIMULATION] Dry-run mode active. No host changes made."
+        )
+
+        log_message(
+            conn,
+            inc_id,
+            f"[SIMULATION] Executing command: `{command}`"
+        )
+
+        log_message(
+            conn,
+            inc_id,
+            f"[SIMULATION] SUCCESS: Playbook action "
+            f"'{action_taken}' completed."
+        )
+
+        log_message(
+            conn,
+            inc_id,
+            "[ALERT] Administrator notification simulated."
+        )
+
+        cursor.execute("""
+            UPDATE incidents
+            SET status = 'SIMULATED',
+                alert_status = 'ALERT_SENT'
+            WHERE incident_id = ?
+        """, (inc_id,))
+
         conn.commit()
+
         return True
 
+    # -------------------------------------------------
     # Real Enforcement Mode
-    cursor.execute("UPDATE incidents SET status = 'EXECUTING' WHERE incident_id = ?", (inc_id,))
+    # -------------------------------------------------
+
+    cursor.execute("""
+        UPDATE incidents
+        SET status = 'EXECUTING'
+        WHERE incident_id = ?
+    """, (inc_id,))
+
     conn.commit()
 
-    log_message(conn, inc_id, f"[ACTIVE] Launching live remediation command on system: `{command}`")
+    log_message(
+        conn,
+        inc_id,
+        f"[ACTIVE] Launching live remediation command "
+        f"on system: `{command}`"
+    )
 
     target_os = str(os_name or "Windows").lower()
     host_is_windows = sys.platform.startswith("win")
 
-    # If platform mismatch, we run in simulated/dry-run mode for safety or report failure
-    if ("linux" in target_os and host_is_windows) or ("windows" in target_os and not host_is_windows):
-        log_message(conn, inc_id, f"[ACTIVE] WARNING: Target OS ({os_name}) does not match current host platform ({sys.platform}). Falling back to simulation.")
-        log_message(conn, inc_id, f"[ACTIVE] SUCCESS: Simulated execution of `{command}` completed.")
-        log_message(conn, inc_id, f"[ALERT] Administrator notification simulated.")
-        cursor.execute("UPDATE incidents SET status = 'SIMULATED', alert_status = 'ALERT_SENT' WHERE incident_id = ?", (inc_id,))
+    # -------------------------------------------------
+    # Platform mismatch protection
+    # -------------------------------------------------
+
+    if (
+        ("linux" in target_os and host_is_windows)
+        or
+        ("windows" in target_os and not host_is_windows)
+    ):
+
+        log_message(
+            conn,
+            inc_id,
+            f"[ACTIVE] WARNING: Target OS ({os_name}) "
+            f"does not match current host platform "
+            f"({sys.platform}). Falling back to simulation."
+        )
+
+        log_message(
+            conn,
+            inc_id,
+            f"[ACTIVE] SUCCESS: Simulated execution "
+            f"of `{command}` completed."
+        )
+
+        log_message(
+            conn,
+            inc_id,
+            "[ALERT] Administrator notification simulated."
+        )
+
+        cursor.execute("""
+            UPDATE incidents
+            SET status = 'SIMULATED',
+                alert_status = 'ALERT_SENT'
+            WHERE incident_id = ?
+        """, (inc_id,))
+
         conn.commit()
+
         return True
 
-    # Run the shell command
+    # -------------------------------------------------
+    # Execute command
+    # -------------------------------------------------
+
     try:
+
         if host_is_windows:
-            # Execute command in powershell
-            res = subprocess.run(
-                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
-                capture_output=True, text=True, timeout=10
-            )
-        else:
-            # Execute command in bash
-            res = subprocess.run(
-                ["/bin/bash", "-c", command],
-                capture_output=True, text=True, timeout=10
+
+            result = subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    command
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10
             )
 
-        if res.returncode == 0:
-            log_message(conn, inc_id, f"[ACTIVE] SUCCESS: Command returned exit code 0.")
-            if res.stdout.strip():
-                log_message(conn, inc_id, f"[STDOUT] {res.stdout.strip()}")
-            cursor.execute("UPDATE incidents SET status = 'EXECUTED', alert_status = 'ALERT_SENT' WHERE incident_id = ?", (inc_id,))
         else:
-            log_message(conn, inc_id, f"[ACTIVE] ERROR: Command failed with exit code {res.returncode}.")
-            if res.stderr.strip():
-                log_message(conn, inc_id, f"[STDERR] {res.stderr.strip()}")
-            cursor.execute("UPDATE incidents SET status = 'FAILED', alert_status = 'ALERT_SENT' WHERE incident_id = ?", (inc_id,))
+
+            result = subprocess.run(
+                [
+                    "/bin/bash",
+                    "-c",
+                    command
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+        # ---------------------------------------------
+        # Successful execution
+        # ---------------------------------------------
+
+        if result.returncode == 0:
+
+            log_message(
+                conn,
+                inc_id,
+                "[ACTIVE] SUCCESS: Command returned exit code 0."
+            )
+
+            if result.stdout.strip():
+
+                log_message(
+                    conn,
+                    inc_id,
+                    f"[STDOUT] {result.stdout.strip()}"
+                )
+
+            cursor.execute("""
+                UPDATE incidents
+                SET status = 'EXECUTED',
+                    alert_status = 'ALERT_SENT'
+                WHERE incident_id = ?
+            """, (inc_id,))
+
+        # ---------------------------------------------
+        # Failed execution
+        # ---------------------------------------------
+
+        else:
+
+            log_message(
+                conn,
+                inc_id,
+                f"[ACTIVE] ERROR: Command failed with "
+                f"exit code {result.returncode}."
+            )
+
+            if result.stderr.strip():
+
+                log_message(
+                    conn,
+                    inc_id,
+                    f"[STDERR] {result.stderr.strip()}"
+                )
+
+            cursor.execute("""
+                UPDATE incidents
+                SET status = 'FAILED',
+                    alert_status = 'ALERT_SENT'
+                WHERE incident_id = ?
+            """, (inc_id,))
 
     except subprocess.TimeoutExpired:
-        log_message(conn, inc_id, f"[ACTIVE] ERROR: Command execution timed out (10s limit).")
-        cursor.execute("UPDATE incidents SET status = 'FAILED', alert_status = 'ALERT_SENT' WHERE incident_id = ?", (inc_id,))
+
+        log_message(
+            conn,
+            inc_id,
+            "[ACTIVE] ERROR: Command execution timed out (10s limit)."
+        )
+
+        cursor.execute("""
+            UPDATE incidents
+            SET status = 'FAILED',
+                alert_status = 'ALERT_SENT'
+            WHERE incident_id = ?
+        """, (inc_id,))
+
     except Exception as e:
-        log_message(conn, inc_id, f"[ACTIVE] ERROR: Command failed to start. {str(e)}")
-        cursor.execute("UPDATE incidents SET status = 'FAILED', alert_status = 'ALERT_SENT' WHERE incident_id = ?", (inc_id,))
+
+        log_message(
+            conn,
+            inc_id,
+            f"[ACTIVE] ERROR: Command failed to start. {str(e)}"
+        )
+
+        cursor.execute("""
+            UPDATE incidents
+            SET status = 'FAILED',
+                alert_status = 'ALERT_SENT'
+            WHERE incident_id = ?
+        """, (inc_id,))
 
     conn.commit()
+
     return True
 
 

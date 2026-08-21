@@ -1,14 +1,32 @@
-import subprocess
 import json
-from datetime import datetime, timedelta
-import requests
 import platform
+import subprocess
+from datetime import datetime, timedelta
+
+import requests
+
 from config_loader import load_config
 
+
+# ============================================================
+# LOAD CONFIGURATION
+# ============================================================
+
 config = load_config()
+
 ANALYZER = config["analyzer_url"]
+HOURS = int(config["hours"])
+MAX_EVENTS = int(config["max_events"])
+
+
+# ============================================================
+# SEND LOGS TO ANALYZER
+# ============================================================
 
 def send_logs(parsed_logs):
+    """
+    Send collected logs to the central AegisGuard Analyzer.
+    """
 
     payload = {
         "machine_id": platform.node(),
@@ -17,32 +35,80 @@ def send_logs(parsed_logs):
         "logs": parsed_logs
     }
 
-    response = requests.post(
-        ANALYZER,
-        json=payload
-    )
+    print("\nSending logs to Analyzer:")
+    print(ANALYZER)
 
-    print(response.text)
+    try:
+        response = requests.post(
+            ANALYZER,
+            json=payload,
+            timeout=60
+        )
+
+        print(
+            "Analyzer HTTP Status:",
+            response.status_code
+        )
+
+        print(
+            "Analyzer Response:",
+            response.text
+        )
+
+        return response.status_code == 200
+
+    except requests.RequestException as e:
+
+        print(
+            "Failed to connect to Analyzer:",
+            e
+        )
+
+        return False
 
 
-def collect_security_logs(hours=HOURS, max_events=MAX_EVENTS):
+# ============================================================
+# COLLECT WINDOWS SECURITY LOGS
+# ============================================================
+
+def collect_security_logs(
+    hours=HOURS,
+    max_events=MAX_EVENTS
+):
     """
-    Collect important Windows Security logs from the last 'hours' hours.
+    Collect Windows Security logs.
+
+    hours:
+        Number of hours of historical events to collect.
+
+    max_events:
+        Maximum number of events to collect.
     """
 
-    # Calculate start time
-    start_time = (datetime.now() - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%S")
+    start_time = (
+        datetime.now() - timedelta(hours=hours)
+    ).strftime("%Y-%m-%dT%H:%M:%S")
 
     powershell_command = f"""
-    Get-WinEvent -LogName Security -MaxEvents {max_events} |
-    Select-Object RecordId,
-                Id,
-                TimeCreated,
-                MachineName,
-                LevelDisplayName,
-                Message |
-    ConvertTo-Json -Depth 4
-    """
+$start = (Get-Date).AddHours(-{hours})
+
+Get-WinEvent -FilterHashtable @{{
+    LogName='Security'
+    StartTime=$start
+}} -MaxEvents {max_events} |
+Select-Object RecordId,
+              Id,
+              TimeCreated,
+              MachineName,
+              LevelDisplayName,
+              Message |
+ConvertTo-Json -Depth 4
+"""
+
+    print("\nStart Time:", start_time)
+
+    print("\nPowerShell Command:")
+    print(powershell_command)
 
     result = subprocess.run(
         [
@@ -59,67 +125,150 @@ def collect_security_logs(hours=HOURS, max_events=MAX_EVENTS):
         errors="ignore"
     )
 
-    print("Start Time:", start_time)
-    print("PowerShell Command:")
-    print(powershell_command)
+    # --------------------------------------------------------
+    # PowerShell error
+    # --------------------------------------------------------
 
     if result.returncode != 0:
-        print("PowerShell Error:")
+
+        print("\nPowerShell Error:")
         print(result.stderr)
+
         return []
 
-    print("STDOUT:")
-    print(result.stdout)
-
-    print("STDERR:")
-    print(result.stderr)
+    # --------------------------------------------------------
+    # Empty output
+    # --------------------------------------------------------
 
     if not result.stdout.strip():
+
+        print(
+            "\nNo Security events were returned."
+        )
+
         return []
 
+    # --------------------------------------------------------
+    # Parse JSON
+    # --------------------------------------------------------
+
     try:
-        logs = json.loads(result.stdout)
+
+        logs = json.loads(
+            result.stdout
+        )
 
         if isinstance(logs, dict):
             logs = [logs]
 
+        print(
+            f"\nSuccessfully parsed {len(logs)} Security events."
+        )
+
         return logs
 
-    except json.JSONDecodeError:
-        print("Failed to parse PowerShell JSON output.")
+    except json.JSONDecodeError as e:
+
+        print(
+            "\nFailed to parse PowerShell JSON output."
+        )
+
+        print(
+            "JSON error:",
+            e
+        )
+
+        print(
+            "\nRaw PowerShell output:"
+        )
+
+        print(
+            result.stdout
+        )
+
         return []
 
 
-def save_raw_logs(logs, filename="raw_security_logs.json"):
+# ============================================================
+# SAVE RAW LOGS
+# ============================================================
+
+def save_raw_logs(
+    logs,
+    filename=None
+):
     """
-    Save collected raw logs to JSON.
+    Save collected logs locally.
     """
 
-    with open(filename, "w", encoding="utf-8") as file:
-        json.dump(logs, file, indent=4, default=str)
+    if filename is None:
+        filename = config.get(
+            "raw_output_file",
+            "raw_security_logs.json"
+        )
 
-    print(f"Raw logs saved to '{filename}'")
+    with open(
+        filename,
+        "w",
+        encoding="utf-8"
+    ) as file:
 
+        json.dump(
+            logs,
+            file,
+            indent=4,
+            default=str
+        )
+
+    print(
+        f"Raw logs saved to '{filename}'"
+    )
+
+
+# ============================================================
+# MAIN
+# ============================================================
 
 if __name__ == "__main__":
 
+    print("=" * 60)
+    print("            AEGISGUARD WINDOWS")
+    print("            SECURITY COLLECTOR")
+    print("=" * 60)
 
-    HOURS = config["hours"]
-    MAX_EVENTS = config["max_events"]
+    print(
+        f"\nAnalyzer URL : {ANALYZER}"
+    )
 
-    print("=" * 50)
-    print("Windows Security Log Collector")
-    print("=" * 50)
+    print(
+        f"History Hours: {HOURS}"
+    )
+
+    print(
+        f"Max Events   : {MAX_EVENTS}"
+    )
+
+    # --------------------------------------------------------
+    # Historical collection
+    # --------------------------------------------------------
 
     logs = collect_security_logs(
         hours=HOURS,
         max_events=MAX_EVENTS
     )
 
-    print(f"\nCollected {len(logs)} Security Events\n")
+    print(
+        f"\nCollected {len(logs)} Security Events.\n"
+    )
+
+    # --------------------------------------------------------
+    # Process collected logs
+    # --------------------------------------------------------
 
     if logs:
+
         print("First Event:\n")
+
         print(
             json.dumps(
                 logs[0],
@@ -132,7 +281,23 @@ if __name__ == "__main__":
         save_raw_logs(logs)
 
         # Send to Analyzer
-        send_logs(logs)
+        success = send_logs(logs)
+
+        if success:
+
+            print(
+                "\nLogs successfully uploaded to Analyzer."
+            )
+
+        else:
+
+            print(
+                "\nLogs were collected, "
+                "but upload to Analyzer failed."
+            )
 
     else:
-        print("No matching Security events found.")
+
+        print(
+            "No matching Security events found."
+        )
