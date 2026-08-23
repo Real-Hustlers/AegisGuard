@@ -23,7 +23,16 @@ else:
 # DATABASE / INPUT PATHS
 # ============================================================
 
-DB_PATH = APP_ROOT / "aegisguard.db"
+try:
+    # Keep manual historical imports on the exact same database as Flask APIs.
+    from backend.analyzer.database import DB_PATH as CANONICAL_DB_PATH
+except ImportError:
+    try:
+        from database import DB_PATH as CANONICAL_DB_PATH
+    except ImportError:
+        CANONICAL_DB_PATH = APP_ROOT / "aegisguard.db"
+
+DB_PATH = CANONICAL_DB_PATH
 
 DEFAULT_JSON_PATH = (
     APP_ROOT

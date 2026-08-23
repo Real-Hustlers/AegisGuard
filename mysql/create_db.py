@@ -1,7 +1,13 @@
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent / "aegisguard.db"
+try:
+    # Keep this legacy helper aligned with the Analyzer runtime database.
+    from backend.analyzer.database import DB_PATH as CANONICAL_DB_PATH
+except ImportError:
+    CANONICAL_DB_PATH = Path(__file__).resolve().parent.parent / "aegisguard.db"
+
+DB_PATH = CANONICAL_DB_PATH
 
 
 def initialize_db(db_path=None):

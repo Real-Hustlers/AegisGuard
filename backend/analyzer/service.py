@@ -8,7 +8,10 @@ if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
 
 
-from database import get_connection
+try:
+    from backend.analyzer.database import get_connection
+except ImportError:
+    from database import get_connection
 
 try:
     from backend.analyzer.ingestion.mitre_mapper import get_mitre_mapping
@@ -254,8 +257,11 @@ def get_events(hostname=None):
         cursor.execute("""
             SELECT
                 log_id,
+                record_id,
                 timestamp,
                 hostname,
+                event_type,
+                user,
                 source_ip,
                 severity,
                 raw_log,
@@ -273,8 +279,11 @@ def get_events(hostname=None):
         cursor.execute("""
             SELECT
                 log_id,
+                record_id,
                 timestamp,
                 hostname,
+                event_type,
+                user,
                 source_ip,
                 severity,
                 raw_log,
@@ -299,11 +308,20 @@ def get_events(hostname=None):
             "id":
                 row["log_id"],
 
+            "record_id":
+                row["record_id"],
+
             "timestamp":
                 row["timestamp"],
 
             "hostname":
                 row["hostname"],
+
+            "event_type":
+                row["event_type"],
+
+            "user":
+                row["user"],
 
             "ip":
                 row["source_ip"],

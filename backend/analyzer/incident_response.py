@@ -7,7 +7,7 @@ from datetime import datetime
 # Platform & Helper Imports
 # --------------------------
 try:
-    from database import get_connection
+    from backend.analyzer.database import get_connection
     from backend.analyzer.incident_enricher import IncidentEnricher
 except ImportError:
     from database import get_connection
@@ -371,7 +371,7 @@ def scan_and_generate_incidents(conn):
     cursor.execute("""
         SELECT log_id, machine_id, hostname, os, timestamp, event_type,
                user, source_ip, process, file_path, severity, raw_log,
-               ml_prediction, ml_confidence, threat_level
+               ml_prediction, ml_confidence, threat_level, threat_score
         FROM security_logs
         WHERE log_id NOT IN (SELECT DISTINCT log_id FROM incidents WHERE log_id IS NOT NULL)
     """)
@@ -382,12 +382,10 @@ def scan_and_generate_incidents(conn):
 
     incidents_created = 0
     settings = get_settings(conn)
-    auto_respond = settings.get("auto_response_enabled", "true") == "true"
-
     for log in logs:
         (log_id, machine_id, hostname, os_name, timestamp, event_type,
          user, source_ip, process, file_path, severity, raw_log,
-         ml_prediction, ml_confidence, threat_level) = log
+         ml_prediction, ml_confidence, threat_level, threat_score) = log
 
         threat_type = None
         playbook_steps = []
@@ -405,11 +403,14 @@ def scan_and_generate_incidents(conn):
         # -----------------------------
         if ml_pred_upper == "BRUTE_FORCE" or "brute-force" in raw_log_lower or "multiple failed login" in raw_log_lower:
             threat_type = "Brute Force Attack"
-            ip = source_ip or "10.12.32.108"
+            # Never invent a block target.  A missing source IP is an
+            # investigation-only incident, not a remediation candidate.
+            ip = source_ip or ""
             playbook_steps = ["Block the attacker's IP", "Send alerts to administrators", "Generate an incident report"]
             command_windows = f'netsh advfirewall firewall add rule name="Block Hacker" dir=in action=block remoteip={ip}'
             command_linux = f'iptables -A INPUT -s {ip} -j DROP'
-            action_taken = f"Blocked malicious attacker IP: {ip}"
+            action_taken = (f"Recommended containment of attacker IP: {ip}"
+                            if ip else "Recommended investigation: source IP unavailable")
             if user:
                 playbook_steps.insert(1, "Disable compromised account")
                 command_windows += f'; net user {user} /active:no'
@@ -521,8 +522,21 @@ def scan_and_generate_incidents(conn):
             log_message(conn, incident_id, f"[INIT] Incident report generated.")
             log_message(conn, incident_id, f"[ALERT] Alert scheduled for administrators.")
 
-            # Execute automatically if enabled
-            if auto_respond:
-                execute_incident_playbook(conn, incident_id)
+            # Generic legacy playbooks may contain host commands, so they are
+            # never auto-enforced here.  The dedicated SOAR engine handles the
+            # one supported real action (BLOCK_IP) through strict validation.
+            if source_ip:
+                try:
+                    from backend.analyzer.soar import SoarEngine
+                except ImportError:
+                    from soar import SoarEngine
+                soar_incident = dict(incident_data)
+                soar_incident["log_id"] = log_id
+                soar_incident["threat_score"] = threat_score or 0
+                SoarEngine(conn).request_block(
+                    soar_incident,
+                    source_ip,
+                    reason="Incident response playbook recommends source-IP containment",
+                )
 
     return incidents_created

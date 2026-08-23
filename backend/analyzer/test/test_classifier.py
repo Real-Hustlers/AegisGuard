@@ -1,11 +1,28 @@
 import json
 import sys
-import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from backend.analyzer.ingestion.classifier import classify_logs
+
+
+def _classify_sample(sample):
+    """Use workspace-local temporary files (Windows sandbox-safe)."""
+
+    root = Path.cwd()
+    input_path = root / ".aegisguard_classifier_test_input.json"
+    output_path = root / ".aegisguard_classifier_test_output.json"
+    temp_output_path = Path(f"{output_path}.tmp")
+
+    try:
+        input_path.write_text(json.dumps(sample), encoding="utf-8")
+        classify_logs(str(input_path), str(output_path))
+        return json.loads(output_path.read_text(encoding="utf-8"))
+    finally:
+        for path in (input_path, output_path, temp_output_path):
+            if path.exists():
+                path.unlink()
 
 
 def test_successful_login_is_classified_as_normal():
@@ -22,12 +39,7 @@ def test_successful_login_is_classified_as_normal():
         "raw_log": "Successful login"
     }]
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        input_path = Path(tmpdir) / "merged.json"
-        output_path = Path(tmpdir) / "classified.json"
-        input_path.write_text(json.dumps(sample), encoding="utf-8")
-        classify_logs(str(input_path), str(output_path))
-        payload = json.loads(output_path.read_text(encoding="utf-8"))
+    payload = _classify_sample(sample)
 
     assert payload[0]["ml_prediction"] == "NORMAL"
     assert payload[0]["threat_level"] == "LOW"
@@ -47,12 +59,7 @@ def test_malware_alert_is_classified_as_malware():
         "raw_log": "Malware detected"
     }]
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        input_path = Path(tmpdir) / "merged.json"
-        output_path = Path(tmpdir) / "classified.json"
-        input_path.write_text(json.dumps(sample), encoding="utf-8")
-        classify_logs(str(input_path), str(output_path))
-        payload = json.loads(output_path.read_text(encoding="utf-8"))
+    payload = _classify_sample(sample)
 
     assert payload[0]["ml_prediction"] == "MALWARE"
     assert payload[0]["threat_level"] == "CRITICAL"

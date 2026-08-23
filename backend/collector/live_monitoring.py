@@ -6,7 +6,7 @@ import subprocess
 
 from backend.collector.parser import parse_event
 from backend.collector.detector import detect_threat
-from backend.collector.config_loader import load_config
+from backend.collector.config_loader import get_config_path, load_config
 
 
 # ============================================================
@@ -122,6 +122,20 @@ def send_logs(parsed_logs):
             print(
                 "Analyzer response:",
                 response.text
+            )
+
+        except requests.ConnectTimeout:
+
+            print(
+                "[UPLOAD CONNECT TIMEOUT] "
+                f"Could not establish a connection within {UPLOAD_TIMEOUT} seconds."
+            )
+
+        except requests.ReadTimeout:
+
+            print(
+                "[UPLOAD READ TIMEOUT] "
+                f"Analyzer accepted the connection but did not respond within {UPLOAD_TIMEOUT} seconds."
             )
 
         except requests.Timeout:
@@ -253,6 +267,14 @@ ConvertTo-Json
     )
 
     if result.returncode != 0:
+        error_text = (result.stderr or "").lower()
+        if any(token in error_text for token in (
+            "unauthorized", "access is denied", "access denied", "permission"
+        )):
+            raise PermissionError(
+                "AegisGuard Collector requires Administrator privileges to read "
+                "the Windows Security Event Log."
+            )
         return 0
 
     if not result.stdout.strip():
@@ -362,6 +384,15 @@ ConvertTo-Json -Depth 4
             result.stderr
         )
 
+        error_text = (result.stderr or "").lower()
+        if any(token in error_text for token in (
+            "unauthorized", "access is denied", "access denied", "permission"
+        )):
+            raise PermissionError(
+                "AegisGuard Collector requires Administrator privileges to read "
+                "the Windows Security Event Log."
+            )
+
         return []
 
     if not result.stdout.strip():
@@ -429,6 +460,16 @@ def start_live_monitor(
         "Analyzer URL:",
         ANALYZER
     )
+
+    print("Collector hostname:", platform.node())
+    print("Config path:", get_config_path())
+
+    if "127.0.0.1" in ANALYZER or "localhost" in ANALYZER.lower():
+        print(
+            "[WARNING] Analyzer URL is localhost. This only works when the "
+            "Analyzer runs on this same PC; set analyzer_url in config.json "
+            "for a remote Analyzer."
+        )
 
     # --------------------------------------------------------
     # Determine initial RecordID
@@ -648,6 +689,10 @@ if __name__ == "__main__":
     try:
 
         start_live_monitor()
+
+    except PermissionError as e:
+
+        print(e)
 
     except KeyboardInterrupt:
 

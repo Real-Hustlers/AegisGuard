@@ -1,15 +1,81 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from pathlib import Path
+from PyInstaller.utils.hooks import collect_data_files
+
+
+# ============================================================
+# PROJECT PATHS
+# ============================================================
+
+PROJECT_ROOT = Path.cwd()
+
+COLLECTOR_DIR = (
+    PROJECT_ROOT
+    / "backend"
+    / "collector"
+)
+
+ENTRY_POINT = (
+    COLLECTOR_DIR
+    / "live_monitoring.py"
+)
+
+
+# ============================================================
+# TZDATA
+# ============================================================
+
+tzdata_files = collect_data_files(
+    "tzdata"
+)
+
+
+# ============================================================
+# ANALYSIS
+# ============================================================
 
 a = Analysis(
-    ['main.py'],
-    pathex=[],
-    binaries=[],
-    datas=[
-        ('config.json', '.'),
-        ('event_ids.txt', '.'),
+    [
+        str(ENTRY_POINT)
     ],
-    hiddenimports=[],
+
+    pathex=[
+        str(PROJECT_ROOT),
+        str(PROJECT_ROOT / "backend"),
+        str(COLLECTOR_DIR),
+    ],
+
+    binaries=[],
+
+    # config.json is intentionally NOT bundled.
+    # It should stay beside the EXE so each endpoint can
+    # point to a different Analyzer URL.
+    datas=[
+        *tzdata_files,
+    ],
+
+    hiddenimports=[
+        # Collector modules
+        "backend.collector",
+        "backend.collector.live_monitoring",
+        "backend.collector.parser",
+        "backend.collector.detector",
+        "backend.collector.config_loader",
+
+        # Networking
+        "requests",
+        "urllib3",
+
+        # Windows / system
+        "platform",
+        "subprocess",
+
+        # Timezone support
+        "zoneinfo",
+        "tzdata",
+    ],
+
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -17,31 +83,49 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
-pyz = PYZ(a.pure)
+
+
+# ============================================================
+# PYZ
+# ============================================================
+
+pyz = PYZ(
+    a.pure
+)
+
+
+# ============================================================
+# SINGLE EXE
+# ============================================================
 
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,
+    a.datas,
     [],
-    exclude_binaries=True,
-    name='AegisGuardCollector',
+
+    name="AegisGuardCollector",
+
+    # Required to read Windows Security Event Log.
     uac_admin=True,
-    debug=False,    bootloader_ignore_signals=False,
+
+    debug=False,
+    bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+
+    # Keep disabled for first stable build.
+    upx=False,
+    upx_exclude=[],
+
+    runtime_tmpdir=None,
+
+    # Keep console visible during testing.
     console=True,
+
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-)
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name='AegisGuardCollector',
 )

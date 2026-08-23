@@ -773,6 +773,83 @@ function renderSuspiciousEntities(data) {
     }
 }
 
+// Browser-local clock: it is independent from API polling and naturally
+// updates the date after midnight without a page refresh.
+function updateDashboardClock() {
+    const now = new Date();
+    const date = document.getElementById('dashboard-date');
+    const time = document.getElementById('dashboard-time');
+
+    if (date) {
+        date.textContent = new Intl.DateTimeFormat('en-GB', {
+            day: '2-digit', month: 'short', year: 'numeric'
+        }).format(now);
+    }
+
+    if (time) {
+        time.textContent = new Intl.DateTimeFormat('en-US', {
+            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+        }).format(now);
+    }
+}
+
+function renderSoarActions(actions, settings) {
+    const table = document.getElementById('soarActionsTable');
+    const mode = document.getElementById('soarModeStatus');
+    const modeSelect = document.getElementById('soarModeSelect');
+    const dryRunToggle = document.getElementById('toggleSoarDryRun');
+    if (mode) {
+        const dryRun = settings && settings.soar_dry_run ? ' / DRY-RUN' : '';
+        mode.textContent = `${(settings && settings.soar_mode) || 'MANUAL'}${dryRun}`;
+    }
+    if (modeSelect && settings) modeSelect.value = settings.soar_mode || 'MANUAL';
+    if (dryRunToggle && settings) dryRunToggle.checked = Boolean(settings.soar_dry_run);
+    if (!table) return;
+    if (!actions || !actions.length) {
+        table.innerHTML = '<tr><td colspan="6" class="text-main" style="text-align:center; padding:12px;">No response actions yet.</td></tr>';
+        return;
+    }
+    table.innerHTML = actions.map(action => {
+        const status = String(action.status || 'UNKNOWN').toUpperCase();
+        let controls = '';
+        if (status === 'PENDING_APPROVAL') {
+            controls = `<button class="btn-outline" onclick="approveResponseAction(${Number(action.id)})" style="padding:4px 8px;font-size:10px;">APPROVE BLOCK</button>`;
+        } else if (['EXECUTED', 'DRY_RUN'].includes(status) && action.action_type === 'BLOCK_IP') {
+            controls = `<button class="btn-outline" onclick="unblockResponseIp('${escapeHtml(action.target)}')" style="padding:4px 8px;font-size:10px;border-color:var(--orange);color:var(--orange);">UNBLOCK</button>`;
+        }
+        return `<tr>
+            <td class="mono">${escapeHtml(action.action_type || '')}</td>
+            <td><div class="mono text-cyan">${escapeHtml(action.target || '')}</div><div style="font-size:10px;color:#94a3b8">${escapeHtml(action.hostname || 'ANALYZER')} · ${escapeHtml(action.execution_scope || 'ANALYZER')}</div></td>
+            <td style="font-size:11px;max-width:260px">${escapeHtml(action.reason || '')}</td>
+            <td class="mono" style="font-size:10px">${escapeHtml(action.requested_at || '')}</td>
+            <td><span class="badge badge-info">${escapeHtml(status)}</span>${action.rollback_status ? `<div style="font-size:10px;margin-top:3px">Rollback: ${escapeHtml(action.rollback_status)}</div>` : ''}</td>
+            <td style="text-align:right">${controls}</td>
+        </tr>`;
+    }).join('');
+}
+
+window.approveResponseAction = function(actionId) {
+    fetch(`/api/response-actions/${actionId}/approve`, { method: 'POST' })
+        .then(r => r.json()).then(() => loadIncidentResponseData())
+        .catch(err => console.error('SOAR approval failed:', err));
+};
+
+window.unblockResponseIp = function(ip) {
+    if (!confirm(`Remove the AegisGuard firewall rule for ${ip}?`)) return;
+    fetch('/api/soar/unblock-ip', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ip, reason: 'Dashboard rollback'})
+    }).then(r => r.json()).then(() => loadIncidentResponseData())
+      .catch(err => console.error('SOAR rollback failed:', err));
+};
+
+function updateSoarSettings(values) {
+    fetch('/api/incidents/settings', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(values)
+    }).then(r => r.json()).then(() => loadIncidentResponseData())
+      .catch(err => console.error('SOAR settings update failed:', err));
+}
+
 function updateSettings(autoEnabled, simMode) {
     fetch('/api/incidents/settings', {
         method: 'POST',
@@ -811,9 +888,10 @@ function loadIncidentResponseData() {
         fetch('/api/incidents/settings').then(r => r.json()),
         fetch('/api/incidents/suspicious').then(r => r.json()),
         fetch('/api/incidents').then(r => r.json()),
-        fetch('/api/incidents/logs').then(r => r.json())
+        fetch('/api/incidents/logs').then(r => r.json()),
+        fetch('/api/response-actions').then(r => r.json())
     ])
-    .then(([settings, suspicious, incidents, logs]) => {
+    .then(([settings, suspicious, incidents, logs, responseActions]) => {
         renderSettingsState(settings);
         renderSuspiciousEntities(suspicious);
         renderIncidentsTable(incidents);
@@ -835,6 +913,7 @@ function loadIncidentResponseData() {
         }
 
         renderTerminalLogs(logs);
+        renderSoarActions(responseActions, settings);
     })
     .catch(err => {
         console.error('Incident Response fetch failed:', err);
@@ -882,6 +961,10 @@ function loadDashboardData() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+    // The dashboard owns exactly one one-second clock interval.
+    updateDashboardClock();
+    setInterval(updateDashboardClock, 1000);
+
     // Initial loads
     loadDashboardData();
     loadDeviceData();
@@ -927,6 +1010,11 @@ window.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    const soarMode = document.getElementById('soarModeSelect');
+    const soarDryRun = document.getElementById('toggleSoarDryRun');
+    if (soarMode) soarMode.addEventListener('change', () => updateSoarSettings({soar_mode: soarMode.value}));
+    if (soarDryRun) soarDryRun.addEventListener('change', () => updateSoarSettings({soar_dry_run: soarDryRun.checked}));
 
     // Modal close button and keyboard handlers
     const alertModal = document.getElementById('alertModal');

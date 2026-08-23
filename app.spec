@@ -1,11 +1,55 @@
-# -*- mode: python ; coding: utf-8 -*-
+﻿# -*- mode: python ; coding: utf-8 -*-
+
+from pathlib import Path
+
+PROJECT_ROOT = Path.cwd()
+
+ANALYZER_APP = PROJECT_ROOT / "backend" / "analyzer" / "app.py"
+
+TEMPLATES_DIR = PROJECT_ROOT / "templates"
+STATIC_DIR = PROJECT_ROOT / "static"
+
+MITRE_FILE = (
+    PROJECT_ROOT
+    / "backend"
+    / "analyzer"
+    / "ingestion"
+    / "mitre"
+    / "mitre_mapping.json"
+)
+
+RESPONSE_PLAYBOOKS = (
+    PROJECT_ROOT
+    / "backend"
+    / "analyzer"
+    / "response"
+    / "response_playbooks.json"
+)
+
+MODEL_FILE = (
+    PROJECT_ROOT
+    / "backend"
+    / "ML Aegis"
+    / "ml"
+    / "model.pkl"
+)
+
+ENCODER_FILE = (
+    PROJECT_ROOT
+    / "backend"
+    / "ML Aegis"
+    / "ml"
+    / "label_encoder.pkl"
+)
+
 
 a = Analysis(
-    ['backend\\analyzer\\app.py'],
+    [str(ANALYZER_APP)],
 
     pathex=[
-        '.',
-        'backend\\analyzer'
+        str(PROJECT_ROOT),
+        str(PROJECT_ROOT / "backend" / "analyzer"),
+        str(PROJECT_ROOT / "backend"),
     ],
 
     binaries=[],
@@ -16,31 +60,22 @@ a = Analysis(
         # ====================================================
 
         (
-            r'C:\Users\saran\makethon\templates',
-            'templates'
+            str(TEMPLATES_DIR),
+            "templates"
         ),
 
         (
-            r'C:\Users\saran\makethon\static',
-            'static'
+            str(STATIC_DIR),
+            "static"
         ),
 
         # ====================================================
-        # DATABASE
+        # MITRE DATA
         # ====================================================
 
         (
-            r'C:\Users\saran\makethon\mysql\aegisguard.db',
-            'mysql'
-        ),
-
-        # ====================================================
-        # MITRE
-        # ====================================================
-
-        (
-            r'C:\Users\saran\makethon\backend\analyzer\ingestion\mitre\mitre_mapping.json',
-            r'backend\analyzer\ingestion\mitre'
+            str(MITRE_FILE),
+            r"backend\analyzer\ingestion\mitre"
         ),
 
         # ====================================================
@@ -48,30 +83,78 @@ a = Analysis(
         # ====================================================
 
         (
-            r'C:\Users\saran\makethon\backend\analyzer\response\response_playbooks.json',
-            'response'
+            str(RESPONSE_PLAYBOOKS),
+            r"backend\analyzer\response"
+        ),
+
+        # ====================================================
+        # ML MODEL
+        # ====================================================
+
+        (
+            str(MODEL_FILE),
+            r"backend\ML Aegis\ml"
+        ),
+
+        (
+            str(ENCODER_FILE),
+            r"backend\ML Aegis\ml"
         ),
     ],
 
     hiddenimports=[
-        # Response
-        'response',
-        'response.playbook_loader',
+        # ====================================================
+        # ANALYZER
+        # ====================================================
 
-        # Backend
-        'backend.analyzer.incident_response',
-        'backend.analyzer.incident_enricher',
-        'backend.analyzer.service',
-        'backend.analyzer.database',
+        "backend.analyzer.app",
+        "backend.analyzer.database",
+        "backend.analyzer.service",
+        "backend.analyzer.incident_response",
+        "backend.analyzer.incident_enricher",
+        "backend.analyzer.soar",
+        "backend.analyzer.soar.engine",
+        "backend.analyzer.soar.policies",
+        "backend.analyzer.soar.firewall",
 
-        # Ingestion
-        'backend.analyzer.ingestion.classifier',
-        'backend.analyzer.ingestion.import_merge',
-        'backend.analyzer.ingestion.correlation_engine',
-        'backend.analyzer.ingestion.mitre_mapper',
+        # ====================================================
+        # INGESTION
+        # ====================================================
 
-        # MySQL folder / SQLite importer
-        'backend.analyzer.mysql.merge_log_sql',
+        "backend.analyzer.ingestion",
+        "backend.analyzer.ingestion.classifier",
+        "backend.analyzer.ingestion.import_merge",
+        "backend.analyzer.ingestion.correlation_engine",
+        "backend.analyzer.ingestion.mitre_mapper",
+
+        # ====================================================
+        # DATABASE IMPORTER
+        # ====================================================
+
+        "mysql.merge_log_sql",
+
+        # ====================================================
+        # ML / DATA
+        # ====================================================
+
+        "joblib",
+        "pandas",
+        "sklearn",
+        "sklearn.ensemble",
+        "sklearn.preprocessing",
+
+        # ====================================================
+        # FLASK
+        # ====================================================
+
+        "flask",
+        "jinja2",
+
+        # ====================================================
+        # SQLITE
+        # ====================================================
+
+        "sqlite3",
     ],
 
     hookspath=[],
@@ -82,7 +165,11 @@ a = Analysis(
     optimize=0,
 )
 
-pyz = PYZ(a.pure)
+
+pyz = PYZ(
+    a.pure
+)
+
 
 exe = EXE(
     pyz,
@@ -91,15 +178,16 @@ exe = EXE(
     a.datas,
     [],
 
-    name='app',
+    name="AegisGuardAnalyzer",
 
     debug=False,
 
     bootloader_ignore_signals=False,
+
     strip=False,
 
-    # For debugging, I recommend disabling UPX first
     upx=False,
+
     upx_exclude=[],
 
     runtime_tmpdir=None,
@@ -107,9 +195,12 @@ exe = EXE(
     console=True,
 
     disable_windowed_traceback=False,
+
     argv_emulation=False,
 
     target_arch=None,
+
     codesign_identity=None,
+
     entitlements_file=None,
 )

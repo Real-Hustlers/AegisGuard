@@ -3,20 +3,26 @@ import sys
 from pathlib import Path
 
 
-def load_config():
+def get_config_path():
+    """Return the one supported Collector configuration location."""
 
     if getattr(sys, "frozen", False):
         # Look for config.json next to the EXE
-        config_path = (
+        return (
             Path(sys.executable).resolve().parent
             / "config.json"
         )
     else:
         # Normal Python development
-        config_path = (
+        return (
             Path(__file__).resolve().parent
             / "config.json"
         )
+
+
+def load_config():
+
+    config_path = get_config_path()
 
     print(
         f"Loading config from: {config_path}",

@@ -1,10 +1,18 @@
 import json
 import os
+import sys
+import threading
 from collections import Counter
 from pathlib import Path
 
 import joblib
 import pandas as pd
+
+
+_ml_cache_lock = threading.Lock()
+_cached_model = None
+_cached_encoder = None
+_ml_cache_initialized = False
 
 
 # ============================================================
@@ -72,24 +80,60 @@ def _resolve_ml_artifacts():
     """
     Return paths to the trained ML model and label encoder.
 
-    classifier.py:
-        backend/analyzer/ingestion/classifier.py
+    Source mode:
+        <project>\\backend\\ML Aegis\\ml\\
 
-    parents[2]:
-        backend/
+    PyInstaller mode:
+        <_MEIPASS>\\backend\\ML Aegis\\ml\\
     """
 
-    backend_dir = (
-        Path(__file__)
-        .resolve()
-        .parents[2]
-    )
+    # --------------------------------------------------------
+    # PYINSTALLER / FROZEN MODE
+    # --------------------------------------------------------
 
-    ml_dir = (
-        backend_dir
-        / "ML Aegis"
-        / "ml"
-    )
+    if getattr(sys, "frozen", False):
+
+        base_dir = Path(
+            sys._MEIPASS
+        )
+
+        ml_dir = (
+            base_dir
+            / "backend"
+            / "ML Aegis"
+            / "ml"
+        )
+
+    # --------------------------------------------------------
+    # NORMAL SOURCE MODE
+    # --------------------------------------------------------
+
+    else:
+
+        # classifier.py:
+        #
+        # project/
+        # └── backend/
+        #     ├── analyzer/
+        #     │   └── ingestion/
+        #     │       └── classifier.py
+        #     │
+        #     └── ML Aegis/
+        #         └── ml/
+        #
+        # parents[2] = backend/
+
+        backend_dir = (
+            Path(__file__)
+            .resolve()
+            .parents[2]
+        )
+
+        ml_dir = (
+            backend_dir
+            / "ML Aegis"
+            / "ml"
+        )
 
     model_path = (
         ml_dir
@@ -101,28 +145,122 @@ def _resolve_ml_artifacts():
         / "label_encoder.pkl"
     )
 
+    # --------------------------------------------------------
+    # DEBUG INFORMATION
+    # --------------------------------------------------------
+
+    print(
+        f"[Classifier] Frozen: "
+        f"{getattr(sys, 'frozen', False)}",
+        flush=True
+    )
+
+    if getattr(
+        sys,
+        "frozen",
+        False
+    ):
+
+        print(
+            f"[Classifier] _MEIPASS: "
+            f"{sys._MEIPASS}",
+            flush=True
+        )
+
+    print(
+        f"[Classifier] ML directory: "
+        f"{ml_dir}",
+        flush=True
+    )
+
+    print(
+        f"[Classifier] Model path: "
+        f"{model_path}",
+        flush=True
+    )
+
+    print(
+        f"[Classifier] Model exists: "
+        f"{model_path.exists()}",
+        flush=True
+    )
+
+    print(
+        f"[Classifier] Encoder path: "
+        f"{encoder_path}",
+        flush=True
+    )
+
+    print(
+        f"[Classifier] Encoder exists: "
+        f"{encoder_path.exists()}",
+        flush=True
+    )
+
     return (
         model_path,
         encoder_path
     )
 
 
+def _get_cached_ml_artifacts():
+    """Load the bundled model once per Analyzer process, not once per upload."""
+
+    global _cached_model, _cached_encoder, _ml_cache_initialized
+
+    if _ml_cache_initialized:
+        return _cached_model, _cached_encoder
+
+    with _ml_cache_lock:
+        if _ml_cache_initialized:
+            return _cached_model, _cached_encoder
+
+        model_path, encoder_path = _resolve_ml_artifacts()
+        if model_path.exists() and encoder_path.exists():
+            try:
+                print("[Classifier] Loading ML model...", flush=True)
+                _cached_model = joblib.load(model_path)
+                _cached_encoder = joblib.load(encoder_path)
+                print("[Classifier] ML model loaded successfully.", flush=True)
+                print("[Classifier] ML enabled.", flush=True)
+            except Exception as exc:
+                print(f"[Classifier] ML model could not be loaded: {exc}", flush=True)
+                _cached_model = None
+                _cached_encoder = None
+        else:
+            print("[Classifier] ML unavailable. Using rule-based fallback.", flush=True)
+
+        _ml_cache_initialized = True
+        return _cached_model, _cached_encoder
+
+
+def warm_up_classifier():
+    """Preload ML artifacts during Analyzer startup so uploads stay fast."""
+
+    return _get_cached_ml_artifacts()
+
+
 # ============================================================
 # ATOMIC JSON WRITER
 # ============================================================
 
-def _atomic_json_write(path, data):
+def _atomic_json_write(
+    path,
+    data
+):
     """
     Safely write JSON.
 
-    Content is written to a temporary file first and then
-    atomically replaces the destination file.
+    The new file is fully written to a temporary file first.
+    Only after the write succeeds is the original file replaced.
 
-    This prevents another component from reading an empty or
-    partially-written classified_logs.json.
+    This prevents other AegisGuard components from reading
+    an empty or partially-written classified_logs.json.
     """
 
-    path = Path(path)
+    path = Path(
+        path
+    )
 
     path.parent.mkdir(
         parents=True,
@@ -164,9 +302,11 @@ def _atomic_json_write(path, data):
         try:
 
             if temp_path.exists():
+
                 temp_path.unlink()
 
         except Exception:
+
             pass
 
         raise
@@ -176,9 +316,11 @@ def _atomic_json_write(path, data):
 # FEATURE VECTOR
 # ============================================================
 
-def _build_feature_vector(logs):
+def _build_feature_vector(
+    logs
+):
     """
-    Build the feature vector expected by the trained model.
+    Build the feature vector expected by the trained ML model.
     """
 
     counts = Counter(
@@ -189,24 +331,43 @@ def _build_feature_vector(logs):
             )
         ).upper()
         for log in logs
-        if isinstance(log, dict)
+        if isinstance(
+            log,
+            dict
+        )
     )
 
     users = {
-        log.get("user")
+        log.get(
+            "user"
+        )
         for log in logs
         if (
-            isinstance(log, dict)
-            and log.get("user")
+            isinstance(
+                log,
+                dict
+            )
+            and
+            log.get(
+                "user"
+            )
         )
     }
 
     ips = {
-        log.get("source_ip")
+        log.get(
+            "source_ip"
+        )
         for log in logs
         if (
-            isinstance(log, dict)
-            and log.get("source_ip")
+            isinstance(
+                log,
+                dict
+            )
+            and
+            log.get(
+                "source_ip"
+            )
         )
     }
 
@@ -214,13 +375,19 @@ def _build_feature_vector(logs):
         1
         for log in logs
         if (
-            isinstance(log, dict)
-            and str(
+            isinstance(
+                log,
+                dict
+            )
+            and
+            str(
                 log.get(
                     "severity",
                     ""
                 )
-            ).upper() == "HIGH"
+            ).upper()
+            ==
+            "HIGH"
         )
     )
 
@@ -228,17 +395,24 @@ def _build_feature_vector(logs):
         1
         for log in logs
         if (
-            isinstance(log, dict)
-            and str(
+            isinstance(
+                log,
+                dict
+            )
+            and
+            str(
                 log.get(
                     "severity",
                     ""
                 )
-            ).upper() == "CRITICAL"
+            ).upper()
+            ==
+            "CRITICAL"
         )
     )
 
     features = {
+
         "FAILED_LOGIN":
             counts.get(
                 "FAILED_LOGIN",
@@ -318,7 +492,9 @@ def _build_feature_vector(logs):
             ),
 
         "TOTAL_EVENTS":
-            len(logs),
+            len(
+                logs
+            ),
 
         "HIGH_EVENTS":
             high,
@@ -327,14 +503,20 @@ def _build_feature_vector(logs):
             critical,
 
         "UNIQUE_USERS":
-            len(users),
+            len(
+                users
+            ),
 
         "UNIQUE_SOURCE_IPS":
-            len(ips),
+            len(
+                ips
+            ),
     }
 
     return pd.DataFrame(
-        [features]
+        [
+            features
+        ]
     )
 
 
@@ -348,11 +530,10 @@ def _score_from_ml(
     encoder
 ):
     """
-    Score a normalized log.
+    Score one normalized event.
 
-    Certain canonical security events take precedence over the
-    trained model so an important known event cannot be silently
-    downgraded because Windows uses severity 'Information'.
+    Canonical high-value security events override ML inference
+    so known Windows events cannot be incorrectly downgraded.
     """
 
     log = (
@@ -366,33 +547,38 @@ def _score_from_ml(
             "event_type",
             ""
         )
-    ).upper()
+    ).upper().strip()
 
     # --------------------------------------------------------
-    # Canonical successful login
+    # SUCCESSFUL LOGIN
     # --------------------------------------------------------
 
     if event_type == "LOGON_SUCCESS":
 
         return {
-            "ml_prediction": "NORMAL",
-            "ml_confidence": 99.0,
-            "threat_score": 10,
-            "threat_level": "LOW",
+            "ml_prediction":
+                "NORMAL",
+
+            "ml_confidence":
+                99.0,
+
+            "threat_score":
+                10,
+
+            "threat_level":
+                "LOW",
         }
 
     # --------------------------------------------------------
-    # Authentication failure / Windows Event 4625
+    # FAILED LOGIN / WINDOWS EVENT 4625
     #
-    # IMPORTANT:
-    # Do NOT depend on Windows LevelDisplayName/severity here.
+    # Do NOT rely on Windows severity here.
     #
-    # A real Windows 4625 may arrive with:
+    # Windows Event 4625 may be reported as:
     #
-    # event_type = FAILED_LOGIN
-    # severity   = Information
+    # severity = Information
     #
-    # The canonical event type is the important signal.
+    # but event_type is still FAILED_LOGIN.
     # --------------------------------------------------------
 
     if event_type in {
@@ -401,27 +587,41 @@ def _score_from_ml(
     }:
 
         return {
-            "ml_prediction": "BRUTE_FORCE",
-            "ml_confidence": 96.0,
-            "threat_score": 80,
-            "threat_level": "HIGH",
+            "ml_prediction":
+                "BRUTE_FORCE",
+
+            "ml_confidence":
+                96.0,
+
+            "threat_score":
+                80,
+
+            "threat_level":
+                "HIGH",
         }
 
     # --------------------------------------------------------
-    # Defender / malware
+    # DEFENDER ALERT / MALWARE
     # --------------------------------------------------------
 
     if event_type == "DEFENDER_ALERT":
 
         return {
-            "ml_prediction": "MALWARE",
-            "ml_confidence": 99.0,
-            "threat_score": 95,
-            "threat_level": "CRITICAL",
+            "ml_prediction":
+                "MALWARE",
+
+            "ml_confidence":
+                99.0,
+
+            "threat_score":
+                95,
+
+            "threat_level":
+                "CRITICAL",
         }
 
     # --------------------------------------------------------
-    # Privilege escalation
+    # PRIVILEGE ESCALATION
     # --------------------------------------------------------
 
     if event_type in {
@@ -445,39 +645,55 @@ def _score_from_ml(
         }
 
     # --------------------------------------------------------
-    # ML MODEL INFERENCE
+    # ACTUAL ML MODEL INFERENCE
     # --------------------------------------------------------
 
-    features = _build_feature_vector(
-        logs
+    features = (
+        _build_feature_vector(
+            logs
+        )
     )
 
-    prediction = model.predict(
-        features
-    )[0]
+    prediction = (
+        model.predict(
+            features
+        )[0]
+    )
 
-    probability = model.predict_proba(
-        features
-    )[0]
+    probability = (
+        model.predict_proba(
+            features
+        )[0]
+    )
 
     confidence = (
-        max(probability)
+        max(
+            probability
+        )
         * 100
     )
 
-    label = encoder.inverse_transform(
-        [prediction]
-    )[0]
+    label = (
+        encoder.inverse_transform(
+            [
+                prediction
+            ]
+        )[0]
+    )
 
     normalized_label = str(
         label
-    ).upper()
+    ).upper().strip()
 
     # --------------------------------------------------------
-    # Convert model output into threat level / score
+    # MODEL LABEL → RISK
     # --------------------------------------------------------
 
-    if normalized_label == "NORMAL":
+    if (
+        normalized_label
+        ==
+        "NORMAL"
+    ):
 
         threat_level = "LOW"
         threat_score = 10
@@ -516,12 +732,16 @@ def _score_from_ml(
 
         "ml_confidence":
             round(
-                float(confidence),
+                float(
+                    confidence
+                ),
                 2
             ),
 
         "threat_score":
-            int(threat_score),
+            int(
+                threat_score
+            ),
 
         "threat_level":
             threat_level,
@@ -532,9 +752,12 @@ def _score_from_ml(
 # RULE-BASED FALLBACK
 # ============================================================
 
-def _score_from_rules(log):
+def _score_from_rules(
+    log
+):
     """
-    Rule-based classifier used when ML artifacts are unavailable.
+    Rule-based fallback when the trained ML artifacts
+    cannot be loaded.
     """
 
     event_type = str(
@@ -542,7 +765,7 @@ def _score_from_rules(log):
             "event_type",
             ""
         )
-    ).upper()
+    ).upper().strip()
 
     score = BASE_SCORES.get(
         event_type,
@@ -550,11 +773,13 @@ def _score_from_rules(log):
     )
 
     # --------------------------------------------------------
-    # Privileged user adjustment
+    # PRIVILEGED USER ADJUSTMENT
     # --------------------------------------------------------
 
     user = str(
-        log.get("user")
+        log.get(
+            "user"
+        )
         or ""
     ).lower()
 
@@ -567,7 +792,7 @@ def _score_from_rules(log):
         score += 20
 
     # --------------------------------------------------------
-    # Off-hours adjustment
+    # OFF-HOURS ADJUSTMENT
     # --------------------------------------------------------
 
     try:
@@ -578,6 +803,8 @@ def _score_from_rules(log):
                 ""
             )
         )
+
+        hour = None
 
         if "T" in timestamp:
 
@@ -593,10 +820,6 @@ def _score_from_rules(log):
                 .split(" ")[1][:2]
             )
 
-        else:
-
-            hour = None
-
         if (
             hour is not None
             and (
@@ -608,16 +831,16 @@ def _score_from_rules(log):
             score += 15
 
     except Exception:
+
         pass
 
     # --------------------------------------------------------
-    # Canonical prediction
+    # CANONICAL PREDICTION
     # --------------------------------------------------------
 
     if event_type == "LOGON_SUCCESS":
 
         pred = "NORMAL"
-
         score = 10
         level = "LOW"
 
@@ -652,23 +875,21 @@ def _score_from_rules(log):
         "SUDO_EXECUTED",
     }:
 
-        pred = "PRIVILEGE_ESCALATION"
+        pred = (
+            "PRIVILEGE_ESCALATION"
+        )
 
         score = max(
             score,
             80
         )
 
-        level = (
-            "CRITICAL"
-            if score >= 80
-            else "HIGH"
-        )
+        level = "CRITICAL"
 
     else:
 
         # ----------------------------------------------------
-        # Generic score → level
+        # GENERIC SCORE → THREAT LEVEL
         # ----------------------------------------------------
 
         if score <= 20:
@@ -694,7 +915,9 @@ def _score_from_rules(log):
         )
 
     score = min(
-        int(score),
+        int(
+            score
+        ),
         100
     )
 
@@ -716,6 +939,55 @@ def _score_from_rules(log):
     }
 
 
+def classify_records(logs):
+    """Classify an in-memory batch without reading or rewriting history."""
+
+    try:
+        from .mitre_mapper import get_mitre_mapping
+    except ImportError:
+        from backend.analyzer.ingestion.mitre_mapper import get_mitre_mapping
+
+    model, encoder = _get_cached_ml_artifacts()
+    ml_available = model is not None and encoder is not None
+    classified_logs = []
+
+    for log in logs:
+        if not isinstance(log, dict):
+            continue
+
+        normalized_log = dict(log)
+        event_type = str(normalized_log.get("event_type", "")).upper().strip()
+        normalized_log["event_type"] = event_type
+
+        if ml_available:
+            score = _score_from_ml([normalized_log], model, encoder)
+            result = {
+                "ml_prediction": score["ml_prediction"],
+                "ml_confidence": score["ml_confidence"],
+                "mitre": get_mitre_mapping(score["ml_prediction"]),
+                "threat_category": CATEGORIES.get(event_type, "Unknown"),
+                "threat_score": score["threat_score"],
+                "threat_level": score["threat_level"],
+            }
+        else:
+            score = _score_from_rules(normalized_log)
+            result = {
+                "ml_prediction": score.get("ml_prediction", "UNKNOWN"),
+                "ml_confidence": 0.0,
+                "mitre": get_mitre_mapping(score.get("ml_prediction", "UNKNOWN")),
+                "threat_category": score.get(
+                    "threat_category", CATEGORIES.get(event_type, "Unknown")
+                ),
+                "threat_score": score.get("threat_score", 10),
+                "threat_level": score.get("threat_level", "LOW"),
+            }
+
+        normalized_log.update(result)
+        classified_logs.append(normalized_log)
+
+    return classified_logs
+
+
 # ============================================================
 # CLASSIFY LOGS
 # ============================================================
@@ -725,8 +997,8 @@ def classify_logs(
     output_file
 ):
     """
-    Load normalized merged logs, classify them, attach MITRE
-    metadata, and atomically save classified_logs.json.
+    Read merged logs, classify them, add MITRE information,
+    and atomically save classified_logs.json.
     """
 
     # --------------------------------------------------------
@@ -741,21 +1013,23 @@ def classify_logs(
             encoding="utf-8"
         ) as f:
 
-            logs = json.load(f)
+            logs = json.load(
+                f
+            )
 
-    except FileNotFoundError as e:
-
-        raise RuntimeError(
-            f"Merged logs file not found: "
-            f"{input_file}"
-        ) from e
-
-    except json.JSONDecodeError as e:
+    except FileNotFoundError as exc:
 
         raise RuntimeError(
-            f"Invalid merged logs JSON "
-            f"'{input_file}': {e}"
-        ) from e
+            "Merged logs file "
+            f"not found: {input_file}"
+        ) from exc
+
+    except json.JSONDecodeError as exc:
+
+        raise RuntimeError(
+            "Invalid merged logs JSON "
+            f"'{input_file}': {exc}"
+        ) from exc
 
     if not isinstance(
         logs,
@@ -763,61 +1037,12 @@ def classify_logs(
     ):
 
         raise ValueError(
-            "Merged logs must contain "
-            "a JSON list."
+            "Merged logs must "
+            "contain a JSON list."
         )
 
-    # --------------------------------------------------------
-    # LOAD ML ARTIFACTS
-    # --------------------------------------------------------
-
-    model_path, encoder_path = (
-        _resolve_ml_artifacts()
-    )
-
-    ml_available = (
-        model_path.exists()
-        and encoder_path.exists()
-    )
-
-    model = None
-    encoder = None
-
-    if ml_available:
-
-        try:
-
-            model = joblib.load(
-                model_path
-            )
-
-            encoder = joblib.load(
-                encoder_path
-            )
-
-        except Exception as exc:
-
-            print(
-                "[Classifier] ML model could not "
-                f"be loaded: {exc}",
-                flush=True
-            )
-
-            model = None
-            encoder = None
-
-    if (
-        model is None
-        or encoder is None
-    ):
-
-        ml_available = False
-
-        print(
-            "[Classifier] ML unavailable. "
-            "Using rule-based fallback.",
-            flush=True
-        )
+    model, encoder = _get_cached_ml_artifacts()
+    ml_available = model is not None and encoder is not None
 
     # --------------------------------------------------------
     # MITRE IMPORT
@@ -850,7 +1075,10 @@ def classify_logs(
 
             continue
 
-        # Canonicalize event type before classification
+        # ----------------------------------------------------
+        # CANONICAL EVENT TYPE
+        # ----------------------------------------------------
+
         event_type = str(
             log.get(
                 "event_type",
@@ -876,18 +1104,26 @@ def classify_logs(
             and encoder is not None
         ):
 
-            ml_result = _score_from_ml(
-                [normalized_log],
-                model,
-                encoder
+            ml_result = (
+                _score_from_ml(
+                    [
+                        normalized_log
+                    ],
+                    model,
+                    encoder
+                )
             )
 
-            prediction = ml_result[
-                "ml_prediction"
-            ]
+            prediction = (
+                ml_result[
+                    "ml_prediction"
+                ]
+            )
 
-            mitre = get_mitre_mapping(
-                prediction
+            mitre = (
+                get_mitre_mapping(
+                    prediction
+                )
             )
 
             result = {
@@ -938,8 +1174,10 @@ def classify_logs(
                 )
             )
 
-            mitre = get_mitre_mapping(
-                prediction
+            mitre = (
+                get_mitre_mapping(
+                    prediction
+                )
             )
 
             result = {
@@ -975,7 +1213,7 @@ def classify_logs(
             }
 
         # ----------------------------------------------------
-        # PRESERVE ORIGINAL LOG + ADD CLASSIFICATION
+        # PRESERVE ORIGINAL LOG + CLASSIFICATION
         # ----------------------------------------------------
 
         classified_log = dict(
@@ -991,7 +1229,7 @@ def classify_logs(
         )
 
     # --------------------------------------------------------
-    # ATOMIC OUTPUT
+    # ATOMIC OUTPUT WRITE
     # --------------------------------------------------------
 
     _atomic_json_write(
@@ -1020,16 +1258,38 @@ def classify_logs(
 
 if __name__ == "__main__":
 
+    # --------------------------------------------------------
+    # SOURCE MODE
+    #
     # classifier.py
     # backend/analyzer/ingestion/classifier.py
     #
     # parents[3] = project root
+    # --------------------------------------------------------
 
-    PROJECT_ROOT = (
-        Path(__file__)
-        .resolve()
-        .parents[3]
-    )
+    if getattr(
+        sys,
+        "frozen",
+        False
+    ):
+
+        # This section normally won't be used because the
+        # Analyzer EXE starts through app.py.
+        PROJECT_ROOT = (
+            Path(
+                sys.executable
+            )
+            .resolve()
+            .parent
+        )
+
+    else:
+
+        PROJECT_ROOT = (
+            Path(__file__)
+            .resolve()
+            .parents[3]
+        )
 
     INPUT_FILE = (
         PROJECT_ROOT
@@ -1044,6 +1304,10 @@ if __name__ == "__main__":
     )
 
     classify_logs(
-        str(INPUT_FILE),
-        str(OUTPUT_FILE)
+        str(
+            INPUT_FILE
+        ),
+        str(
+            OUTPUT_FILE
+        )
     )

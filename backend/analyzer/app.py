@@ -2,6 +2,7 @@ import sys
 import json
 import os
 import threading
+import time
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -392,14 +393,24 @@ except ImportError:
 
 try:
 
-    from database import (
-        get_connection
+    from backend.analyzer.database import (
+        build_log_identity,
+        get_connection,
+        get_database_path,
+        get_existing_log_ids,
+        insert_new_security_logs,
+        record_collector_endpoint,
     )
 
 except ImportError:
 
-    from backend.analyzer.database import (
-        get_connection
+    from database import (
+        build_log_identity,
+        get_connection,
+        get_database_path,
+        get_existing_log_ids,
+        insert_new_security_logs,
+        record_collector_endpoint,
     )
 
 
@@ -417,7 +428,9 @@ except ImportError:
 try:
 
     from ingestion.classifier import (
-        classify_logs
+        classify_logs,
+        classify_records,
+        warm_up_classifier,
     )
 
 except ImportError:
@@ -425,7 +438,9 @@ except ImportError:
     try:
 
         from backend.analyzer.ingestion.classifier import (
-            classify_logs
+            classify_logs,
+            classify_records,
+            warm_up_classifier,
         )
 
     except Exception as e:
@@ -435,6 +450,27 @@ except ImportError:
         )
 
         classify_logs = None
+        classify_records = None
+        warm_up_classifier = None
+
+
+try:
+    from backend.analyzer.soar import SoarEngine
+except ImportError:
+    from soar import SoarEngine
+
+
+if warm_up_classifier is not None:
+    # Model deserialization can take seconds on a Windows endpoint. Do it once
+    # before Flask starts accepting Collector requests, never in the hot path.
+    warm_up_classifier()
+
+
+debug_print(
+    "[AegisGuard] Runtime mode: "
+    f"{'frozen' if getattr(sys, 'frozen', False) else 'source'}"
+)
+debug_print(f"[AegisGuard] Database path: {get_database_path()}")
 
 
 # ============================================================
@@ -454,6 +490,133 @@ UPLOAD_FOLDER.mkdir(
 WINDOWS_LOG_FILE = app_data_path(
     "data/windows_logs.json"
 )
+
+
+@app.after_request
+def disable_api_caching(response):
+    """Polling clients must always receive the current SQLite state."""
+
+    if request.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+    return response
+
+
+def _normalize_uploaded_logs(payload):
+    """Normalize one Collector payload without touching historical files."""
+
+    logs = payload.get("logs", [])
+    if not isinstance(logs, list):
+        raise ValueError("'logs' must be a list")
+
+    machine_id = str(payload.get("machine_id") or payload.get("hostname") or "UNKNOWN")
+    hostname = str(payload.get("hostname") or machine_id)
+    operating_system = str(payload.get("os") or "Windows")
+    normalized = []
+
+    for raw in logs:
+        if not isinstance(raw, dict):
+            continue
+
+        record_id = raw.get("record_id", raw.get("RecordId"))
+        event = {
+            "machine_id": str(raw.get("machine_id") or machine_id),
+            "hostname": str(raw.get("hostname") or raw.get("MachineName") or hostname),
+            "os": str(raw.get("os") or operating_system),
+            "record_id": record_id,
+            "timestamp": raw.get("timestamp") or raw.get("TimeCreated") or "",
+            "event_type": str(raw.get("event_type") or raw.get("event_id") or raw.get("Id") or "OTHER").upper(),
+            "user": raw.get("user") or raw.get("User") or "",
+            "source_ip": raw.get("source_ip") or raw.get("SourceIp") or "",
+            "destination_ip": raw.get("destination_ip") or raw.get("DestinationIp") or "",
+            "process": raw.get("process") or raw.get("ProcessName") or "",
+            "file_path": raw.get("file_path") or raw.get("FilePath") or "",
+            "severity": raw.get("severity") or raw.get("LevelDisplayName") or "INFO",
+            "raw_log": raw.get("raw_log") or raw.get("Message") or "",
+        }
+        normalized.append(event)
+
+    return machine_id, normalized
+
+
+def _ingest_live_batch(payload, collector_ip=None):
+    """Fast, retry-safe Collector ingestion path.
+
+    The old JSON merge/classify/import/correlation workflow remains available
+    for manual historical processing, but it is deliberately not in this HTTP
+    request path.  SQLite is the running Analyzer's canonical source of truth.
+    """
+
+    started = time.perf_counter()
+    try:
+        machine_id, normalized = _normalize_uploaded_logs(payload)
+    except ValueError as exc:
+        return jsonify({
+            "status": "error",
+            "message": str(exc),
+            "machine": payload.get("machine_id", "UNKNOWN"),
+        }), 400
+
+    # This is the HTTP peer address of the Collector, not the source address
+    # inside a Windows event.  It becomes an automatic SOAR protected target.
+    if collector_ip:
+        record_collector_endpoint(machine_id, collector_ip)
+
+    # Avoid ML work for known retries.  The SQLite primary key is still the
+    # authoritative guard if two uploads race each other.
+    existing_ids = get_existing_log_ids(normalized)
+    pending = []
+    pending_ids = set()
+    for log in normalized:
+        identity = build_log_identity(log)
+        if identity in existing_ids or identity in pending_ids:
+            continue
+        pending_ids.add(identity)
+        pending.append(log)
+
+    try:
+        classified = classify_records(pending) if pending else []
+        inserted = insert_new_security_logs(classified)
+        # Incident generation is deliberately after the retry-safe insert.
+        # Duplicate Collector uploads therefore cannot create duplicate SOAR
+        # recommendations or response attempts.
+        if inserted:
+            conn = get_connection()
+            try:
+                incident_response.scan_and_generate_incidents(conn)
+            finally:
+                conn.close()
+    except Exception as exc:
+        debug_print(f"[INGEST] Batch failed for {machine_id}: {exc}")
+        return jsonify({
+            "status": "error",
+            "message": "Analyzer ingestion failed",
+            "error": str(exc),
+            "machine": machine_id,
+            "logs_received": len(normalized),
+        }), 500
+
+    inserted_ids = {log["log_id"] for log in inserted}
+    for log in normalized:
+        identity = build_log_identity(log)
+        debug_print(
+            f"[INGEST] hostname={log['hostname']} record_id={log['record_id']} "
+            f"identity={identity} inserted={identity in inserted_ids} "
+            f"database={get_database_path()}"
+        )
+
+    elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
+    debug_print(
+        f"[INGEST] machine={machine_id} received={len(normalized)} "
+        f"new={len(inserted)} elapsed_ms={elapsed_ms}"
+    )
+    return jsonify({
+        "status": "success",
+        "machine": machine_id,
+        "logs_received": len(normalized),
+        "new_logs_added": len(inserted),
+        "processing_ms": elapsed_ms,
+    }), 200
 
 
 # ============================================================
@@ -491,6 +654,8 @@ def upload_logs():
         )
         or {}
     )
+
+    return _ingest_live_batch(data, request.remote_addr)
 
     machine_id = data.get(
         "machine_id",
@@ -1312,6 +1477,8 @@ def get_or_post_settings():
             for key in [
                 "auto_response_enabled",
                 "simulation_mode",
+                "soar_dry_run",
+                "soar_allow_private_ip_blocking",
             ]:
 
                 if key in data:
@@ -1332,6 +1499,27 @@ def get_or_post_settings():
                         val,
                     ))
 
+            if "soar_mode" in data:
+                mode = str(data["soar_mode"]).upper()
+                if mode not in {"OFF", "MANUAL", "AUTO"}:
+                    return jsonify({"error": "soar_mode must be OFF, MANUAL, or AUTO"}), 400
+                cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("soar_mode", mode))
+
+            if "soar_auto_min_score" in data:
+                try:
+                    score = int(data["soar_auto_min_score"])
+                except (TypeError, ValueError):
+                    return jsonify({"error": "soar_auto_min_score must be an integer"}), 400
+                if not 0 <= score <= 100:
+                    return jsonify({"error": "soar_auto_min_score must be between 0 and 100"}), 400
+                cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("soar_auto_min_score", str(score)))
+
+            if "soar_allowlist" in data:
+                allowlist = data["soar_allowlist"]
+                if not isinstance(allowlist, list) or not all(isinstance(item, str) for item in allowlist):
+                    return jsonify({"error": "soar_allowlist must be a list of IP strings"}), 400
+                cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("soar_allowlist", json.dumps(allowlist)))
+
             conn.commit()
 
         cursor.execute("""
@@ -1341,18 +1529,20 @@ def get_or_post_settings():
             FROM settings
         """)
 
-        settings = {
-
-            r["key"]:
-                (
-                    r["value"]
-                    ==
-                    "true"
-                )
-
-            for r
-            in cursor.fetchall()
-        }
+        boolean_settings = {"auto_response_enabled", "simulation_mode", "soar_dry_run", "soar_allow_private_ip_blocking"}
+        settings = {}
+        for r in cursor.fetchall():
+            value = r["value"]
+            if r["key"] in boolean_settings:
+                value = value == "true"
+            elif r["key"] == "soar_auto_min_score":
+                value = int(value)
+            elif r["key"] == "soar_allowlist":
+                try:
+                    value = json.loads(value)
+                except (TypeError, json.JSONDecodeError):
+                    value = []
+            settings[r["key"]] = value
 
     finally:
 
@@ -1361,6 +1551,88 @@ def get_or_post_settings():
     return jsonify(
         settings
     )
+
+
+# ============================================================
+# SAFE SOAR RESPONSE API (Analyzer-side only)
+# ============================================================
+
+def _soar_incident_from_payload(data):
+    """Resolve an optional incident; clients never supply commands or scope."""
+    incident_id = data.get("incident_id")
+    if not incident_id:
+        return {"incident_id": "manual", "hostname": "ANALYZER", "log_id": None,
+                "severity": "MANUAL", "threat_score": 0, "source_ip": data.get("ip")}
+    conn = get_connection()
+    try:
+        row = conn.execute("""
+            SELECT incident_id, log_id, hostname, source_ip, severity, threat_type
+            FROM incidents WHERE incident_id = ?
+        """, (incident_id,)).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None
+    return dict(row)
+
+
+@app.route("/api/response-actions")
+def get_response_actions():
+    conn = get_connection()
+    try:
+        return jsonify(SoarEngine(conn).list_actions(request.args.get("limit", 50)))
+    finally:
+        conn.close()
+
+
+@app.route("/api/response-actions/<int:action_id>")
+def get_response_action(action_id):
+    conn = get_connection()
+    try:
+        action = SoarEngine(conn).get_action(action_id)
+        return (jsonify(action), 200) if action else (jsonify({"error": "response action not found"}), 404)
+    finally:
+        conn.close()
+
+
+@app.route("/api/response-actions/<int:action_id>/approve", methods=["POST"])
+def approve_response_action(action_id):
+    conn = get_connection()
+    try:
+        action = SoarEngine(conn).approve(action_id)
+        return (jsonify(action), 200) if action else (jsonify({"error": "response action not found"}), 404)
+    finally:
+        conn.close()
+
+
+@app.route("/api/soar/block-ip", methods=["POST"])
+def soar_block_ip():
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data.get("ip"), str) or not data["ip"].strip():
+        return jsonify({"error": "ip is required"}), 400
+    incident = _soar_incident_from_payload(data)
+    if incident is None:
+        return jsonify({"error": "incident not found"}), 404
+    conn = get_connection()
+    try:
+        # This endpoint is the explicit operator approval; it still cannot
+        # bypass OFF mode, IP validation, allowlists, or dry-run.
+        action = SoarEngine(conn).request_block(incident, data["ip"], data.get("reason"), approved=True)
+        return jsonify(action)
+    finally:
+        conn.close()
+
+
+@app.route("/api/soar/unblock-ip", methods=["POST"])
+def soar_unblock_ip():
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data.get("ip"), str) or not data["ip"].strip():
+        return jsonify({"error": "ip is required"}), 400
+    conn = get_connection()
+    try:
+        return jsonify(SoarEngine(conn).unblock(data["ip"], data.get("reason", "operator requested rollback")))
+    finally:
+        conn.close()
 
 
 # ============================================================
@@ -1391,6 +1663,16 @@ def execute_incident():
         "enforce",
         False
     )
+
+    # This legacy endpoint predates the constrained SOAR engine and stored
+    # generic playbook commands.  It remains available for its simulation
+    # dashboard/tests, but live host command execution is intentionally not
+    # exposed through the API.  Use /api/soar/block-ip for the only supported
+    # real response action.
+    if enforce:
+        return jsonify({
+            "error": "legacy live playbook execution is disabled; use the safe SOAR IP action"
+        }), 403
 
     if not incident_id:
 
@@ -1831,12 +2113,9 @@ def alert_summary():
 
 if __name__ == "__main__":
 
-    # --------------------------------------------------------
-    # Perform one startup classification before Flask begins
-    # serving concurrent requests.
-    # --------------------------------------------------------
-
-    run_ml_classification()
+    # The Collector hot path performs incremental classification and SQLite
+    # persistence.  Do not replay legacy JSON history at startup: it can be
+    # large, delays availability, and uses a different historical identity.
 
     app.run(
         host="0.0.0.0",
