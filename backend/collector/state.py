@@ -74,6 +74,63 @@ class CollectorState:
         finally:
             conn.close()
 
+    def initialize_checkpoint(self, record_id: int) -> int:
+        """Persist the first collection baseline without moving it later.
+
+        The first baseline must survive restart; otherwise a collector that
+        restarts before its first acknowledged batch could skip events that
+        arrived after startup. Existing acknowledged state always wins.
+        """
+
+        checkpoint = int(record_id)
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT value FROM collector_state WHERE key='last_acked_record_id'"
+            ).fetchone()
+            if row is not None:
+                conn.commit()
+                return int(row["value"])
+
+            conn.execute(
+                "INSERT INTO collector_state(key, value) VALUES (?, ?)",
+                ("last_acked_record_id", str(checkpoint)),
+            )
+            conn.commit()
+            return checkpoint
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def get_collection_cursor(self) -> Optional[int]:
+        """Return the highest record durably owned by this collector.
+
+        The ACK checkpoint advances only after a matching server ACK. The
+        collection cursor may additionally advance to the highest locally
+        spooled record so network outages do not cause duplicate spooling.
+        """
+
+        conn = self._connect()
+        try:
+            checkpoint_row = conn.execute(
+                "SELECT value FROM collector_state WHERE key='last_acked_record_id'"
+            ).fetchone()
+            pending_row = conn.execute(
+                "SELECT MAX(max_record_id) AS max_record_id FROM outbound_batches"
+            ).fetchone()
+
+            values = []
+            if checkpoint_row is not None:
+                values.append(int(checkpoint_row["value"]))
+            if pending_row is not None and pending_row["max_record_id"] is not None:
+                values.append(int(pending_row["max_record_id"]))
+            return max(values) if values else None
+        finally:
+            conn.close()
+
     def enqueue(self, payload: Dict[str, Any], max_record_id: Optional[int]) -> str:
         batch_id = str(payload.get("batch_id") or "").strip()
         if not batch_id:

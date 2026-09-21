@@ -105,3 +105,34 @@ def send_batch(
         timeout=timeout,
         verify=verify,
     )
+
+def validate_batch_ack(response, payload):
+    """Validate the server durable-ACK boundary for one exact batch.
+
+    Only HTTP 202 with the same collector_id and batch_id is accepted. A
+    generic 2xx, malformed JSON, or identity mismatch must not advance the
+    collector checkpoint.
+    """
+
+    if getattr(response, "status_code", None) != 202:
+        raise ValueError(
+            f"durable collector ACK requires HTTP 202; got "
+            f"{getattr(response, 'status_code', None)}"
+        )
+
+    try:
+        body = response.json()
+    except (TypeError, ValueError) as exc:
+        raise ValueError("durable collector ACK must contain JSON") from exc
+
+    if not isinstance(body, dict) or body.get("status") != "accepted":
+        raise ValueError("durable collector ACK status must be accepted")
+
+    expected_collector = str(payload.get("collector_id") or "")
+    expected_batch = str(payload.get("batch_id") or "")
+    if str(body.get("collector_id") or "") != expected_collector:
+        raise ValueError("durable collector ACK collector_id mismatch")
+    if str(body.get("batch_id") or "") != expected_batch:
+        raise ValueError("durable collector ACK batch_id mismatch")
+
+    return body

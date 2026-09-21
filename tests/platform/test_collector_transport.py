@@ -12,6 +12,7 @@ from backend.collector.transport import (
     build_batch_payload,
     send_batch,
     validate_analyzer_url,
+    validate_batch_ack,
 )
 from backend.storage.migrations import ensure_platform_schema
 
@@ -41,6 +42,34 @@ class CollectorStateTests(unittest.TestCase):
             final = CollectorState(path)
             self.assertEqual(final.pending(), [])
             self.assertEqual(final.get_checkpoint(), 101)
+
+    def test_initial_checkpoint_and_collection_cursor_are_durable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "collector-state.db"
+            state = CollectorState(path)
+
+            self.assertEqual(state.initialize_checkpoint(100), 100)
+            self.assertEqual(state.get_checkpoint(), 100)
+            self.assertEqual(state.get_collection_cursor(), 100)
+
+            collector_id = state.get_or_create_collector_id()
+            payload = build_batch_payload(
+                collector_id,
+                "HOST01",
+                "Windows",
+                [{"record_id": 105, "event_type": "LOGON"}],
+                batch_id="batch-105",
+            )
+            state.enqueue(payload, 105)
+
+            reopened = CollectorState(path)
+            self.assertEqual(reopened.get_checkpoint(), 100)
+            self.assertEqual(reopened.get_collection_cursor(), 105)
+            self.assertEqual(reopened.initialize_checkpoint(999), 100)
+
+            reopened.acknowledge("batch-105")
+            self.assertEqual(reopened.get_checkpoint(), 105)
+            self.assertEqual(reopened.get_collection_cursor(), 105)
 
 
 class TransportPolicyTests(unittest.TestCase):
@@ -80,6 +109,40 @@ class TransportPolicyTests(unittest.TestCase):
             kwargs["headers"]["X-AegisGuard-Batch-ID"],
             "batch-1",
         )
+
+    def test_validate_batch_ack_requires_exact_202_identity(self):
+        payload = build_batch_payload(
+            "collector-1",
+            "HOST01",
+            "Windows",
+            [],
+            batch_id="batch-1",
+        )
+        response = Mock(status_code=202)
+        response.json.return_value = {
+            "status": "accepted",
+            "collector_id": "collector-1",
+            "batch_id": "batch-1",
+            "duplicate": False,
+            "analysis_state": "QUEUED",
+        }
+
+        body = validate_batch_ack(response, payload)
+        self.assertEqual(body["batch_id"], "batch-1")
+
+        wrong_batch = Mock(status_code=202)
+        wrong_batch.json.return_value = {
+            "status": "accepted",
+            "collector_id": "collector-1",
+            "batch_id": "batch-other",
+        }
+        with self.assertRaisesRegex(ValueError, "batch_id mismatch"):
+            validate_batch_ack(wrong_batch, payload)
+
+        generic_success = Mock(status_code=200)
+        generic_success.json.return_value = response.json.return_value
+        with self.assertRaisesRegex(ValueError, "requires HTTP 202"):
+            validate_batch_ack(generic_success, payload)
 
 
 class CollectorIngestApiTests(unittest.TestCase):
