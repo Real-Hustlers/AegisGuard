@@ -363,6 +363,24 @@ def ensure_schema(conn):
         )
     """)
 
+    # ========================================================
+    # ENTERPRISE PLATFORM SCHEMA
+    # ========================================================
+    #
+    # Keep the verified pre-product tables intact and layer the
+    # enterprise schema on top through versioned, additive migrations.
+    # The migration module deliberately does not own ML/detection logic.
+    try:
+        from backend.storage.migrations import ensure_platform_schema
+    except ImportError:
+        # Support direct source execution from backend/analyzer.
+        project_root = Path(__file__).resolve().parents[2]
+        if str(project_root) not in sys.path:
+            sys.path.insert(0, str(project_root))
+        from backend.storage.migrations import ensure_platform_schema
+
+    ensure_platform_schema(conn)
+
     conn.commit()
 
 

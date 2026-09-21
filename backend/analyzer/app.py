@@ -460,6 +460,14 @@ except ImportError:
     from soar import SoarEngine
 
 
+try:
+    from backend.analyzer.collector_api import create_collector_blueprint
+except ImportError:
+    from collector_api import create_collector_blueprint
+
+app.register_blueprint(create_collector_blueprint(get_connection))
+
+
 if warm_up_classifier is not None:
     # Model deserialization can take seconds on a Windows endpoint. Do it once
     # before Flask starts accepting Collector requests, never in the hot path.

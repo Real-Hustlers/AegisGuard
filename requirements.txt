@@ -6,4 +6,4 @@ pyinstaller
 requests
 joblib
 pandas
-scikit-learn
+scikit-learn==1.9.0
