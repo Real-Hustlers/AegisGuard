@@ -169,3 +169,27 @@ def mark_collector_batch_failed(
     )
     conn.commit()
     return cursor.rowcount == 1
+
+
+def recover_processing_collector_batches(
+    conn: sqlite3.Connection,
+) -> int:
+    """Requeue batches stranded in PROCESSING after analyzer interruption.
+
+    The analyzer currently runs one durable ingest worker per process. On
+    startup, any PROCESSING row is therefore work that was claimed by the
+    previous analyzer process but never completed. Event insertion remains
+    idempotent at the database layer, so replay after recovery is safe.
+    """
+
+    cursor = conn.execute(
+        """
+        UPDATE collector_ingest_batches
+        SET state = 'QUEUED',
+            processed_at = NULL,
+            last_error = 'recovered after interrupted analyzer processing'
+        WHERE state = 'PROCESSING'
+        """
+    )
+    conn.commit()
+    return int(cursor.rowcount)

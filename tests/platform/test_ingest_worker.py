@@ -1,5 +1,6 @@
 import sqlite3
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from backend.storage.collector_ingest import (
     mark_collector_batch_failed,
     mark_collector_batch_processed,
     persist_collector_batch,
+    recover_processing_collector_batches,
 )
 from backend.storage.migrations import ensure_platform_schema
 
@@ -148,6 +150,65 @@ class DurableIngestWorkerTests(unittest.TestCase):
         row = self.row()
         self.assertEqual(row[0], "FAILED")
         self.assertEqual(row[3], "pipeline exploded")
+
+    def test_recovery_requeues_stranded_processing_batch(self):
+        self.persist()
+        conn = self.connection_factory()
+        try:
+            first_claim = claim_next_collector_batch(conn)
+        finally:
+            conn.close()
+
+        self.assertEqual(first_claim["attempts"], 1)
+        self.assertEqual(self.row()[0], "PROCESSING")
+
+        conn = self.connection_factory()
+        try:
+            recovered = recover_processing_collector_batches(conn)
+        finally:
+            conn.close()
+
+        self.assertEqual(recovered, 1)
+        row = self.row()
+        self.assertEqual(row[0], "QUEUED")
+        self.assertEqual(
+            row[3],
+            "recovered after interrupted analyzer processing",
+        )
+
+        conn = self.connection_factory()
+        try:
+            second_claim = claim_next_collector_batch(conn)
+        finally:
+            conn.close()
+
+        self.assertEqual(second_claim["batch_id"], "batch-1")
+        self.assertEqual(second_claim["attempts"], 2)
+
+    def test_run_forever_drains_backlog_until_stopped(self):
+        self.persist("batch-1")
+        self.persist("batch-2")
+        calls = []
+        stop_event = threading.Event()
+
+        def processor(payload, _peer_ip):
+            calls.append(payload["batch_id"])
+            if len(calls) == 2:
+                stop_event.set()
+            return {"new_logs_added": 1}
+
+        worker = CollectorIngestWorker(
+            self.connection_factory,
+            processor,
+        )
+        worker.run_forever(
+            stop_event=stop_event,
+            poll_interval=0,
+        )
+
+        self.assertEqual(calls, ["batch-1", "batch-2"])
+        self.assertEqual(self.row("batch-1")[0], "PROCESSED")
+        self.assertEqual(self.row("batch-2")[0], "PROCESSED")
 
 
 if __name__ == "__main__":

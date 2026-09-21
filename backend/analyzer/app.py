@@ -470,6 +470,11 @@ try:
 except ImportError:
     from ingest_pipeline import process_normalized_collector_logs
 
+try:
+    from backend.analyzer.ingest_worker import start_default_ingest_worker_thread
+except ImportError:
+    from ingest_worker import start_default_ingest_worker_thread
+
 app.register_blueprint(create_collector_blueprint(get_connection))
 
 
@@ -2107,10 +2112,27 @@ if __name__ == "__main__":
     # persistence.  Do not replay legacy JSON history at startup: it can be
     # large, delays availability, and uses a different historical identity.
 
-    app.run(
-        host="0.0.0.0",
-        port=5000,
-        debug=False,
-        use_reloader=False,
-        threaded=True
+    (
+        _ingest_worker,
+        _ingest_thread,
+        _ingest_stop_event,
+        _recovered_batches,
+    ) = start_default_ingest_worker_thread(
+        get_connection,
     )
+
+    debug_print(
+        f"[INGEST WORKER] started; recovered={_recovered_batches}"
+    )
+
+    try:
+        app.run(
+            host="0.0.0.0",
+            port=5000,
+            debug=False,
+            use_reloader=False,
+            threaded=True
+        )
+    finally:
+        _ingest_stop_event.set()
+        _ingest_thread.join(timeout=5)
