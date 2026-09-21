@@ -74,3 +74,14 @@ class CollectorIngestWorker:
             "attempts": batch["attempts"],
             "result": result,
         }
+
+
+def build_default_ingest_worker(connection_factory) -> CollectorIngestWorker:
+    """Build the production worker with the shared analyzer ingest pipeline."""
+
+    from backend.analyzer.ingest_pipeline import process_collector_payload
+
+    return CollectorIngestWorker(
+        connection_factory,
+        process_collector_payload,
+    )
