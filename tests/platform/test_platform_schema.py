@@ -65,7 +65,7 @@ class PlatformSchemaTests(unittest.TestCase):
         migration_count = self.conn.execute(
             "SELECT COUNT(*) FROM platform_schema_migrations"
         ).fetchone()[0]
-        self.assertEqual(migration_count, 1)
+        self.assertEqual(migration_count, LATEST_PLATFORM_SCHEMA_VERSION)
 
     def test_required_enterprise_tables_exist(self):
         ensure_platform_schema(self.conn)
@@ -89,6 +89,7 @@ class PlatformSchemaTests(unittest.TestCase):
             "model_metadata",
             "settings",
             "platform_schema_migrations",
+            "collector_ingest_batches",
         }
         self.assertTrue(required.issubset(tables))
 

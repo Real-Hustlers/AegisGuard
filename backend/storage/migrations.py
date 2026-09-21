@@ -9,7 +9,7 @@ import sqlite3
 from typing import Callable, Iterable, Tuple
 
 
-LATEST_PLATFORM_SCHEMA_VERSION = 1
+LATEST_PLATFORM_SCHEMA_VERSION = 2
 Migration = Tuple[int, str, Callable[[sqlite3.Connection], None]]
 
 
@@ -227,8 +227,38 @@ def _migration_001_enterprise_foundation(conn: sqlite3.Connection) -> None:
         _add_column_if_missing(conn, "response_actions", column, definition)
 
 
+def _migration_002_collector_ingest_queue(conn: sqlite3.Connection) -> None:
+    _execute_script_transactionally(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS collector_ingest_batches (
+            batch_id TEXT PRIMARY KEY,
+            collector_id TEXT NOT NULL,
+            hostname TEXT NOT NULL,
+            peer_ip TEXT,
+            payload_json TEXT NOT NULL,
+            event_count INTEGER NOT NULL,
+            max_record_id INTEGER,
+            state TEXT NOT NULL DEFAULT 'QUEUED'
+                CHECK(state IN ('QUEUED','PROCESSING','PROCESSED','FAILED')),
+            attempts INTEGER NOT NULL DEFAULT 0,
+            received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            processed_at TEXT,
+            last_error TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_collector_ingest_state_received
+            ON collector_ingest_batches(state, received_at);
+
+        CREATE INDEX IF NOT EXISTS idx_collector_ingest_collector_received
+            ON collector_ingest_batches(collector_id, received_at DESC);
+        """
+    )
+
+
 MIGRATIONS: Iterable[Migration] = (
     (1, "enterprise_foundation", _migration_001_enterprise_foundation),
+    (2, "collector_ingest_queue", _migration_002_collector_ingest_queue),
 )
 
 
