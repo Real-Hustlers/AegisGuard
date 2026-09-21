@@ -37,8 +37,30 @@ def _add_column_if_missing(
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
+def _execute_script_transactionally(conn: sqlite3.Connection, script: str) -> None:
+    """Execute a semicolon-delimited SQLite script without implicit commits.
+
+    sqlite3.Connection.executescript() may implicitly commit an open
+    transaction, which would invalidate the savepoint used by the migration
+    runner. This helper uses sqlite3.complete_statement() and conn.execute()
+    so the caller retains transaction control.
+    """
+    statement = ""
+    for line in script.splitlines():
+        statement += line + "\n"
+        if sqlite3.complete_statement(statement):
+            sql = statement.strip()
+            statement = ""
+            if sql:
+                conn.execute(sql)
+
+    if statement.strip():
+        raise sqlite3.OperationalError("Incomplete SQL statement in migration script")
+
+
 def _migration_001_enterprise_foundation(conn: sqlite3.Connection) -> None:
-    conn.executescript(
+    _execute_script_transactionally(
+        conn,
         """
         CREATE TABLE IF NOT EXISTS users (
             user_id TEXT PRIMARY KEY,
