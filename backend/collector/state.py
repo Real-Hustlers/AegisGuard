@@ -159,7 +159,11 @@ class CollectorState:
                 """
                 SELECT batch_id, payload_json, max_record_id, attempts, last_error
                 FROM outbound_batches
-                ORDER BY created_at, batch_id
+                ORDER BY
+                    CASE WHEN max_record_id IS NULL THEN 1 ELSE 0 END,
+                    max_record_id,
+                    created_at,
+                    batch_id
                 LIMIT ?
                 """,
                 (int(limit),),

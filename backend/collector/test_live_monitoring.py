@@ -65,12 +65,20 @@ class LiveMonitoringTests(unittest.TestCase):
             returncode=0,
         )
 
-        with patch.object(live_monitoring.subprocess, "run", return_value=result):
+        with patch.object(
+            live_monitoring,
+            "_run_powershell",
+            return_value=result,
+        ) as mock_run:
             events = live_monitoring.collect_new_events(100)
 
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["RecordId"], 101)
         self.assertEqual(events[0]["Id"], 4624)
+        command = mock_run.call_args.args[0]
+        self.assertIn("EventRecordID > 100", command)
+        self.assertIn("-Oldest", command)
+        self.assertIn("-MaxEvents 100", command)
 
     def test_collect_new_events_returns_empty_list_on_timeout(self):
         with patch.object(
@@ -82,7 +90,7 @@ class LiveMonitoringTests(unittest.TestCase):
 
         self.assertEqual(events, [])
 
-    def test_start_live_monitor_advances_last_record(self):
+    def test_start_live_monitor_spools_before_advancing_collection_cursor(self):
         event = {
             "RecordId": 101,
             "Id": 4624,
@@ -98,20 +106,32 @@ class LiveMonitoringTests(unittest.TestCase):
             "process": "",
             "file_path": "",
         }
+        runtime = Mock()
+        runtime.analyzer_url = "https://siem.example.test/api/collector/v1/batches"
+        runtime.collector_id = "collector-1"
+        runtime.state.path = Path("collector_state.db")
+        runtime.initialize.return_value = 100
+        runtime.enqueue_logs.return_value = "batch-1"
+        runtime.flush_pending.return_value = True
+        runtime.collection_cursor.return_value = 101
+        runtime.checkpoint.return_value = 101
 
         with patch.object(live_monitoring, "collect_new_events", side_effect=[[event], KeyboardInterrupt()]) as mock_collect, \
              patch.object(live_monitoring, "parse_event", return_value=parsed), \
              patch.object(live_monitoring, "detect_threat", return_value="LOW"), \
-             patch.object(live_monitoring, "send_logs", return_value=True) as mock_send, \
              patch.object(live_monitoring.time, "sleep", return_value=None):
             with self.assertRaises(KeyboardInterrupt):
-                live_monitoring.start_live_monitor(last_record=100)
+                live_monitoring.start_live_monitor(
+                    last_record=100,
+                    runtime=runtime,
+                )
 
         self.assertEqual(mock_collect.call_args_list[0].args[0], 100)
         self.assertEqual(mock_collect.call_args_list[1].args[0], 101)
-        sent_batch = mock_send.call_args.args[0]
+        sent_batch = runtime.enqueue_logs.call_args.args[0]
         self.assertEqual(sent_batch[0]["record_id"], 101)
         self.assertEqual(sent_batch[0]["threat_level"], "LOW")
+        runtime.flush_pending.assert_called_once()
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ import subprocess
 from backend.collector.parser import parse_event
 from backend.collector.detector import detect_threat
 from backend.collector.config_loader import get_config_path, load_config
+from backend.collector.durable_runtime import DurableCollectorRuntime
 
 
 # ============================================================
@@ -342,20 +343,18 @@ def collect_new_events(
     last_record_id
 ):
 
-    ids = ",".join(
-        str(i)
-        for i in EVENT_IDS
+    event_predicate = " or ".join(
+        f"EventID={int(event_id)}"
+        for event_id in EVENT_IDS
     )
 
     cmd = f"""
-$events = Get-WinEvent -FilterHashtable @{{
-    LogName = 'Security'
-    Id = @({ids})
-}} -MaxEvents 100 |
-Where-Object {{
-    $_.RecordId -gt {last_record_id}
-}} |
-Sort-Object RecordId
+$filter = "*[System[(EventRecordID > {int(last_record_id)}) and ({event_predicate})]]"
+
+$events = Get-WinEvent -LogName Security `
+    -FilterXPath $filter `
+    -Oldest `
+    -MaxEvents 100
 
 $events |
 Select-Object RecordId,
@@ -441,7 +440,8 @@ ConvertTo-Json -Depth 4
 # ============================================================
 
 def start_live_monitor(
-    last_record=None
+    last_record=None,
+    runtime=None,
 ):
 
     print(
@@ -456,34 +456,51 @@ def start_live_monitor(
         "=" * 60
     )
 
+    if runtime is None:
+        runtime = DurableCollectorRuntime.from_config(
+            CONFIG,
+            get_config_path(),
+            hostname=platform.node(),
+            os_name=platform.platform(),
+        )
+
     print(
         "Analyzer URL:",
-        ANALYZER
+        runtime.analyzer_url
     )
 
     print("Collector hostname:", platform.node())
+    print("Collector ID:", runtime.collector_id)
+    print("Collector state:", runtime.state.path)
     print("Config path:", get_config_path())
 
-    if "127.0.0.1" in ANALYZER or "localhost" in ANALYZER.lower():
+    if (
+        "127.0.0.1" in runtime.analyzer_url
+        or "localhost" in runtime.analyzer_url.lower()
+    ):
         print(
             "[WARNING] Analyzer URL is localhost. This only works when the "
-            "Analyzer runs on this same PC; set analyzer_url in config.json "
-            "for a remote Analyzer."
+            "Analyzer runs on this same PC; set collector_ingest_url in "
+            "config.json for a remote Analyzer."
         )
 
     # --------------------------------------------------------
-    # Determine initial RecordID
+    # Determine restart-safe collection cursor
     # --------------------------------------------------------
 
-    if last_record is None:
-
-        last_record = (
-            get_latest_record_id()
-        )
+    last_record = runtime.initialize(
+        last_record,
+        get_latest_record_id,
+    )
 
     print(
         "Starting from RecordID:",
         last_record
+    )
+
+    print(
+        "Last ACKed RecordID:",
+        runtime.checkpoint()
     )
 
     # --------------------------------------------------------
@@ -511,8 +528,11 @@ def start_live_monitor(
 
             continue
 
-        # No new events
+        # No new events. Pending durable batches still need delivery.
         if not events:
+
+            runtime.flush_pending()
+            last_record = runtime.collection_cursor()
 
             time.sleep(
                 2
@@ -626,49 +646,52 @@ def start_live_monitor(
                 )
 
         # ====================================================
-        # SEND ENTIRE BATCH ONCE
+        # DURABLY SPOOL, THEN ATTEMPT DELIVERY
         # ====================================================
 
         if parsed_batch:
 
-            upload_success = send_logs(
-                parsed_batch
+            batch_id = runtime.enqueue_logs(
+                parsed_batch,
+                batch_record_ids,
+            )
+
+            print(
+                f"[SPOOL] batch={batch_id} "
+                f"logs={len(parsed_batch)} "
+                f"max_record_id={max(batch_record_ids)}"
+            )
+
+            upload_success = runtime.flush_pending()
+
+            # Collection advances to the highest locally durable RecordID,
+            # even when the network is down. The ACK checkpoint itself only
+            # advances after an exact server durable acknowledgement.
+            last_record = runtime.collection_cursor()
+
+            print(
+                "Collection cursor:",
+                last_record
+            )
+
+            print(
+                "Last ACKed RecordID:",
+                runtime.checkpoint()
             )
 
             if upload_success:
 
-                # --------------------------------------------
-                # Move monitoring position forward only
-                # after Analyzer accepted the batch.
-                # --------------------------------------------
-
-                last_record = max(
-                    last_record,
-                    max(
-                        batch_record_ids
-                    )
-                )
-
                 print(
-                    "Last RecordID:",
-                    last_record
-                )
-
-                print(
-                    f"[Analyzer] Batch upload successful "
+                    f"[Analyzer] Durable batch delivery successful "
                     f"({len(parsed_batch)} logs)"
                 )
 
             else:
 
                 print(
-                    "[Analyzer] Batch upload failed."
-                )
-
-                print(
-                    "RecordID was not advanced. "
-                    "Events will be retried on the "
-                    "next polling cycle."
+                    "[Analyzer] Batch remains durably spooled. "
+                    "Collection will continue and delivery will retry "
+                    "on the next polling cycle."
                 )
 
         # ----------------------------------------------------
