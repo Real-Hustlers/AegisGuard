@@ -33,6 +33,10 @@ from backend.storage.collector_identity import (
     CollectorCertificateRotationError,
     stage_collector_certificate_rotation,
 )
+from backend.storage.collector_health import (
+    CollectorHealthError,
+    record_collector_heartbeat,
+)
 from backend.storage.collector_ingest import persist_collector_batch
 
 
@@ -389,6 +393,80 @@ def create_collector_blueprint(
         response.headers["Cache-Control"] = "no-store, max-age=0"
         response.headers["Pragma"] = "no-cache"
         return response
+
+    @blueprint.post("/api/collector/v1/heartbeat")
+    def heartbeat():
+        payload = request.get_json(silent=True) or {}
+
+        collector_id = str(
+            request.headers.get("X-AegisGuard-Collector-ID") or ""
+        ).strip()
+        presented_credential = str(
+            request.headers.get(COLLECTOR_CREDENTIAL_HEADER) or ""
+        )
+
+        if not collector_id or not presented_credential:
+            return _json_error("collector authentication failed", 401)
+
+        if str(payload.get("collector_id") or "").strip() != collector_id:
+            return _json_error("collector_id header/body mismatch", 400)
+
+        hostname = str(payload.get("hostname") or "").strip()
+        if not hostname:
+            return _json_error("hostname is required", 400)
+
+        certificate, certificate_error = require_client_certificate(
+            collector_id
+        )
+        if certificate_error is not None:
+            return certificate_error
+
+        conn = connection_factory()
+        try:
+            try:
+                identity = authenticate_collector(
+                    conn,
+                    collector_id,
+                    presented_credential,
+                    hostname=hostname,
+                )
+                health = record_collector_heartbeat(
+                    conn,
+                    collector_id,
+                    peer_ip=request.remote_addr,
+                    mtls_required=mtls_required,
+                    mtls_verified=bool(certificate),
+                    certificate_fingerprint=certificate,
+                    reported_version=payload.get("version"),
+                    reported_health=payload.get("health"),
+                )
+            except CollectorRevokedError:
+                return _json_error("collector is revoked", 403)
+            except (
+                CollectorAuthenticationError,
+                CollectorIdentityError,
+            ):
+                return _json_error("collector authentication failed", 401)
+            except CollectorHealthError as exc:
+                return _json_error(str(exc), 400)
+        finally:
+            conn.close()
+
+        observed = health["server_observed"]
+        return jsonify({
+            "status": "alive",
+            "collector_id": identity["collector_id"],
+            "hostname": identity["hostname"],
+            "last_seen_at": identity["last_seen_at"],
+            "last_heartbeat_at": observed["last_heartbeat_at"],
+            "server_observed": {
+                "credential_authenticated": (
+                    observed["credential_authenticated"]
+                ),
+                "mtls_required": observed["mtls_required"],
+                "mtls_verified": observed["mtls_verified"],
+            },
+        }), 200
 
     @blueprint.post("/api/collector/v1/batches")
     def accept_collector_batch():

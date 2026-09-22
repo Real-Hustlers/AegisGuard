@@ -122,6 +122,33 @@ class PlatformSchemaTests(unittest.TestCase):
         self.assertIn("certificate_rotation_id", collector_columns)
         self.assertIn("certificate_rotation_started_at", collector_columns)
         self.assertIn("certificate_rotated_at", collector_columns)
+        self.assertIn("last_heartbeat_at", collector_columns)
+        self.assertIn("heartbeat_peer_ip", collector_columns)
+        self.assertIn(
+            "heartbeat_credential_authenticated",
+            collector_columns,
+        )
+        self.assertIn("heartbeat_mtls_required", collector_columns)
+        self.assertIn("heartbeat_mtls_verified", collector_columns)
+        self.assertIn(
+            "heartbeat_certificate_fingerprint",
+            collector_columns,
+        )
+        self.assertIn("reported_version", collector_columns)
+        self.assertIn("reported_transport_status", collector_columns)
+        self.assertIn("reported_pending_batches", collector_columns)
+        self.assertIn("reported_checkpoint", collector_columns)
+        self.assertIn("reported_collection_cursor", collector_columns)
+        self.assertIn("reported_retry_in_seconds", collector_columns)
+        self.assertIn(
+            "reported_last_successful_ack_at",
+            collector_columns,
+        )
+        self.assertIn(
+            "reported_certificate_rotation_pending",
+            collector_columns,
+        )
+        self.assertIn("reported_health_json", collector_columns)
 
 
 if __name__ == "__main__":

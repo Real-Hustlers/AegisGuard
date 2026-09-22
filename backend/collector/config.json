@@ -3,6 +3,7 @@
   "analyzer_url": "http://127.0.0.1:5000/api/upload_logs",
   "collector_ingest_url": "http://127.0.0.1:5000/api/collector/v1/batches",
   "collector_enrollment_url": "http://127.0.0.1:5000/api/collector/v1/enroll",
+  "collector_heartbeat_url": "http://127.0.0.1:5000/api/collector/v1/heartbeat",
   "collector_rotation_url": "http://127.0.0.1:5000/api/collector/v1/rotate",
   "collector_recovery_url": "http://127.0.0.1:5000/api/collector/v1/recover",
   "collector_certificate_rotation_url": "http://127.0.0.1:5000/api/collector/v1/certificate/rotate",

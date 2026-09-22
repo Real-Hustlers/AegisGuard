@@ -14,18 +14,21 @@ from backend.collector.state import CollectorState
 from backend.collector.transport import (
     build_batch_payload,
     build_enrollment_payload,
+    build_heartbeat_payload,
     build_recovery_payload,
     build_rotation_payload,
     build_certificate_rotation_payload,
     certificate_fingerprint_from_client_cert,
     send_batch,
     send_enrollment,
+    send_heartbeat,
     send_recovery,
     send_rotation,
     send_certificate_rotation,
     validate_analyzer_url,
     validate_batch_ack,
     validate_enrollment_response,
+    validate_heartbeat_response,
     validate_recovery_response,
     validate_rotation_response,
     validate_certificate_rotation_response,
@@ -42,6 +45,7 @@ class DurableCollectorRuntime:
         os_name: str = "",
         enrollment_url: str = None,
         enrollment_token: str = None,
+        heartbeat_url: str = None,
         rotation_url: str = None,
         recovery_url: str = None,
         recovery_token: str = None,
@@ -52,11 +56,13 @@ class DurableCollectorRuntime:
         collector_version: str = None,
         sender: Callable = send_batch,
         enrollment_sender: Callable = send_enrollment,
+        heartbeat_sender: Callable = send_heartbeat,
         rotation_sender: Callable = send_rotation,
         recovery_sender: Callable = send_recovery,
         certificate_rotation_sender: Callable = send_certificate_rotation,
         ack_validator: Callable = validate_batch_ack,
         enrollment_validator: Callable = validate_enrollment_response,
+        heartbeat_validator: Callable = validate_heartbeat_response,
         rotation_validator: Callable = validate_rotation_response,
         recovery_validator: Callable = validate_recovery_response,
         certificate_rotation_validator: Callable = (
@@ -74,6 +80,8 @@ class DurableCollectorRuntime:
         validate_analyzer_url(analyzer_url)
         if enrollment_url:
             validate_analyzer_url(enrollment_url)
+        if heartbeat_url:
+            validate_analyzer_url(heartbeat_url)
         if rotation_url:
             validate_analyzer_url(rotation_url)
         if recovery_url:
@@ -101,6 +109,7 @@ class DurableCollectorRuntime:
         self.os_name = str(os_name)
         self.enrollment_url = str(enrollment_url or "").strip() or None
         self.enrollment_token = str(enrollment_token or "").strip() or None
+        self.heartbeat_url = str(heartbeat_url or "").strip() or None
         self.rotation_url = str(rotation_url or "").strip() or None
         self.recovery_url = str(recovery_url or "").strip() or None
         self.recovery_token = str(recovery_token or "").strip() or None
@@ -134,6 +143,7 @@ class DurableCollectorRuntime:
         )
         self.sender = sender
         self.enrollment_sender = enrollment_sender
+        self.heartbeat_sender = heartbeat_sender
         self.rotation_sender = rotation_sender
         self.recovery_sender = recovery_sender
         self.certificate_rotation_sender = (
@@ -141,6 +151,7 @@ class DurableCollectorRuntime:
         )
         self.ack_validator = ack_validator
         self.enrollment_validator = enrollment_validator
+        self.heartbeat_validator = heartbeat_validator
         self.rotation_validator = rotation_validator
         self.recovery_validator = recovery_validator
         self.certificate_rotation_validator = (
@@ -175,6 +186,9 @@ class DurableCollectorRuntime:
         auth_required = bool(config.get("collector_auth_required", True))
         enrollment_url = str(
             config.get("collector_enrollment_url") or ""
+        ).strip()
+        heartbeat_url = str(
+            config.get("collector_heartbeat_url") or ""
         ).strip()
         rotation_url = str(
             config.get("collector_rotation_url") or ""
@@ -236,6 +250,7 @@ class DurableCollectorRuntime:
             enrollment_token=os.environ.get(
                 "AEGISGUARD_COLLECTOR_ENROLLMENT_TOKEN"
             ),
+            heartbeat_url=heartbeat_url or None,
             rotation_url=rotation_url or None,
             recovery_url=recovery_url or None,
             recovery_token=os.environ.get(
@@ -316,6 +331,61 @@ class DurableCollectorRuntime:
         self.state.store_collector_credential(credential)
         self.enrollment_token = None
         return credential
+
+    def heartbeat(self):
+        """Send one authenticated liveness heartbeat to the Analyzer."""
+
+        if not self.auth_required:
+            raise ValueError(
+                "collector heartbeat requires authenticated mode"
+            )
+        if not self.heartbeat_url:
+            raise ValueError("collector heartbeat URL is unavailable")
+
+        credential = self.ensure_enrolled()
+        transport_health = getattr(
+            self.state,
+            "transport_health",
+            None,
+        )
+        snapshot = (
+            transport_health(now=self.clock())
+            if callable(transport_health)
+            else {}
+        )
+        health = {
+            key: snapshot.get(key)
+            for key in (
+                "status",
+                "pending_batches",
+                "checkpoint",
+                "collection_cursor",
+                "retry_in_seconds",
+                "last_successful_ack_at",
+            )
+            if snapshot.get(key) is not None
+        }
+        health["certificate_rotation_pending"] = bool(
+            self.state.get_pending_client_certificate_rotation()
+        )
+
+        payload = build_heartbeat_payload(
+            self.collector_id,
+            self.hostname,
+            version=self.collector_version,
+            health=health,
+        )
+        response = self.heartbeat_sender(
+            self.heartbeat_url,
+            payload,
+            credential,
+            timeout=30,
+            ca_bundle=self.ca_bundle,
+            client_cert=self.client_cert,
+        )
+        body = self.heartbeat_validator(response, payload)
+        self._complete_certificate_transition_after_authenticated_success()
+        return body
 
     def recover_credential(self):
         """Explicitly recover an enrolled credential through recovery trust."""

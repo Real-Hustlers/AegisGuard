@@ -63,6 +63,8 @@ Set-ConfigValue $config "collector_ingest_url" `
     "$base/api/collector/v1/batches"
 Set-ConfigValue $config "collector_enrollment_url" `
     "$base/api/collector/v1/enroll"
+Set-ConfigValue $config "collector_heartbeat_url" `
+    "$base/api/collector/v1/heartbeat"
 Set-ConfigValue $config "collector_rotation_url" `
     "$base/api/collector/v1/rotate"
 Set-ConfigValue $config "collector_recovery_url" `
