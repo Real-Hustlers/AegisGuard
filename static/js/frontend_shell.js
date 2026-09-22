@@ -60,7 +60,7 @@
         button.setAttribute('aria-label', 'Open navigation');
         button.setAttribute('aria-controls', 'primarySidebar');
         button.setAttribute('aria-expanded', 'false');
-        button.innerHTML = '<span aria-hidden="true">â˜°</span>';
+        button.innerHTML = \'<span aria-hidden="true">&#9776;</span>\';
         button.addEventListener('click', toggleSidebar);
         topbar.insertBefore(button, topbar.firstChild);
 

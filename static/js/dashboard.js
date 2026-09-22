@@ -410,8 +410,10 @@ function renderIncidentDetails(incident) {
 
     const mitre = incident.mitre || {};
     const techniqueId = mitre.technique_id || 'Unknown';
-    const techniqueName = mitre.technique_name || 'Unknown';
+    const techniqueName = mitre.technique_name || mitre.technique || 'Unknown';
     const tactic = mitre.tactic || 'Unknown';
+    const report = incident.incident_report || {};
+    const steps = Array.isArray(incident.playbook_steps) ? incident.playbook_steps : [];
 
     panel.innerHTML = `
         <div class="panel-title">Incident details <span id="irSelectedIncident" style="font-size:11px; color:var(--text-main);">(${escapeHtml(incident.incident_id)})</span></div>
@@ -464,16 +466,16 @@ function renderIncidentDetails(incident) {
         <div style="margin-top: 16px;">
             <div style="font-size:11px; color:#94a3b8; margin-bottom:8px;">Details</div>
             <div class="text-main" style="background: rgba(15, 23, 42, 0.8); padding: 14px; border-radius: 6px; border:1px solid var(--border-color); min-height: 80px; white-space: pre-wrap;">Threat:
-            ${incident.incident_report.threat_type}
+            ${escapeHtml(report.threat_type || incident.threat_type || 'Unknown')}
 
             Action:
-            ${incident.incident_report.action_taken}
+            ${escapeHtml(report.action_taken || incident.action_taken || 'No action recorded')}
 
             MITRE:
-            ${incident.mitre.technique_id}
+            ${escapeHtml(techniqueId)}
 
             Playbook:
-            ${incident.playbook_steps.join("\n")}</div>
+            ${escapeHtml(steps.join("\n") || "No playbook steps available")}</div>
         </div>
     `;
 }
@@ -895,6 +897,9 @@ function loadIncidentResponseData() {
         renderSettingsState(settings);
         renderSuspiciousEntities(suspicious);
         renderIncidentsTable(incidents);
+        if (window.AegisIntelligenceUI) {
+            window.AegisIntelligenceUI.renderIncidents(incidents);
+        }
 
         window.incidentsById = incidents.reduce((map, incident) => {
             map[incident.incident_id] = incident;
@@ -941,6 +946,9 @@ function loadDashboardData() {
             renderThreatList(alerts);
             renderEvents(events);
             renderCharts(dashboardData);
+            if (window.AegisIntelligenceUI) {
+                window.AegisIntelligenceUI.renderDashboard(dashboardData, alerts, events);
+            }
             // Update sidebar nav badges with live counts
             try {
                 const evBadge = document.getElementById('navEventsBadge');
