@@ -45,6 +45,16 @@ class CollectorRecoveryConflictError(CollectorRecoveryError):
     """Raised when one recovery_id is reused with different credential data."""
 
 
+class CollectorCertificateRotationError(CollectorIdentityError):
+    """Raised when a collector certificate rotation cannot be staged."""
+
+
+class CollectorCertificateRotationConflictError(
+    CollectorCertificateRotationError
+):
+    """Raised when certificate rotation state conflicts with a request."""
+
+
 def _require(value: str, field_name: str) -> str:
     normalized = str(value or "").strip()
     if not normalized:
@@ -85,53 +95,221 @@ def certificate_fingerprint_from_pem(pem_certificate: str) -> str:
     return hashlib.sha256(der).hexdigest()
 
 
+def stage_collector_certificate_rotation(
+    conn,
+    collector_id: str,
+    current_certificate_fingerprint: str,
+    new_certificate_fingerprint: str,
+    rotation_id: str,
+) -> Dict[str, Any]:
+    """Stage a new certificate without immediately invalidating the old one."""
+
+    collector_id = _require(collector_id, "collector_id")
+    current = normalize_certificate_fingerprint(current_certificate_fingerprint)
+    new = normalize_certificate_fingerprint(new_certificate_fingerprint)
+    rotation_id = _require(rotation_id, "certificate rotation_id")
+
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            """
+            SELECT status, revoked_at, certificate_fingerprint,
+                   pending_certificate_fingerprint,
+                   certificate_rotation_id,
+                   certificate_rotation_started_at,
+                   certificate_rotated_at
+            FROM collectors
+            WHERE collector_id = ?
+            """,
+            (collector_id,),
+        ).fetchone()
+
+        if row is None:
+            conn.rollback()
+            raise CollectorAuthenticationError("unknown collector")
+
+        status = str(row[0] or "").upper()
+        if status == "REVOKED" or row[1] not in (None, ""):
+            conn.rollback()
+            raise CollectorRevokedError("collector is revoked")
+        if status != "ENROLLED":
+            conn.rollback()
+            raise CollectorAuthenticationError(
+                f"collector status {status or 'EMPTY'} is not allowed"
+            )
+
+        active = normalize_certificate_fingerprint(str(row[2] or ""))
+        pending = str(row[3] or "")
+        stored_rotation_id = str(row[4] or "")
+
+        if not hmac.compare_digest(active, current):
+            conn.rollback()
+            raise CollectorAuthenticationError("collector current certificate mismatch")
+
+        if stored_rotation_id == rotation_id:
+            if pending:
+                normalized_pending = normalize_certificate_fingerprint(pending)
+                if not hmac.compare_digest(normalized_pending, new):
+                    conn.rollback()
+                    raise CollectorCertificateRotationConflictError(
+                        "certificate rotation_id was reused with a different certificate"
+                    )
+                conn.commit()
+                return {
+                    "collector_id": collector_id,
+                    "rotation_id": rotation_id,
+                    "new_certificate_fingerprint": normalized_pending,
+                    "staged_at": row[5],
+                    "rotated_at": row[6],
+                    "duplicate": True,
+                    "completed": False,
+                }
+
+            if hmac.compare_digest(active, new):
+                conn.commit()
+                return {
+                    "collector_id": collector_id,
+                    "rotation_id": rotation_id,
+                    "new_certificate_fingerprint": active,
+                    "staged_at": None,
+                    "rotated_at": row[6],
+                    "duplicate": True,
+                    "completed": True,
+                }
+
+            conn.rollback()
+            raise CollectorCertificateRotationConflictError(
+                "certificate rotation_id no longer matches collector state"
+            )
+
+        if pending:
+            conn.rollback()
+            raise CollectorCertificateRotationConflictError(
+                "another certificate rotation is already pending"
+            )
+
+        if hmac.compare_digest(active, new):
+            conn.rollback()
+            raise CollectorCertificateRotationError(
+                "new certificate must differ from current certificate"
+            )
+
+        conn.execute(
+            """
+            UPDATE collectors
+            SET pending_certificate_fingerprint = ?,
+                certificate_rotation_id = ?,
+                certificate_rotation_started_at = CURRENT_TIMESTAMP
+            WHERE collector_id = ?
+            """,
+            (new, rotation_id, collector_id),
+        )
+        conn.commit()
+        refreshed = conn.execute(
+            "SELECT certificate_rotation_started_at FROM collectors WHERE collector_id = ?",
+            (collector_id,),
+        ).fetchone()
+        return {
+            "collector_id": collector_id,
+            "rotation_id": rotation_id,
+            "new_certificate_fingerprint": new,
+            "staged_at": refreshed[0] if refreshed else None,
+            "rotated_at": None,
+            "duplicate": False,
+            "completed": False,
+        }
+    except CollectorIdentityError:
+        raise
+    except Exception:
+        if conn.in_transaction:
+            conn.rollback()
+        raise
+
+
 def authenticate_collector_certificate(
     conn,
     collector_id: str,
     certificate_fingerprint: str,
 ) -> Dict[str, Any]:
     collector_id = _require(collector_id, "collector_id")
-    presented = normalize_certificate_fingerprint(
-        certificate_fingerprint
-    )
-    row = conn.execute(
-        """
-        SELECT hostname, status, revoked_at,
-               certificate_fingerprint, certificate_bound_at
-        FROM collectors
-        WHERE collector_id = ?
-        """,
-        (collector_id,),
-    ).fetchone()
+    presented = normalize_certificate_fingerprint(certificate_fingerprint)
 
-    if row is None:
-        raise CollectorAuthenticationError("unknown collector")
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            """
+            SELECT hostname, status, revoked_at,
+                   certificate_fingerprint, certificate_bound_at,
+                   pending_certificate_fingerprint,
+                   certificate_rotation_id
+            FROM collectors
+            WHERE collector_id = ?
+            """,
+            (collector_id,),
+        ).fetchone()
 
-    status = str(row[1] or "").upper()
-    if status == "REVOKED" or row[2] not in (None, ""):
-        raise CollectorRevokedError("collector is revoked")
-    if status != "ENROLLED":
-        raise CollectorAuthenticationError(
-            f"collector status {status or 'EMPTY'} is not allowed"
-        )
+        if row is None:
+            conn.rollback()
+            raise CollectorAuthenticationError("unknown collector")
 
-    stored = str(row[3] or "")
-    if not stored:
-        raise CollectorAuthenticationError(
-            "collector has no bound client certificate"
-        )
-    if not hmac.compare_digest(stored, presented):
-        raise CollectorAuthenticationError(
-            "collector client certificate mismatch"
-        )
+        status = str(row[1] or "").upper()
+        if status == "REVOKED" or row[2] not in (None, ""):
+            conn.rollback()
+            raise CollectorRevokedError("collector is revoked")
+        if status != "ENROLLED":
+            conn.rollback()
+            raise CollectorAuthenticationError(
+                f"collector status {status or 'EMPTY'} is not allowed"
+            )
 
-    return {
-        "collector_id": collector_id,
-        "hostname": str(row[0] or ""),
-        "status": status,
-        "certificate_fingerprint": stored,
-        "certificate_bound_at": row[4],
-    }
+        active = str(row[3] or "")
+        pending = str(row[5] or "")
+        if active and hmac.compare_digest(active, presented):
+            conn.commit()
+            return {
+                "collector_id": collector_id,
+                "hostname": str(row[0] or ""),
+                "status": status,
+                "certificate_fingerprint": active,
+                "certificate_bound_at": row[4],
+                "certificate_promoted": False,
+            }
+
+        if pending:
+            normalized_pending = normalize_certificate_fingerprint(pending)
+            if hmac.compare_digest(normalized_pending, presented):
+                conn.execute(
+                    """
+                    UPDATE collectors
+                    SET certificate_fingerprint = ?,
+                        certificate_bound_at = CURRENT_TIMESTAMP,
+                        pending_certificate_fingerprint = NULL,
+                        certificate_rotation_started_at = NULL,
+                        certificate_rotated_at = CURRENT_TIMESTAMP
+                    WHERE collector_id = ?
+                    """,
+                    (normalized_pending, collector_id),
+                )
+                conn.commit()
+                return {
+                    "collector_id": collector_id,
+                    "hostname": str(row[0] or ""),
+                    "status": status,
+                    "certificate_fingerprint": normalized_pending,
+                    "certificate_bound_at": row[4],
+                    "certificate_promoted": True,
+                    "certificate_rotation_id": row[6],
+                }
+
+        conn.rollback()
+        raise CollectorAuthenticationError("collector client certificate mismatch")
+    except CollectorIdentityError:
+        raise
+    except Exception:
+        if conn.in_transaction:
+            conn.rollback()
+        raise
+
 
 
 def _generate_credential() -> str:
