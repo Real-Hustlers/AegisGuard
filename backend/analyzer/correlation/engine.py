@@ -13,6 +13,7 @@ from backend.analyzer.detection.contracts import (
     DetectionType,
     Severity,
 )
+from backend.analyzer.mitre import mappings_for_correlation
 
 FIVE_MINUTES = timedelta(minutes=5)
 TEN_MINUTES = timedelta(minutes=10)
@@ -89,6 +90,7 @@ class CorrelationEngine:
                     prediction_source=f"correlation:{correlation_id}",
                     source_engine=self.engine_name,
                     correlation_id=correlation_id,
+                    mitre=mappings_for_correlation(correlation_id),
                     evidence=_evidence(related),
                     metadata={"hostname": host},
                 )

@@ -7,6 +7,7 @@ from hashlib import sha256
 from typing import Iterable
 
 from .contracts import CanonicalEvent, DetectionFinding, DetectionType, Severity
+from backend.analyzer.mitre import mappings_for_rule
 
 
 @dataclass(frozen=True)
@@ -92,6 +93,7 @@ class RuleEngine:
             prediction_source=f"rule:{spec.rule_id}",
             source_engine=self.engine_name,
             rule_id=spec.rule_id,
+            mitre=mappings_for_rule(spec.rule_id, spec.classification_label),
             evidence=(
                 {
                     "event_id": event.event_id,
