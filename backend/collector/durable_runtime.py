@@ -2,7 +2,9 @@
 
 import hashlib
 import os
+import secrets
 import time
+import uuid
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -12,11 +14,14 @@ from backend.collector.state import CollectorState
 from backend.collector.transport import (
     build_batch_payload,
     build_enrollment_payload,
+    build_rotation_payload,
     send_batch,
     send_enrollment,
+    send_rotation,
     validate_analyzer_url,
     validate_batch_ack,
     validate_enrollment_response,
+    validate_rotation_response,
 )
 
 
@@ -30,12 +35,17 @@ class DurableCollectorRuntime:
         os_name: str = "",
         enrollment_url: str = None,
         enrollment_token: str = None,
+        rotation_url: str = None,
         auth_required: bool = False,
         collector_version: str = None,
         sender: Callable = send_batch,
         enrollment_sender: Callable = send_enrollment,
+        rotation_sender: Callable = send_rotation,
         ack_validator: Callable = validate_batch_ack,
         enrollment_validator: Callable = validate_enrollment_response,
+        rotation_validator: Callable = validate_rotation_response,
+        credential_factory: Callable = None,
+        rotation_id_factory: Callable = None,
         retry_base_seconds: float = 2.0,
         retry_max_seconds: float = 60.0,
         retry_jitter_ratio: float = 0.2,
@@ -44,6 +54,8 @@ class DurableCollectorRuntime:
         validate_analyzer_url(analyzer_url)
         if enrollment_url:
             validate_analyzer_url(enrollment_url)
+        if rotation_url:
+            validate_analyzer_url(rotation_url)
 
         retry_base_seconds = float(retry_base_seconds)
         retry_max_seconds = float(retry_max_seconds)
@@ -65,6 +77,7 @@ class DurableCollectorRuntime:
         self.os_name = str(os_name)
         self.enrollment_url = str(enrollment_url or "").strip() or None
         self.enrollment_token = str(enrollment_token or "").strip() or None
+        self.rotation_url = str(rotation_url or "").strip() or None
         self.auth_required = bool(auth_required)
         self.collector_version = (
             str(collector_version).strip()
@@ -73,8 +86,12 @@ class DurableCollectorRuntime:
         )
         self.sender = sender
         self.enrollment_sender = enrollment_sender
+        self.rotation_sender = rotation_sender
         self.ack_validator = ack_validator
         self.enrollment_validator = enrollment_validator
+        self.rotation_validator = rotation_validator
+        self.credential_factory = credential_factory if credential_factory is not None else lambda: secrets.token_urlsafe(32)
+        self.rotation_id_factory = rotation_id_factory if rotation_id_factory is not None else lambda: str(uuid.uuid4())
         self.retry_base_seconds = retry_base_seconds
         self.retry_max_seconds = retry_max_seconds
         self.retry_jitter_ratio = retry_jitter_ratio
@@ -96,6 +113,9 @@ class DurableCollectorRuntime:
         auth_required = bool(config.get("collector_auth_required", True))
         enrollment_url = str(
             config.get("collector_enrollment_url") or ""
+        ).strip()
+        rotation_url = str(
+            config.get("collector_rotation_url") or ""
         ).strip()
 
         config_path = Path(config_path)
@@ -122,6 +142,7 @@ class DurableCollectorRuntime:
             enrollment_token=os.environ.get(
                 "AEGISGUARD_COLLECTOR_ENROLLMENT_TOKEN"
             ),
+            rotation_url=rotation_url or None,
             auth_required=auth_required,
             collector_version=config.get("collector_version"),
             retry_base_seconds=float(
@@ -191,6 +212,77 @@ class DurableCollectorRuntime:
         self.state.store_collector_credential(credential)
         self.enrollment_token = None
         return credential
+
+    def rotate_credential(self):
+        """Rotate without lockout if the server response is lost."""
+
+        if not self.auth_required:
+            raise ValueError(
+                "collector credential rotation requires authenticated mode"
+            )
+        if not self.rotation_url:
+            raise ValueError("collector rotation URL is unavailable")
+
+        current = self.ensure_enrolled()
+        pending = self.state.get_pending_credential_rotation()
+
+        if pending is None:
+            new_credential = str(
+                self.credential_factory() or ""
+            ).strip()
+            if not new_credential:
+                raise ValueError(
+                    "generated collector credential is empty"
+                )
+            if new_credential == current:
+                raise ValueError(
+                    "generated collector credential did not change"
+                )
+
+            rotation_id = str(
+                self.rotation_id_factory() or ""
+            ).strip()
+            if not rotation_id:
+                raise ValueError("generated rotation_id is empty")
+
+            self.state.begin_credential_rotation(
+                rotation_id,
+                new_credential,
+            )
+        else:
+            rotation_id = str(pending["rotation_id"])
+            new_credential = str(pending["credential"])
+
+        payload = build_rotation_payload(
+            self.collector_id,
+            self.hostname,
+            rotation_id,
+            new_credential,
+        )
+
+        response = self.rotation_sender(
+            self.rotation_url,
+            payload,
+            credential=current,
+            timeout=30,
+            ca_bundle=self.ca_bundle,
+        )
+
+        if (
+            getattr(response, "status_code", None) == 401
+            and new_credential != current
+        ):
+            response = self.rotation_sender(
+                self.rotation_url,
+                payload,
+                credential=new_credential,
+                timeout=30,
+                ca_bundle=self.ca_bundle,
+            )
+
+        body = self.rotation_validator(response, payload)
+        self.state.commit_credential_rotation(rotation_id)
+        return body
 
     def enqueue_logs(self, logs, record_ids) -> Optional[str]:
         if not logs:

@@ -108,6 +108,13 @@ class PlatformSchemaTests(unittest.TestCase):
         self.assertIn("requested_by_user_id", response_columns)
         self.assertIn("simulation_result", response_columns)
 
+        collector_columns = {
+            row[1]
+            for row in self.conn.execute("PRAGMA table_info(collectors)")
+        }
+        self.assertIn("credential_rotation_id", collector_columns)
+        self.assertIn("credential_rotated_at", collector_columns)
+
 
 if __name__ == "__main__":
     unittest.main()

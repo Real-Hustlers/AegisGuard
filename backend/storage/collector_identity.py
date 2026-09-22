@@ -29,6 +29,14 @@ class CollectorRevokedError(CollectorAuthenticationError):
     """Raised when a revoked collector attempts authentication."""
 
 
+class CollectorRotationError(CollectorIdentityError):
+    """Raised when a collector credential rotation cannot be completed."""
+
+
+class CollectorRotationConflictError(CollectorRotationError):
+    """Raised when one rotation_id is reused with different credential data."""
+
+
 def _require(value: str, field_name: str) -> str:
     normalized = str(value or "").strip()
     if not normalized:
@@ -261,3 +269,170 @@ def revoke_collector(
 
     conn.commit()
     return cursor.rowcount == 1
+
+
+def rotate_collector_credential(
+    conn,
+    collector_id: str,
+    current_credential: str,
+    new_credential: str,
+    rotation_id: str,
+    *,
+    hostname: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Atomically rotate one collector credential with idempotent replay."""
+
+    collector_id = _require(collector_id, "collector_id")
+    current_credential = _require(
+        current_credential,
+        "current credential",
+    )
+    new_credential = _require(new_credential, "new credential")
+    rotation_id = _require(rotation_id, "rotation_id")
+
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            """
+            SELECT hostname, status, credential_fingerprint, revoked_at,
+                   credential_rotation_id, credential_rotated_at
+            FROM collectors
+            WHERE collector_id = ?
+            """,
+            (collector_id,),
+        ).fetchone()
+
+        if row is None:
+            conn.rollback()
+            raise CollectorAuthenticationError("unknown collector")
+
+        registered_hostname = str(row[0] or "")
+        status = str(row[1] or "").upper()
+        stored_fingerprint = str(row[2] or "")
+        revoked_at = row[3]
+        stored_rotation_id = str(row[4] or "")
+
+        if status == "REVOKED" or revoked_at not in (None, ""):
+            conn.rollback()
+            raise CollectorRevokedError("collector is revoked")
+
+        if status != "ENROLLED":
+            conn.rollback()
+            raise CollectorAuthenticationError(
+                f"collector status {status or 'EMPTY'} is not allowed"
+            )
+
+        if hostname is not None:
+            presented_hostname = _require(hostname, "hostname")
+            if not hmac.compare_digest(
+                registered_hostname,
+                presented_hostname,
+            ):
+                conn.rollback()
+                raise CollectorAuthenticationError(
+                    "collector hostname mismatch"
+                )
+
+        current_fingerprint = credential_fingerprint(
+            current_credential
+        )
+        new_fingerprint = credential_fingerprint(new_credential)
+
+        if stored_rotation_id == rotation_id:
+            if not hmac.compare_digest(
+                stored_fingerprint,
+                new_fingerprint,
+            ):
+                conn.rollback()
+                raise CollectorRotationConflictError(
+                    "rotation_id was already used with different credential data"
+                )
+
+            if not hmac.compare_digest(
+                stored_fingerprint,
+                current_fingerprint,
+            ):
+                conn.rollback()
+                raise CollectorAuthenticationError(
+                    "invalid collector credential"
+                )
+
+            conn.execute(
+                """
+                UPDATE collectors
+                SET last_seen_at = CURRENT_TIMESTAMP
+                WHERE collector_id = ?
+                """,
+                (collector_id,),
+            )
+            conn.commit()
+            return {
+                "collector_id": collector_id,
+                "hostname": registered_hostname,
+                "status": status,
+                "rotation_id": rotation_id,
+                "rotated_at": row[5],
+                "duplicate": True,
+            }
+
+        if (
+            not stored_fingerprint
+            or not hmac.compare_digest(
+                stored_fingerprint,
+                current_fingerprint,
+            )
+        ):
+            conn.rollback()
+            raise CollectorAuthenticationError(
+                "invalid collector credential"
+            )
+
+        if hmac.compare_digest(
+            stored_fingerprint,
+            new_fingerprint,
+        ):
+            conn.rollback()
+            raise CollectorRotationError(
+                "new credential must differ from current credential"
+            )
+
+        conn.execute(
+            """
+            UPDATE collectors
+            SET credential_fingerprint = ?,
+                credential_rotation_id = ?,
+                credential_rotated_at = CURRENT_TIMESTAMP,
+                last_seen_at = CURRENT_TIMESTAMP
+            WHERE collector_id = ?
+            """,
+            (
+                new_fingerprint,
+                rotation_id,
+                collector_id,
+            ),
+        )
+        conn.commit()
+
+        refreshed = conn.execute(
+            """
+            SELECT credential_rotated_at
+            FROM collectors
+            WHERE collector_id = ?
+            """,
+            (collector_id,),
+        ).fetchone()
+
+        return {
+            "collector_id": collector_id,
+            "hostname": registered_hostname,
+            "status": status,
+            "rotation_id": rotation_id,
+            "rotated_at": refreshed[0] if refreshed else None,
+            "duplicate": False,
+        }
+    except CollectorIdentityError:
+        raise
+    except Exception:
+        if conn.in_transaction:
+            conn.rollback()
+        raise

@@ -20,6 +20,9 @@ from backend.storage.collector_identity import (
     CollectorRevokedError,
     authenticate_collector,
     enroll_collector,
+    rotate_collector_credential,
+    CollectorRotationConflictError,
+    CollectorRotationError,
 )
 from backend.storage.collector_ingest import persist_collector_batch
 
@@ -99,6 +102,60 @@ def create_collector_blueprint(
             "credential": result["credential"],
         })
         response.status_code = 201
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        return response
+
+    @blueprint.post("/api/collector/v1/rotate")
+    def rotate_credential():
+        payload = request.get_json(silent=True) or {}
+
+        collector_id = str(
+            request.headers.get("X-AegisGuard-Collector-ID") or ""
+        ).strip()
+        presented_credential = str(
+            request.headers.get(COLLECTOR_CREDENTIAL_HEADER) or ""
+        )
+
+        if not collector_id or not presented_credential:
+            return _json_error("collector authentication failed", 401)
+
+        if str(payload.get("collector_id") or "").strip() != collector_id:
+            return _json_error("collector_id header/body mismatch", 400)
+
+        conn = connection_factory()
+        try:
+            try:
+                result = rotate_collector_credential(
+                    conn,
+                    collector_id,
+                    presented_credential,
+                    payload.get("new_credential"),
+                    payload.get("rotation_id"),
+                    hostname=str(payload.get("hostname") or "").strip(),
+                )
+            except CollectorRevokedError:
+                return _json_error("collector is revoked", 403)
+            except CollectorRotationConflictError as exc:
+                return _json_error(str(exc), 409)
+            except CollectorAuthenticationError:
+                return _json_error("collector authentication failed", 401)
+            except CollectorRotationError as exc:
+                return _json_error(str(exc), 400)
+            except CollectorIdentityError as exc:
+                return _json_error(str(exc), 400)
+        finally:
+            conn.close()
+
+        response = jsonify({
+            "status": "rotated",
+            "collector_id": result["collector_id"],
+            "hostname": result["hostname"],
+            "rotation_id": result["rotation_id"],
+            "duplicate": bool(result["duplicate"]),
+            "rotated_at": result["rotated_at"],
+        })
+        response.status_code = 200
         response.headers["Cache-Control"] = "no-store, max-age=0"
         response.headers["Pragma"] = "no-cache"
         return response

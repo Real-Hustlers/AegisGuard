@@ -164,6 +164,94 @@ def validate_enrollment_response(response, payload):
     return body
 
 
+def build_rotation_payload(
+    collector_id: str,
+    hostname: str,
+    rotation_id: str,
+    new_credential: str,
+):
+    if not collector_id:
+        raise ValueError("collector_id is required")
+    if not hostname:
+        raise ValueError("hostname is required")
+    if not rotation_id:
+        raise ValueError("rotation_id is required")
+    if not new_credential:
+        raise ValueError("new_credential is required")
+
+    return {
+        "collector_id": str(collector_id),
+        "hostname": str(hostname),
+        "rotation_id": str(rotation_id),
+        "new_credential": str(new_credential),
+    }
+
+
+def send_rotation(
+    rotation_url: str,
+    payload,
+    credential: str,
+    timeout: int = 30,
+    ca_bundle=None,
+    session=None,
+):
+    validate_analyzer_url(rotation_url)
+
+    current = str(credential or "").strip()
+    if not current:
+        raise ValueError("current collector credential is required")
+
+    body = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+
+    verify = ca_bundle if ca_bundle else True
+    client = session or requests
+    return client.post(
+        rotation_url,
+        data=body.encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "X-AegisGuard-Collector-ID": payload["collector_id"],
+            COLLECTOR_CREDENTIAL_HEADER: current,
+        },
+        timeout=timeout,
+        verify=verify,
+    )
+
+
+def validate_rotation_response(response, payload):
+    if getattr(response, "status_code", None) != 200:
+        raise ValueError(
+            f"collector credential rotation requires HTTP 200; got "
+            f"{getattr(response, 'status_code', None)}"
+        )
+
+    try:
+        body = response.json()
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "collector credential rotation response must contain JSON"
+        ) from exc
+
+    if not isinstance(body, dict) or body.get("status") != "rotated":
+        raise ValueError(
+            "collector credential rotation status must be rotated"
+        )
+
+    for field in ("collector_id", "hostname", "rotation_id"):
+        expected = str(payload.get(field) or "")
+        if str(body.get(field) or "") != expected:
+            raise ValueError(
+                f"collector credential rotation {field} mismatch"
+            )
+
+    return body
+
+
 def send_batch(
     analyzer_url: str,
     payload,

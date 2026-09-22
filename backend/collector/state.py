@@ -226,6 +226,175 @@ class CollectorState:
         finally:
             conn.close()
 
+    _PENDING_ROTATION_ID_KEY = "collector_credential_rotation_pending_id"
+    _PENDING_ROTATION_CREDENTIAL_KEY = (
+        "collector_credential_rotation_pending_protected_v1"
+    )
+
+    def get_pending_credential_rotation(self):
+        """Return the protected pending rotation, if one exists."""
+
+        conn = self._connect()
+        try:
+            rotation_row = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_ROTATION_ID_KEY,),
+            ).fetchone()
+            credential_row = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_ROTATION_CREDENTIAL_KEY,),
+            ).fetchone()
+
+            if rotation_row is None and credential_row is None:
+                return None
+            if rotation_row is None or credential_row is None:
+                raise CredentialProtectionError(
+                    "collector credential rotation state is incomplete"
+                )
+
+            return {
+                "rotation_id": str(rotation_row["value"]),
+                "credential": self._unprotect_credential_value(
+                    str(credential_row["value"])
+                ),
+            }
+        finally:
+            conn.close()
+
+    def begin_credential_rotation(
+        self,
+        rotation_id: str,
+        credential: str,
+    ) -> None:
+        """Persist a protected candidate before any rotation network call."""
+
+        rotation_value = str(rotation_id or "").strip()
+        if not rotation_value:
+            raise ValueError("rotation_id must not be empty")
+
+        encoded = self._protect_credential_value(credential)
+
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            existing_id = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_ROTATION_ID_KEY,),
+            ).fetchone()
+            existing_credential = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_ROTATION_CREDENTIAL_KEY,),
+            ).fetchone()
+
+            if existing_id is not None or existing_credential is not None:
+                if existing_id is None or existing_credential is None:
+                    conn.rollback()
+                    raise CredentialProtectionError(
+                        "collector credential rotation state is incomplete"
+                    )
+
+                existing_rotation = str(existing_id["value"])
+                existing_value = self._unprotect_credential_value(
+                    str(existing_credential["value"])
+                )
+                if (
+                    existing_rotation != rotation_value
+                    or existing_value != str(credential)
+                ):
+                    conn.rollback()
+                    raise CredentialProtectionError(
+                        "another collector credential rotation is pending"
+                    )
+                conn.commit()
+                return
+
+            conn.execute(
+                "INSERT INTO collector_state(key, value) VALUES (?, ?)",
+                (
+                    self._PENDING_ROTATION_ID_KEY,
+                    rotation_value,
+                ),
+            )
+            conn.execute(
+                "INSERT INTO collector_state(key, value) VALUES (?, ?)",
+                (
+                    self._PENDING_ROTATION_CREDENTIAL_KEY,
+                    encoded,
+                ),
+            )
+            conn.commit()
+        except Exception:
+            if conn.in_transaction:
+                conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def commit_credential_rotation(self, rotation_id: str) -> None:
+        """Atomically promote the protected pending credential to current."""
+
+        rotation_value = str(rotation_id or "").strip()
+        if not rotation_value:
+            raise ValueError("rotation_id must not be empty")
+
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            rotation_row = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_ROTATION_ID_KEY,),
+            ).fetchone()
+            credential_row = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_ROTATION_CREDENTIAL_KEY,),
+            ).fetchone()
+
+            if rotation_row is None or credential_row is None:
+                conn.rollback()
+                raise CredentialProtectionError(
+                    "no complete collector credential rotation is pending"
+                )
+
+            if str(rotation_row["value"]) != rotation_value:
+                conn.rollback()
+                raise CredentialProtectionError(
+                    "pending collector credential rotation_id mismatch"
+                )
+
+            self._unprotect_credential_value(
+                str(credential_row["value"])
+            )
+
+            conn.execute(
+                """
+                INSERT INTO collector_state(key, value)
+                VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+                """,
+                (
+                    self._PROTECTED_CREDENTIAL_KEY,
+                    str(credential_row["value"]),
+                ),
+            )
+            conn.execute(
+                "DELETE FROM collector_state WHERE key = ?",
+                (self._LEGACY_CREDENTIAL_KEY,),
+            )
+            conn.execute(
+                "DELETE FROM collector_state WHERE key IN (?, ?)",
+                (
+                    self._PENDING_ROTATION_ID_KEY,
+                    self._PENDING_ROTATION_CREDENTIAL_KEY,
+                ),
+            )
+            conn.commit()
+        except Exception:
+            if conn.in_transaction:
+                conn.rollback()
+            raise
+        finally:
+            conn.close()
+
     def get_checkpoint(self) -> Optional[int]:
         conn = self._connect()
         try:
