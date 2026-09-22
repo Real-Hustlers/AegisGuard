@@ -96,3 +96,62 @@ For every real-VM scenario, retain:
 
 Y9.1 establishes the deterministic validator. A later Y9 slice performs the
 real authorized VM run and records the resulting evidence.
+
+## Y9.2 live Analyzer evidence capture
+
+Y9.2 adds a GET-only evidence workflow for the actual isolated VM.
+
+The tool refuses to start unless:
+
+- legacy `simulation_mode` is `true`; and
+- SOAR is either `OFF` or `soar_dry_run` is `true`.
+
+It does not change those settings. If the Analyzer is unsafe, validation stops.
+
+### 1. Record the baseline
+
+Run this before producing the authorized test activity:
+
+```powershell
+python -m backend.analyzer.intelligence.live_evidence start `
+  --analyzer-url http://127.0.0.1:5000 `
+  --hostname YOUR-VM-HOSTNAME `
+  --output .\.validation\y9-baseline.json
+```
+
+The baseline records the existing event IDs for that host and the current
+response-safety settings.
+
+### 2. Perform the authorized isolated-VM scenario
+
+Generate the required security activity only inside the isolated test VM.
+Do not target production or public systems. Keep AegisGuard response enforcement
+in simulation/dry-run mode.
+
+Allow the Collector to deliver the resulting Windows events to the Analyzer.
+
+### 3. Finish and validate
+
+```powershell
+python -m backend.analyzer.intelligence.live_evidence finish `
+  --baseline .\.validation\y9-baseline.json `
+  --scenario credential-to-privilege `
+  --output .\.validation\y9-credential-to-privilege.json
+```
+
+The finish operation:
+
+1. rechecks response-safety settings;
+2. fetches the target host's `/api/events`;
+3. considers only event IDs that did not exist in the baseline;
+4. validates those events with the Y9.1 deterministic validator;
+5. fetches `/api/intelligence?event_limit=5000`;
+6. independently verifies the expected findings, MITRE techniques, and attack
+   stages are present for the same hostname;
+7. writes one JSON evidence bundle.
+
+No POST, PUT, PATCH, DELETE, approval, remediation, or response-execution API is
+used by the evidence tool.
+
+A successful report requires both the newly collected event validation and the
+live Intelligence API verification to pass.
