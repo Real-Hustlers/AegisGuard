@@ -83,3 +83,14 @@ Desktop.ini
 build/
 dist/
 installer/
+
+# ============================================================
+# CERTIFICATE / PRIVATE-KEY MATERIAL
+# ============================================================
+
+*.pem
+*.key
+*.crt
+*.cer
+*.pfx
+*.p12
