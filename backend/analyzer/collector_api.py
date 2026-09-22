@@ -33,6 +33,10 @@ from backend.storage.collector_identity import (
     CollectorCertificateRotationError,
     stage_collector_certificate_rotation,
 )
+from backend.storage.collector_health import (
+    CollectorHealthError,
+    record_collector_heartbeat,
+)
 from backend.storage.collector_ingest import persist_collector_batch
 
 
@@ -411,7 +415,7 @@ def create_collector_blueprint(
         if not hostname:
             return _json_error("hostname is required", 400)
 
-        _certificate, certificate_error = require_client_certificate(
+        certificate, certificate_error = require_client_certificate(
             collector_id
         )
         if certificate_error is not None:
@@ -426,6 +430,16 @@ def create_collector_blueprint(
                     presented_credential,
                     hostname=hostname,
                 )
+                health = record_collector_heartbeat(
+                    conn,
+                    collector_id,
+                    peer_ip=request.remote_addr,
+                    mtls_required=mtls_required,
+                    mtls_verified=bool(certificate),
+                    certificate_fingerprint=certificate,
+                    reported_version=payload.get("version"),
+                    reported_health=payload.get("health"),
+                )
             except CollectorRevokedError:
                 return _json_error("collector is revoked", 403)
             except (
@@ -433,14 +447,25 @@ def create_collector_blueprint(
                 CollectorIdentityError,
             ):
                 return _json_error("collector authentication failed", 401)
+            except CollectorHealthError as exc:
+                return _json_error(str(exc), 400)
         finally:
             conn.close()
 
+        observed = health["server_observed"]
         return jsonify({
             "status": "alive",
             "collector_id": identity["collector_id"],
             "hostname": identity["hostname"],
             "last_seen_at": identity["last_seen_at"],
+            "last_heartbeat_at": observed["last_heartbeat_at"],
+            "server_observed": {
+                "credential_authenticated": (
+                    observed["credential_authenticated"]
+                ),
+                "mtls_required": observed["mtls_required"],
+                "mtls_verified": observed["mtls_verified"],
+            },
         }), 200
 
     @blueprint.post("/api/collector/v1/batches")

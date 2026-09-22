@@ -9,7 +9,7 @@ import sqlite3
 from typing import Callable, Iterable, Tuple
 
 
-LATEST_PLATFORM_SCHEMA_VERSION = 6
+LATEST_PLATFORM_SCHEMA_VERSION = 7
 Migration = Tuple[int, str, Callable[[sqlite3.Connection], None]]
 
 
@@ -319,6 +319,32 @@ def _migration_006_collector_certificate_rotation(
         _add_column_if_missing(conn, "collectors", column, definition)
 
 
+def _migration_007_collector_security_health(
+    conn: sqlite3.Connection,
+) -> None:
+    for column, definition in (
+        ("last_heartbeat_at", "TEXT"),
+        ("heartbeat_peer_ip", "TEXT"),
+        (
+            "heartbeat_credential_authenticated",
+            "INTEGER NOT NULL DEFAULT 0",
+        ),
+        ("heartbeat_mtls_required", "INTEGER NOT NULL DEFAULT 0"),
+        ("heartbeat_mtls_verified", "INTEGER NOT NULL DEFAULT 0"),
+        ("heartbeat_certificate_fingerprint", "TEXT"),
+        ("reported_version", "TEXT"),
+        ("reported_transport_status", "TEXT"),
+        ("reported_pending_batches", "INTEGER"),
+        ("reported_checkpoint", "INTEGER"),
+        ("reported_collection_cursor", "INTEGER"),
+        ("reported_retry_in_seconds", "REAL"),
+        ("reported_last_successful_ack_at", "REAL"),
+        ("reported_certificate_rotation_pending", "INTEGER"),
+        ("reported_health_json", "TEXT NOT NULL DEFAULT '{}'"),
+    ):
+        _add_column_if_missing(conn, "collectors", column, definition)
+
+
 MIGRATIONS: Iterable[Migration] = (
     (1, "enterprise_foundation", _migration_001_enterprise_foundation),
     (2, "collector_ingest_queue", _migration_002_collector_ingest_queue),
@@ -341,6 +367,11 @@ MIGRATIONS: Iterable[Migration] = (
         6,
         "collector_certificate_rotation",
         _migration_006_collector_certificate_rotation,
+    ),
+    (
+        7,
+        "collector_security_health",
+        _migration_007_collector_security_health,
     ),
 )
 

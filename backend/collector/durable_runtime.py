@@ -343,10 +343,37 @@ class DurableCollectorRuntime:
             raise ValueError("collector heartbeat URL is unavailable")
 
         credential = self.ensure_enrolled()
+        transport_health = getattr(
+            self.state,
+            "transport_health",
+            None,
+        )
+        snapshot = (
+            transport_health(now=self.clock())
+            if callable(transport_health)
+            else {}
+        )
+        health = {
+            key: snapshot.get(key)
+            for key in (
+                "status",
+                "pending_batches",
+                "checkpoint",
+                "collection_cursor",
+                "retry_in_seconds",
+                "last_successful_ack_at",
+            )
+            if snapshot.get(key) is not None
+        }
+        health["certificate_rotation_pending"] = bool(
+            self.state.get_pending_client_certificate_rotation()
+        )
+
         payload = build_heartbeat_payload(
             self.collector_id,
             self.hostname,
             version=self.collector_version,
+            health=health,
         )
         response = self.heartbeat_sender(
             self.heartbeat_url,

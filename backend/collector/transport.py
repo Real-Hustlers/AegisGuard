@@ -171,6 +171,7 @@ def build_heartbeat_payload(
     collector_id: str,
     hostname: str,
     version: str = None,
+    health=None,
 ):
     if not collector_id:
         raise ValueError("collector_id is required")
@@ -183,6 +184,10 @@ def build_heartbeat_payload(
     }
     if version:
         payload["version"] = str(version)
+    if health is not None:
+        if not isinstance(health, dict):
+            raise ValueError("heartbeat health must be a dictionary")
+        payload["health"] = dict(health)
     return payload
 
 
