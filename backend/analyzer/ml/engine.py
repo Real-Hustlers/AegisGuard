@@ -15,6 +15,7 @@ from backend.analyzer.detection.contracts import (
     MLPrediction,
     Severity,
 )
+from backend.analyzer.mitre import mappings_for_label
 
 FEATURE_SCHEMA_VERSION = "legacy-18-v1"
 FEATURE_COLUMNS = (
@@ -164,6 +165,7 @@ class MLEngine:
             model_version=prediction.model_version,
             feature_schema_version=prediction.feature_schema_version,
             source_engine=self.engine_name,
+            mitre=mappings_for_label(prediction.prediction),
             evidence=tuple(
                 {
                     "event_id": event.event_id,
