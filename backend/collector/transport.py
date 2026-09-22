@@ -9,6 +9,11 @@ from urllib.parse import urlparse
 import requests
 
 
+COLLECTOR_CREDENTIAL_HEADER = "X-AegisGuard-Collector-Credential"
+ENROLLMENT_TOKEN_HEADER = "X-AegisGuard-Enrollment-Token"
+RECOVERY_TOKEN_HEADER = "X-AegisGuard-Recovery-Token"
+
+
 def _is_loopback_host(hostname: str) -> bool:
     if not hostname:
         return False
@@ -76,14 +81,126 @@ def build_batch_payload(
     }
 
 
-def send_batch(
-    analyzer_url: str,
+def build_enrollment_payload(
+    collector_id: str,
+    hostname: str,
+    os_name: str,
+    version: str = None,
+):
+    if not collector_id:
+        raise ValueError("collector_id is required")
+    if not hostname:
+        raise ValueError("hostname is required")
+
+    payload = {
+        "collector_id": str(collector_id),
+        "hostname": str(hostname),
+        "metadata": {"os": str(os_name or "")},
+    }
+    if version:
+        payload["version"] = str(version)
+    return payload
+
+
+def send_enrollment(
+    enrollment_url: str,
     payload,
+    bootstrap_token: str,
     timeout: int = 30,
     ca_bundle=None,
     session=None,
 ):
-    validate_analyzer_url(analyzer_url)
+    validate_analyzer_url(enrollment_url)
+
+    token = str(bootstrap_token or "").strip()
+    if not token:
+        raise ValueError("collector enrollment token is required")
+
+    body = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    verify = ca_bundle if ca_bundle else True
+    client = session or requests
+    return client.post(
+        enrollment_url,
+        data=body.encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            ENROLLMENT_TOKEN_HEADER: token,
+        },
+        timeout=timeout,
+        verify=verify,
+    )
+
+
+def validate_enrollment_response(response, payload):
+    if getattr(response, "status_code", None) != 201:
+        raise ValueError(
+            f"collector enrollment requires HTTP 201; got "
+            f"{getattr(response, 'status_code', None)}"
+        )
+
+    try:
+        body = response.json()
+    except (TypeError, ValueError) as exc:
+        raise ValueError("collector enrollment response must contain JSON") from exc
+
+    if not isinstance(body, dict) or body.get("status") != "enrolled":
+        raise ValueError("collector enrollment status must be enrolled")
+
+    expected_collector = str(payload.get("collector_id") or "")
+    expected_hostname = str(payload.get("hostname") or "")
+    if str(body.get("collector_id") or "") != expected_collector:
+        raise ValueError("collector enrollment collector_id mismatch")
+    if str(body.get("hostname") or "") != expected_hostname:
+        raise ValueError("collector enrollment hostname mismatch")
+
+    credential = str(body.get("credential") or "").strip()
+    if not credential:
+        raise ValueError("collector enrollment credential is missing")
+
+    return body
+
+
+def build_recovery_payload(
+    collector_id: str,
+    hostname: str,
+    recovery_id: str,
+    new_credential: str,
+):
+    if not collector_id:
+        raise ValueError("collector_id is required")
+    if not hostname:
+        raise ValueError("hostname is required")
+    if not recovery_id:
+        raise ValueError("recovery_id is required")
+    if not new_credential:
+        raise ValueError("new_credential is required")
+
+    return {
+        "collector_id": str(collector_id),
+        "hostname": str(hostname),
+        "recovery_id": str(recovery_id),
+        "new_credential": str(new_credential),
+    }
+
+
+def send_recovery(
+    recovery_url: str,
+    payload,
+    recovery_token: str,
+    timeout: int = 30,
+    ca_bundle=None,
+    session=None,
+):
+    validate_analyzer_url(recovery_url)
+
+    token = str(recovery_token or "").strip()
+    if not token:
+        raise ValueError("collector recovery token is required")
 
     body = json.dumps(
         payload,
@@ -95,25 +212,172 @@ def send_batch(
     verify = ca_bundle if ca_bundle else True
     client = session or requests
     return client.post(
-        analyzer_url,
+        recovery_url,
         data=body.encode("utf-8"),
         headers={
             "Content-Type": "application/json",
-            "X-AegisGuard-Collector-ID": payload["collector_id"],
-            "X-AegisGuard-Batch-ID": payload["batch_id"],
+            RECOVERY_TOKEN_HEADER: token,
         },
         timeout=timeout,
         verify=verify,
     )
 
+
+def validate_recovery_response(response, payload):
+    if getattr(response, "status_code", None) != 200:
+        raise ValueError(
+            f"collector credential recovery requires HTTP 200; got "
+            f"{getattr(response, 'status_code', None)}"
+        )
+
+    try:
+        body = response.json()
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "collector credential recovery response must contain JSON"
+        ) from exc
+
+    if not isinstance(body, dict) or body.get("status") != "recovered":
+        raise ValueError(
+            "collector credential recovery status must be recovered"
+        )
+
+    for field in ("collector_id", "hostname", "recovery_id"):
+        expected = str(payload.get(field) or "")
+        if str(body.get(field) or "") != expected:
+            raise ValueError(
+                f"collector credential recovery {field} mismatch"
+            )
+
+    return body
+
+
+def build_rotation_payload(
+    collector_id: str,
+    hostname: str,
+    rotation_id: str,
+    new_credential: str,
+):
+    if not collector_id:
+        raise ValueError("collector_id is required")
+    if not hostname:
+        raise ValueError("hostname is required")
+    if not rotation_id:
+        raise ValueError("rotation_id is required")
+    if not new_credential:
+        raise ValueError("new_credential is required")
+
+    return {
+        "collector_id": str(collector_id),
+        "hostname": str(hostname),
+        "rotation_id": str(rotation_id),
+        "new_credential": str(new_credential),
+    }
+
+
+def send_rotation(
+    rotation_url: str,
+    payload,
+    credential: str,
+    timeout: int = 30,
+    ca_bundle=None,
+    session=None,
+):
+    validate_analyzer_url(rotation_url)
+
+    current = str(credential or "").strip()
+    if not current:
+        raise ValueError("current collector credential is required")
+
+    body = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+
+    verify = ca_bundle if ca_bundle else True
+    client = session or requests
+    return client.post(
+        rotation_url,
+        data=body.encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "X-AegisGuard-Collector-ID": payload["collector_id"],
+            COLLECTOR_CREDENTIAL_HEADER: current,
+        },
+        timeout=timeout,
+        verify=verify,
+    )
+
+
+def validate_rotation_response(response, payload):
+    if getattr(response, "status_code", None) != 200:
+        raise ValueError(
+            f"collector credential rotation requires HTTP 200; got "
+            f"{getattr(response, 'status_code', None)}"
+        )
+
+    try:
+        body = response.json()
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "collector credential rotation response must contain JSON"
+        ) from exc
+
+    if not isinstance(body, dict) or body.get("status") != "rotated":
+        raise ValueError(
+            "collector credential rotation status must be rotated"
+        )
+
+    for field in ("collector_id", "hostname", "rotation_id"):
+        expected = str(payload.get(field) or "")
+        if str(body.get(field) or "") != expected:
+            raise ValueError(
+                f"collector credential rotation {field} mismatch"
+            )
+
+    return body
+
+
+def send_batch(
+    analyzer_url: str,
+    payload,
+    timeout: int = 30,
+    ca_bundle=None,
+    session=None,
+    credential=None,
+):
+    validate_analyzer_url(analyzer_url)
+
+    body = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+
+    headers = {
+        "Content-Type": "application/json",
+        "X-AegisGuard-Collector-ID": payload["collector_id"],
+        "X-AegisGuard-Batch-ID": payload["batch_id"],
+    }
+    credential_value = str(credential or "").strip()
+    if credential_value:
+        headers[COLLECTOR_CREDENTIAL_HEADER] = credential_value
+
+    verify = ca_bundle if ca_bundle else True
+    client = session or requests
+    return client.post(
+        analyzer_url,
+        data=body.encode("utf-8"),
+        headers=headers,
+        timeout=timeout,
+        verify=verify,
+    )
+
+
 def validate_batch_ack(response, payload):
-    """Validate the server durable-ACK boundary for one exact batch.
-
-    Only HTTP 202 with the same collector_id and batch_id is accepted. A
-    generic 2xx, malformed JSON, or identity mismatch must not advance the
-    collector checkpoint.
-    """
-
     if getattr(response, "status_code", None) != 202:
         raise ValueError(
             f"durable collector ACK requires HTTP 202; got "

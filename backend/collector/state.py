@@ -1,5 +1,6 @@
 """Durable local collector spool and checkpoint storage."""
 
+import base64
 import json
 import sqlite3
 import time
@@ -7,11 +8,21 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from backend.collector.credential_store import (
+    CredentialProtectionError,
+    default_credential_protector,
+)
+
 
 class CollectorState:
-    def __init__(self, path):
+    def __init__(self, path, credential_protector=None):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.credential_protector = (
+            credential_protector
+            if credential_protector is not None
+            else default_credential_protector()
+        )
         self._ensure_schema()
 
     def _connect(self):
@@ -82,6 +93,476 @@ class CollectorState:
             )
             conn.commit()
             return collector_id
+        finally:
+            conn.close()
+
+    _PROTECTED_CREDENTIAL_KEY = "collector_credential_protected_v1"
+    _LEGACY_CREDENTIAL_KEY = "collector_credential"
+
+    def _protect_credential_value(self, credential: str) -> str:
+        value = str(credential or "").strip()
+        if not value:
+            raise ValueError("collector credential must not be empty")
+
+        protected = self.credential_protector.protect(
+            value.encode("utf-8")
+        )
+        if not protected:
+            raise CredentialProtectionError(
+                "credential protector returned an empty value"
+            )
+        return base64.b64encode(protected).decode("ascii")
+
+    def _unprotect_credential_value(self, encoded: str) -> str:
+        try:
+            protected = base64.b64decode(
+                str(encoded).encode("ascii"),
+                validate=True,
+            )
+        except Exception as exc:
+            raise CredentialProtectionError(
+                "protected collector credential is not valid Base64"
+            ) from exc
+
+        plaintext = self.credential_protector.unprotect(protected)
+        try:
+            value = plaintext.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise CredentialProtectionError(
+                "protected collector credential is not valid UTF-8"
+            ) from exc
+
+        if not value:
+            raise CredentialProtectionError(
+                "protected collector credential is empty"
+            )
+        return value
+
+    def get_collector_credential(self) -> Optional[str]:
+        """Return the protected device credential, migrating S3-1 plaintext."""
+
+        conn = self._connect()
+        try:
+            protected_row = conn.execute(
+                """
+                SELECT value
+                FROM collector_state
+                WHERE key = ?
+                """,
+                (self._PROTECTED_CREDENTIAL_KEY,),
+            ).fetchone()
+
+            if protected_row is not None:
+                value = self._unprotect_credential_value(
+                    str(protected_row["value"])
+                )
+                conn.execute(
+                    "DELETE FROM collector_state WHERE key = ?",
+                    (self._LEGACY_CREDENTIAL_KEY,),
+                )
+                conn.commit()
+                return value
+
+            legacy_row = conn.execute(
+                """
+                SELECT value
+                FROM collector_state
+                WHERE key = ?
+                """,
+                (self._LEGACY_CREDENTIAL_KEY,),
+            ).fetchone()
+            if legacy_row is None:
+                return None
+
+            legacy_value = str(legacy_row["value"])
+            encoded = self._protect_credential_value(legacy_value)
+
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                """
+                INSERT INTO collector_state(key, value)
+                VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+                """,
+                (self._PROTECTED_CREDENTIAL_KEY, encoded),
+            )
+            conn.execute(
+                "DELETE FROM collector_state WHERE key = ?",
+                (self._LEGACY_CREDENTIAL_KEY,),
+            )
+            conn.commit()
+            return legacy_value
+        except Exception:
+            if conn.in_transaction:
+                conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def store_collector_credential(self, credential: str) -> None:
+        """Protect and persist the device credential for restart continuity."""
+
+        encoded = self._protect_credential_value(credential)
+
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                """
+                INSERT INTO collector_state(key, value)
+                VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+                """,
+                (self._PROTECTED_CREDENTIAL_KEY, encoded),
+            )
+            conn.execute(
+                "DELETE FROM collector_state WHERE key = ?",
+                (self._LEGACY_CREDENTIAL_KEY,),
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    _PENDING_RECOVERY_ID_KEY = "collector_credential_recovery_pending_id"
+    _PENDING_RECOVERY_CREDENTIAL_KEY = (
+        "collector_credential_recovery_pending_protected_v1"
+    )
+
+    def get_pending_credential_recovery(self):
+        """Return the protected pending recovery, if one exists."""
+
+        conn = self._connect()
+        try:
+            recovery_row = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_RECOVERY_ID_KEY,),
+            ).fetchone()
+            credential_row = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_RECOVERY_CREDENTIAL_KEY,),
+            ).fetchone()
+
+            if recovery_row is None and credential_row is None:
+                return None
+            if recovery_row is None or credential_row is None:
+                raise CredentialProtectionError(
+                    "collector credential recovery state is incomplete"
+                )
+
+            return {
+                "recovery_id": str(recovery_row["value"]),
+                "credential": self._unprotect_credential_value(
+                    str(credential_row["value"])
+                ),
+            }
+        finally:
+            conn.close()
+
+    def begin_credential_recovery(
+        self,
+        recovery_id: str,
+        credential: str,
+    ) -> None:
+        """Persist a protected recovery candidate before the network call."""
+
+        recovery_value = str(recovery_id or "").strip()
+        if not recovery_value:
+            raise ValueError("recovery_id must not be empty")
+
+        encoded = self._protect_credential_value(credential)
+
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            existing_id = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_RECOVERY_ID_KEY,),
+            ).fetchone()
+            existing_credential = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_RECOVERY_CREDENTIAL_KEY,),
+            ).fetchone()
+
+            if existing_id is not None or existing_credential is not None:
+                if existing_id is None or existing_credential is None:
+                    conn.rollback()
+                    raise CredentialProtectionError(
+                        "collector credential recovery state is incomplete"
+                    )
+
+                existing_recovery = str(existing_id["value"])
+                existing_value = self._unprotect_credential_value(
+                    str(existing_credential["value"])
+                )
+                if (
+                    existing_recovery != recovery_value
+                    or existing_value != str(credential)
+                ):
+                    conn.rollback()
+                    raise CredentialProtectionError(
+                        "another collector credential recovery is pending"
+                    )
+                conn.commit()
+                return
+
+            conn.execute(
+                "INSERT INTO collector_state(key, value) VALUES (?, ?)",
+                (
+                    self._PENDING_RECOVERY_ID_KEY,
+                    recovery_value,
+                ),
+            )
+            conn.execute(
+                "INSERT INTO collector_state(key, value) VALUES (?, ?)",
+                (
+                    self._PENDING_RECOVERY_CREDENTIAL_KEY,
+                    encoded,
+                ),
+            )
+            conn.commit()
+        except Exception:
+            if conn.in_transaction:
+                conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def commit_credential_recovery(self, recovery_id: str) -> None:
+        """Promote recovered credential and invalidate stale rotation state."""
+
+        recovery_value = str(recovery_id or "").strip()
+        if not recovery_value:
+            raise ValueError("recovery_id must not be empty")
+
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            recovery_row = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_RECOVERY_ID_KEY,),
+            ).fetchone()
+            credential_row = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_RECOVERY_CREDENTIAL_KEY,),
+            ).fetchone()
+
+            if recovery_row is None or credential_row is None:
+                conn.rollback()
+                raise CredentialProtectionError(
+                    "no complete collector credential recovery is pending"
+                )
+
+            if str(recovery_row["value"]) != recovery_value:
+                conn.rollback()
+                raise CredentialProtectionError(
+                    "pending collector credential recovery_id mismatch"
+                )
+
+            self._unprotect_credential_value(
+                str(credential_row["value"])
+            )
+
+            conn.execute(
+                """
+                INSERT INTO collector_state(key, value)
+                VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+                """,
+                (
+                    self._PROTECTED_CREDENTIAL_KEY,
+                    str(credential_row["value"]),
+                ),
+            )
+            conn.execute(
+                "DELETE FROM collector_state WHERE key = ?",
+                (self._LEGACY_CREDENTIAL_KEY,),
+            )
+            conn.execute(
+                "DELETE FROM collector_state WHERE key IN (?, ?, ?, ?)",
+                (
+                    self._PENDING_RECOVERY_ID_KEY,
+                    self._PENDING_RECOVERY_CREDENTIAL_KEY,
+                    self._PENDING_ROTATION_ID_KEY,
+                    self._PENDING_ROTATION_CREDENTIAL_KEY,
+                ),
+            )
+            conn.commit()
+        except Exception:
+            if conn.in_transaction:
+                conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    _PENDING_ROTATION_ID_KEY = "collector_credential_rotation_pending_id"
+    _PENDING_ROTATION_CREDENTIAL_KEY = (
+        "collector_credential_rotation_pending_protected_v1"
+    )
+
+    def get_pending_credential_rotation(self):
+        """Return the protected pending rotation, if one exists."""
+
+        conn = self._connect()
+        try:
+            rotation_row = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_ROTATION_ID_KEY,),
+            ).fetchone()
+            credential_row = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_ROTATION_CREDENTIAL_KEY,),
+            ).fetchone()
+
+            if rotation_row is None and credential_row is None:
+                return None
+            if rotation_row is None or credential_row is None:
+                raise CredentialProtectionError(
+                    "collector credential rotation state is incomplete"
+                )
+
+            return {
+                "rotation_id": str(rotation_row["value"]),
+                "credential": self._unprotect_credential_value(
+                    str(credential_row["value"])
+                ),
+            }
+        finally:
+            conn.close()
+
+    def begin_credential_rotation(
+        self,
+        rotation_id: str,
+        credential: str,
+    ) -> None:
+        """Persist a protected candidate before any rotation network call."""
+
+        rotation_value = str(rotation_id or "").strip()
+        if not rotation_value:
+            raise ValueError("rotation_id must not be empty")
+
+        encoded = self._protect_credential_value(credential)
+
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            existing_id = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_ROTATION_ID_KEY,),
+            ).fetchone()
+            existing_credential = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_ROTATION_CREDENTIAL_KEY,),
+            ).fetchone()
+
+            if existing_id is not None or existing_credential is not None:
+                if existing_id is None or existing_credential is None:
+                    conn.rollback()
+                    raise CredentialProtectionError(
+                        "collector credential rotation state is incomplete"
+                    )
+
+                existing_rotation = str(existing_id["value"])
+                existing_value = self._unprotect_credential_value(
+                    str(existing_credential["value"])
+                )
+                if (
+                    existing_rotation != rotation_value
+                    or existing_value != str(credential)
+                ):
+                    conn.rollback()
+                    raise CredentialProtectionError(
+                        "another collector credential rotation is pending"
+                    )
+                conn.commit()
+                return
+
+            conn.execute(
+                "INSERT INTO collector_state(key, value) VALUES (?, ?)",
+                (
+                    self._PENDING_ROTATION_ID_KEY,
+                    rotation_value,
+                ),
+            )
+            conn.execute(
+                "INSERT INTO collector_state(key, value) VALUES (?, ?)",
+                (
+                    self._PENDING_ROTATION_CREDENTIAL_KEY,
+                    encoded,
+                ),
+            )
+            conn.commit()
+        except Exception:
+            if conn.in_transaction:
+                conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def commit_credential_rotation(self, rotation_id: str) -> None:
+        """Atomically promote the protected pending credential to current."""
+
+        rotation_value = str(rotation_id or "").strip()
+        if not rotation_value:
+            raise ValueError("rotation_id must not be empty")
+
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            rotation_row = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_ROTATION_ID_KEY,),
+            ).fetchone()
+            credential_row = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_ROTATION_CREDENTIAL_KEY,),
+            ).fetchone()
+
+            if rotation_row is None or credential_row is None:
+                conn.rollback()
+                raise CredentialProtectionError(
+                    "no complete collector credential rotation is pending"
+                )
+
+            if str(rotation_row["value"]) != rotation_value:
+                conn.rollback()
+                raise CredentialProtectionError(
+                    "pending collector credential rotation_id mismatch"
+                )
+
+            self._unprotect_credential_value(
+                str(credential_row["value"])
+            )
+
+            conn.execute(
+                """
+                INSERT INTO collector_state(key, value)
+                VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+                """,
+                (
+                    self._PROTECTED_CREDENTIAL_KEY,
+                    str(credential_row["value"]),
+                ),
+            )
+            conn.execute(
+                "DELETE FROM collector_state WHERE key = ?",
+                (self._LEGACY_CREDENTIAL_KEY,),
+            )
+            conn.execute(
+                "DELETE FROM collector_state WHERE key IN (?, ?)",
+                (
+                    self._PENDING_ROTATION_ID_KEY,
+                    self._PENDING_ROTATION_CREDENTIAL_KEY,
+                ),
+            )
+            conn.commit()
+        except Exception:
+            if conn.in_transaction:
+                conn.rollback()
+            raise
         finally:
             conn.close()
 
