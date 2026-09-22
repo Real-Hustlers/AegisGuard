@@ -14,13 +14,16 @@ from backend.collector.state import CollectorState
 from backend.collector.transport import (
     build_batch_payload,
     build_enrollment_payload,
+    build_recovery_payload,
     build_rotation_payload,
     send_batch,
     send_enrollment,
+    send_recovery,
     send_rotation,
     validate_analyzer_url,
     validate_batch_ack,
     validate_enrollment_response,
+    validate_recovery_response,
     validate_rotation_response,
 )
 
@@ -36,16 +39,21 @@ class DurableCollectorRuntime:
         enrollment_url: str = None,
         enrollment_token: str = None,
         rotation_url: str = None,
+        recovery_url: str = None,
+        recovery_token: str = None,
         auth_required: bool = False,
         collector_version: str = None,
         sender: Callable = send_batch,
         enrollment_sender: Callable = send_enrollment,
         rotation_sender: Callable = send_rotation,
+        recovery_sender: Callable = send_recovery,
         ack_validator: Callable = validate_batch_ack,
         enrollment_validator: Callable = validate_enrollment_response,
         rotation_validator: Callable = validate_rotation_response,
+        recovery_validator: Callable = validate_recovery_response,
         credential_factory: Callable = None,
         rotation_id_factory: Callable = None,
+        recovery_id_factory: Callable = None,
         retry_base_seconds: float = 2.0,
         retry_max_seconds: float = 60.0,
         retry_jitter_ratio: float = 0.2,
@@ -56,6 +64,8 @@ class DurableCollectorRuntime:
             validate_analyzer_url(enrollment_url)
         if rotation_url:
             validate_analyzer_url(rotation_url)
+        if recovery_url:
+            validate_analyzer_url(recovery_url)
 
         retry_base_seconds = float(retry_base_seconds)
         retry_max_seconds = float(retry_max_seconds)
@@ -78,6 +88,8 @@ class DurableCollectorRuntime:
         self.enrollment_url = str(enrollment_url or "").strip() or None
         self.enrollment_token = str(enrollment_token or "").strip() or None
         self.rotation_url = str(rotation_url or "").strip() or None
+        self.recovery_url = str(recovery_url or "").strip() or None
+        self.recovery_token = str(recovery_token or "").strip() or None
         self.auth_required = bool(auth_required)
         self.collector_version = (
             str(collector_version).strip()
@@ -87,11 +99,14 @@ class DurableCollectorRuntime:
         self.sender = sender
         self.enrollment_sender = enrollment_sender
         self.rotation_sender = rotation_sender
+        self.recovery_sender = recovery_sender
         self.ack_validator = ack_validator
         self.enrollment_validator = enrollment_validator
         self.rotation_validator = rotation_validator
+        self.recovery_validator = recovery_validator
         self.credential_factory = credential_factory if credential_factory is not None else lambda: secrets.token_urlsafe(32)
         self.rotation_id_factory = rotation_id_factory if rotation_id_factory is not None else lambda: str(uuid.uuid4())
+        self.recovery_id_factory = recovery_id_factory if recovery_id_factory is not None else lambda: str(uuid.uuid4())
         self.retry_base_seconds = retry_base_seconds
         self.retry_max_seconds = retry_max_seconds
         self.retry_jitter_ratio = retry_jitter_ratio
@@ -116,6 +131,9 @@ class DurableCollectorRuntime:
         ).strip()
         rotation_url = str(
             config.get("collector_rotation_url") or ""
+        ).strip()
+        recovery_url = str(
+            config.get("collector_recovery_url") or ""
         ).strip()
 
         config_path = Path(config_path)
@@ -143,6 +161,10 @@ class DurableCollectorRuntime:
                 "AEGISGUARD_COLLECTOR_ENROLLMENT_TOKEN"
             ),
             rotation_url=rotation_url or None,
+            recovery_url=recovery_url or None,
+            recovery_token=os.environ.get(
+                "AEGISGUARD_COLLECTOR_RECOVERY_TOKEN"
+            ),
             auth_required=auth_required,
             collector_version=config.get("collector_version"),
             retry_base_seconds=float(
@@ -212,6 +234,61 @@ class DurableCollectorRuntime:
         self.state.store_collector_credential(credential)
         self.enrollment_token = None
         return credential
+
+    def recover_credential(self):
+        """Explicitly recover an enrolled credential through recovery trust."""
+
+        if not self.auth_required:
+            raise ValueError(
+                "collector credential recovery requires authenticated mode"
+            )
+        if not self.recovery_url:
+            raise ValueError("collector recovery URL is unavailable")
+        if not self.recovery_token:
+            raise ValueError("collector recovery token is unavailable")
+
+        pending = self.state.get_pending_credential_recovery()
+
+        if pending is None:
+            new_credential = str(
+                self.credential_factory() or ""
+            ).strip()
+            if not new_credential:
+                raise ValueError(
+                    "generated collector credential is empty"
+                )
+
+            recovery_id = str(
+                self.recovery_id_factory() or ""
+            ).strip()
+            if not recovery_id:
+                raise ValueError("generated recovery_id is empty")
+
+            self.state.begin_credential_recovery(
+                recovery_id,
+                new_credential,
+            )
+        else:
+            recovery_id = str(pending["recovery_id"])
+            new_credential = str(pending["credential"])
+
+        payload = build_recovery_payload(
+            self.collector_id,
+            self.hostname,
+            recovery_id,
+            new_credential,
+        )
+        response = self.recovery_sender(
+            self.recovery_url,
+            payload,
+            self.recovery_token,
+            timeout=30,
+            ca_bundle=self.ca_bundle,
+        )
+        body = self.recovery_validator(response, payload)
+        self.state.commit_credential_recovery(recovery_id)
+        self.recovery_token = None
+        return body
 
     def rotate_credential(self):
         """Rotate without lockout if the server response is lost."""

@@ -11,6 +11,7 @@ import requests
 
 COLLECTOR_CREDENTIAL_HEADER = "X-AegisGuard-Collector-Credential"
 ENROLLMENT_TOKEN_HEADER = "X-AegisGuard-Enrollment-Token"
+RECOVERY_TOKEN_HEADER = "X-AegisGuard-Recovery-Token"
 
 
 def _is_loopback_host(hostname: str) -> bool:
@@ -160,6 +161,93 @@ def validate_enrollment_response(response, payload):
     credential = str(body.get("credential") or "").strip()
     if not credential:
         raise ValueError("collector enrollment credential is missing")
+
+    return body
+
+
+def build_recovery_payload(
+    collector_id: str,
+    hostname: str,
+    recovery_id: str,
+    new_credential: str,
+):
+    if not collector_id:
+        raise ValueError("collector_id is required")
+    if not hostname:
+        raise ValueError("hostname is required")
+    if not recovery_id:
+        raise ValueError("recovery_id is required")
+    if not new_credential:
+        raise ValueError("new_credential is required")
+
+    return {
+        "collector_id": str(collector_id),
+        "hostname": str(hostname),
+        "recovery_id": str(recovery_id),
+        "new_credential": str(new_credential),
+    }
+
+
+def send_recovery(
+    recovery_url: str,
+    payload,
+    recovery_token: str,
+    timeout: int = 30,
+    ca_bundle=None,
+    session=None,
+):
+    validate_analyzer_url(recovery_url)
+
+    token = str(recovery_token or "").strip()
+    if not token:
+        raise ValueError("collector recovery token is required")
+
+    body = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+
+    verify = ca_bundle if ca_bundle else True
+    client = session or requests
+    return client.post(
+        recovery_url,
+        data=body.encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            RECOVERY_TOKEN_HEADER: token,
+        },
+        timeout=timeout,
+        verify=verify,
+    )
+
+
+def validate_recovery_response(response, payload):
+    if getattr(response, "status_code", None) != 200:
+        raise ValueError(
+            f"collector credential recovery requires HTTP 200; got "
+            f"{getattr(response, 'status_code', None)}"
+        )
+
+    try:
+        body = response.json()
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "collector credential recovery response must contain JSON"
+        ) from exc
+
+    if not isinstance(body, dict) or body.get("status") != "recovered":
+        raise ValueError(
+            "collector credential recovery status must be recovered"
+        )
+
+    for field in ("collector_id", "hostname", "recovery_id"):
+        expected = str(payload.get(field) or "")
+        if str(body.get(field) or "") != expected:
+            raise ValueError(
+                f"collector credential recovery {field} mismatch"
+            )
 
     return body
 

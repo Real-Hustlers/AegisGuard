@@ -482,6 +482,9 @@ app.register_blueprint(
         enrollment_token=os.environ.get(
             "AEGISGUARD_COLLECTOR_ENROLLMENT_TOKEN"
         ),
+        recovery_token=os.environ.get(
+            "AEGISGUARD_COLLECTOR_RECOVERY_TOKEN"
+        ),
     )
 )
 

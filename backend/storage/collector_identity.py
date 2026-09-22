@@ -37,6 +37,14 @@ class CollectorRotationConflictError(CollectorRotationError):
     """Raised when one rotation_id is reused with different credential data."""
 
 
+class CollectorRecoveryError(CollectorIdentityError):
+    """Raised when a collector credential recovery cannot be completed."""
+
+
+class CollectorRecoveryConflictError(CollectorRecoveryError):
+    """Raised when one recovery_id is reused with different credential data."""
+
+
 def _require(value: str, field_name: str) -> str:
     normalized = str(value or "").strip()
     if not normalized:
@@ -428,6 +436,134 @@ def rotate_collector_credential(
             "status": status,
             "rotation_id": rotation_id,
             "rotated_at": refreshed[0] if refreshed else None,
+            "duplicate": False,
+        }
+    except CollectorIdentityError:
+        raise
+    except Exception:
+        if conn.in_transaction:
+            conn.rollback()
+        raise
+
+
+def recover_collector_credential(
+    conn,
+    collector_id: str,
+    hostname: str,
+    new_credential: str,
+    recovery_id: str,
+) -> Dict[str, Any]:
+    """Recover an enrolled collector credential through an external trust path.
+
+    Authorization for this primitive is enforced by the API's separate
+    recovery token. This function never revives a revoked collector.
+    """
+
+    collector_id = _require(collector_id, "collector_id")
+    hostname = _require(hostname, "hostname")
+    new_credential = _require(new_credential, "new credential")
+    recovery_id = _require(recovery_id, "recovery_id")
+
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            """
+            SELECT hostname, status, credential_fingerprint, revoked_at,
+                   credential_recovery_id, credential_recovered_at
+            FROM collectors
+            WHERE collector_id = ?
+            """,
+            (collector_id,),
+        ).fetchone()
+
+        if row is None:
+            conn.rollback()
+            raise CollectorIdentityError("unknown collector")
+
+        registered_hostname = str(row[0] or "")
+        status = str(row[1] or "").upper()
+        stored_fingerprint = str(row[2] or "")
+        revoked_at = row[3]
+        stored_recovery_id = str(row[4] or "")
+
+        if status == "REVOKED" or revoked_at not in (None, ""):
+            conn.rollback()
+            raise CollectorRevokedError("collector is revoked")
+
+        if status != "ENROLLED":
+            conn.rollback()
+            raise CollectorRecoveryError(
+                f"collector status {status or 'EMPTY'} is not recoverable"
+            )
+
+        if not hmac.compare_digest(registered_hostname, hostname):
+            conn.rollback()
+            raise CollectorIdentityError("collector hostname mismatch")
+
+        new_fingerprint = credential_fingerprint(new_credential)
+
+        if stored_recovery_id == recovery_id:
+            if not hmac.compare_digest(
+                stored_fingerprint,
+                new_fingerprint,
+            ):
+                conn.rollback()
+                raise CollectorRecoveryConflictError(
+                    "recovery_id was already used with different credential data"
+                )
+
+            conn.execute(
+                """
+                UPDATE collectors
+                SET last_seen_at = CURRENT_TIMESTAMP
+                WHERE collector_id = ?
+                """,
+                (collector_id,),
+            )
+            conn.commit()
+            return {
+                "collector_id": collector_id,
+                "hostname": registered_hostname,
+                "status": status,
+                "recovery_id": recovery_id,
+                "recovered_at": row[5],
+                "duplicate": True,
+            }
+
+        conn.execute(
+            """
+            UPDATE collectors
+            SET credential_fingerprint = ?,
+                credential_recovery_id = ?,
+                credential_recovered_at = CURRENT_TIMESTAMP,
+                credential_rotation_id = NULL,
+                credential_rotated_at = NULL,
+                last_seen_at = CURRENT_TIMESTAMP
+            WHERE collector_id = ?
+            """,
+            (
+                new_fingerprint,
+                recovery_id,
+                collector_id,
+            ),
+        )
+        conn.commit()
+
+        refreshed = conn.execute(
+            """
+            SELECT credential_recovered_at
+            FROM collectors
+            WHERE collector_id = ?
+            """,
+            (collector_id,),
+        ).fetchone()
+
+        return {
+            "collector_id": collector_id,
+            "hostname": registered_hostname,
+            "status": status,
+            "recovery_id": recovery_id,
+            "recovered_at": refreshed[0] if refreshed else None,
             "duplicate": False,
         }
     except CollectorIdentityError:

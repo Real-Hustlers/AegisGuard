@@ -4,6 +4,7 @@
   "collector_ingest_url": "http://127.0.0.1:5000/api/collector/v1/batches",
   "collector_enrollment_url": "http://127.0.0.1:5000/api/collector/v1/enroll",
   "collector_rotation_url": "http://127.0.0.1:5000/api/collector/v1/rotate",
+  "collector_recovery_url": "http://127.0.0.1:5000/api/collector/v1/recover",
   "collector_auth_required": true,
   "collector_version": "0.1.0",
   "collector_state_file": "collector_state.db",

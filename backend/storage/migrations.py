@@ -9,7 +9,7 @@ import sqlite3
 from typing import Callable, Iterable, Tuple
 
 
-LATEST_PLATFORM_SCHEMA_VERSION = 3
+LATEST_PLATFORM_SCHEMA_VERSION = 4
 Migration = Tuple[int, str, Callable[[sqlite3.Connection], None]]
 
 
@@ -273,6 +273,23 @@ def _migration_003_collector_credential_rotation(
     )
 
 
+def _migration_004_collector_credential_recovery(
+    conn: sqlite3.Connection,
+) -> None:
+    _add_column_if_missing(
+        conn,
+        "collectors",
+        "credential_recovery_id",
+        "TEXT",
+    )
+    _add_column_if_missing(
+        conn,
+        "collectors",
+        "credential_recovered_at",
+        "TEXT",
+    )
+
+
 MIGRATIONS: Iterable[Migration] = (
     (1, "enterprise_foundation", _migration_001_enterprise_foundation),
     (2, "collector_ingest_queue", _migration_002_collector_ingest_queue),
@@ -280,6 +297,11 @@ MIGRATIONS: Iterable[Migration] = (
         3,
         "collector_credential_rotation",
         _migration_003_collector_credential_rotation,
+    ),
+    (
+        4,
+        "collector_credential_recovery",
+        _migration_004_collector_credential_recovery,
     ),
 )
 

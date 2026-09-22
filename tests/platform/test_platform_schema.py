@@ -114,6 +114,8 @@ class PlatformSchemaTests(unittest.TestCase):
         }
         self.assertIn("credential_rotation_id", collector_columns)
         self.assertIn("credential_rotated_at", collector_columns)
+        self.assertIn("credential_recovery_id", collector_columns)
+        self.assertIn("credential_recovered_at", collector_columns)
 
 
 if __name__ == "__main__":
