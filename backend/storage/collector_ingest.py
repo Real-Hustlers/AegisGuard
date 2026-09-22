@@ -2,7 +2,7 @@
 
 import json
 import sqlite3
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 
 def persist_collector_batch(
@@ -69,3 +69,127 @@ def persist_collector_batch(
     ).fetchone()
     state = str(row[0]) if row else "QUEUED"
     return inserted, state
+
+
+def claim_next_collector_batch(
+    conn: sqlite3.Connection,
+) -> Optional[Dict[str, Any]]:
+    """Atomically claim the oldest queued collector batch.
+
+    ``BEGIN IMMEDIATE`` serializes queue claims so two workers cannot claim
+    the same row. ``attempts`` increments only when a claim succeeds.
+    """
+
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            """
+            SELECT batch_id, collector_id, hostname, peer_ip, payload_json,
+                   event_count, max_record_id, attempts
+            FROM collector_ingest_batches
+            WHERE state = 'QUEUED'
+            ORDER BY received_at, batch_id
+            LIMIT 1
+            """
+        ).fetchone()
+
+        if row is None:
+            conn.commit()
+            return None
+
+        batch_id = str(row[0])
+        cursor = conn.execute(
+            """
+            UPDATE collector_ingest_batches
+            SET state = 'PROCESSING',
+                attempts = attempts + 1,
+                last_error = NULL
+            WHERE batch_id = ? AND state = 'QUEUED'
+            """,
+            (batch_id,),
+        )
+
+        if cursor.rowcount != 1:
+            conn.rollback()
+            return None
+
+        conn.commit()
+        return {
+            "batch_id": batch_id,
+            "collector_id": str(row[1]),
+            "hostname": str(row[2]),
+            "peer_ip": row[3],
+            "payload": json.loads(str(row[4])),
+            "event_count": int(row[5]),
+            "max_record_id": row[6],
+            "attempts": int(row[7]) + 1,
+        }
+    except Exception:
+        if conn.in_transaction:
+            conn.rollback()
+        raise
+
+
+def mark_collector_batch_processed(
+    conn: sqlite3.Connection,
+    batch_id: str,
+) -> bool:
+    """Mark one claimed batch as successfully processed."""
+
+    cursor = conn.execute(
+        """
+        UPDATE collector_ingest_batches
+        SET state = 'PROCESSED',
+            processed_at = CURRENT_TIMESTAMP,
+            last_error = NULL
+        WHERE batch_id = ? AND state = 'PROCESSING'
+        """,
+        (str(batch_id),),
+    )
+    conn.commit()
+    return cursor.rowcount == 1
+
+
+def mark_collector_batch_failed(
+    conn: sqlite3.Connection,
+    batch_id: str,
+    error: str,
+) -> bool:
+    """Mark one claimed batch as failed while preserving its error."""
+
+    cursor = conn.execute(
+        """
+        UPDATE collector_ingest_batches
+        SET state = 'FAILED',
+            processed_at = NULL,
+            last_error = ?
+        WHERE batch_id = ? AND state = 'PROCESSING'
+        """,
+        (str(error), str(batch_id)),
+    )
+    conn.commit()
+    return cursor.rowcount == 1
+
+
+def recover_processing_collector_batches(
+    conn: sqlite3.Connection,
+) -> int:
+    """Requeue batches stranded in PROCESSING after analyzer interruption.
+
+    The analyzer currently runs one durable ingest worker per process. On
+    startup, any PROCESSING row is therefore work that was claimed by the
+    previous analyzer process but never completed. Event insertion remains
+    idempotent at the database layer, so replay after recovery is safe.
+    """
+
+    cursor = conn.execute(
+        """
+        UPDATE collector_ingest_batches
+        SET state = 'QUEUED',
+            processed_at = NULL,
+            last_error = 'recovered after interrupted analyzer processing'
+        WHERE state = 'PROCESSING'
+        """
+    )
+    conn.commit()
+    return int(cursor.rowcount)

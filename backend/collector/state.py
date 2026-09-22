@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+import time
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -37,10 +38,30 @@ class CollectorState:
                     max_record_id INTEGER,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     attempts INTEGER NOT NULL DEFAULT 0,
-                    last_error TEXT
+                    last_error TEXT,
+                    last_attempt_at REAL,
+                    next_attempt_at REAL
                 );
                 """
             )
+
+            # S2B-3 collector-local migration for state databases created by
+            # S2A/S2B-2. This is separate from the analyzer platform schema.
+            columns = {
+                str(row[1])
+                for row in conn.execute(
+                    "PRAGMA table_info(outbound_batches)"
+                ).fetchall()
+            }
+            if "last_attempt_at" not in columns:
+                conn.execute(
+                    "ALTER TABLE outbound_batches ADD COLUMN last_attempt_at REAL"
+                )
+            if "next_attempt_at" not in columns:
+                conn.execute(
+                    "ALTER TABLE outbound_batches ADD COLUMN next_attempt_at REAL"
+                )
+
             conn.commit()
         finally:
             conn.close()
@@ -74,6 +95,53 @@ class CollectorState:
         finally:
             conn.close()
 
+    def initialize_checkpoint(self, record_id: int) -> int:
+        """Persist the first collection baseline without moving it later."""
+
+        checkpoint = int(record_id)
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT value FROM collector_state WHERE key='last_acked_record_id'"
+            ).fetchone()
+            if row is not None:
+                conn.commit()
+                return int(row["value"])
+
+            conn.execute(
+                "INSERT INTO collector_state(key, value) VALUES (?, ?)",
+                ("last_acked_record_id", str(checkpoint)),
+            )
+            conn.commit()
+            return checkpoint
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def get_collection_cursor(self) -> Optional[int]:
+        """Return the highest RecordID durably owned by this collector."""
+
+        conn = self._connect()
+        try:
+            checkpoint_row = conn.execute(
+                "SELECT value FROM collector_state WHERE key='last_acked_record_id'"
+            ).fetchone()
+            pending_row = conn.execute(
+                "SELECT MAX(max_record_id) AS max_record_id FROM outbound_batches"
+            ).fetchone()
+
+            values = []
+            if checkpoint_row is not None:
+                values.append(int(checkpoint_row["value"]))
+            if pending_row is not None and pending_row["max_record_id"] is not None:
+                values.append(int(pending_row["max_record_id"]))
+            return max(values) if values else None
+        finally:
+            conn.close()
+
     def enqueue(self, payload: Dict[str, Any], max_record_id: Optional[int]) -> str:
         batch_id = str(payload.get("batch_id") or "").strip()
         if not batch_id:
@@ -100,9 +168,14 @@ class CollectorState:
         try:
             rows = conn.execute(
                 """
-                SELECT batch_id, payload_json, max_record_id, attempts, last_error
+                SELECT batch_id, payload_json, max_record_id, attempts,
+                       last_error, created_at, last_attempt_at, next_attempt_at
                 FROM outbound_batches
-                ORDER BY created_at, batch_id
+                ORDER BY
+                    CASE WHEN max_record_id IS NULL THEN 1 ELSE 0 END,
+                    max_record_id,
+                    created_at,
+                    batch_id
                 LIMIT ?
                 """,
                 (int(limit),),
@@ -114,28 +187,53 @@ class CollectorState:
                     "max_record_id": row["max_record_id"],
                     "attempts": row["attempts"],
                     "last_error": row["last_error"],
+                    "created_at": row["created_at"],
+                    "last_attempt_at": row["last_attempt_at"],
+                    "next_attempt_at": row["next_attempt_at"],
                 }
                 for row in rows
             ]
         finally:
             conn.close()
 
-    def mark_attempt(self, batch_id: str, error: Optional[str] = None) -> None:
+    def mark_attempt(
+        self,
+        batch_id: str,
+        error: Optional[str] = None,
+        attempted_at: Optional[float] = None,
+        next_attempt_at: Optional[float] = None,
+    ) -> None:
+        attempt_time = time.time() if attempted_at is None else float(attempted_at)
+        next_time = (
+            None
+            if next_attempt_at is None
+            else float(next_attempt_at)
+        )
+
         conn = self._connect()
         try:
             conn.execute(
                 """
                 UPDATE outbound_batches
-                SET attempts = attempts + 1, last_error = ?
+                SET attempts = attempts + 1,
+                    last_error = ?,
+                    last_attempt_at = ?,
+                    next_attempt_at = ?
                 WHERE batch_id = ?
                 """,
-                (error, batch_id),
+                (error, attempt_time, next_time, batch_id),
             )
             conn.commit()
         finally:
             conn.close()
 
-    def acknowledge(self, batch_id: str) -> None:
+    def acknowledge(
+        self,
+        batch_id: str,
+        acknowledged_at: Optional[float] = None,
+    ) -> None:
+        ack_time = time.time() if acknowledged_at is None else float(acknowledged_at)
+
         conn = self._connect()
         try:
             conn.execute("BEGIN IMMEDIATE")
@@ -167,6 +265,14 @@ class CollectorState:
                 )
 
             conn.execute(
+                """
+                INSERT INTO collector_state(key, value)
+                VALUES ('last_successful_ack_at', ?)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+                """,
+                (str(ack_time),),
+            )
+            conn.execute(
                 "DELETE FROM outbound_batches WHERE batch_id = ?",
                 (batch_id,),
             )
@@ -176,3 +282,129 @@ class CollectorState:
             raise
         finally:
             conn.close()
+
+    def transport_health(self, now: Optional[float] = None) -> Dict[str, Any]:
+        """Return a durable collector transport-health snapshot."""
+
+        now_value = time.time() if now is None else float(now)
+        conn = self._connect()
+        try:
+            state_rows = {
+                str(row["key"]): str(row["value"])
+                for row in conn.execute(
+                    """
+                    SELECT key, value
+                    FROM collector_state
+                    WHERE key IN (
+                        'collector_id',
+                        'last_acked_record_id',
+                        'last_successful_ack_at'
+                    )
+                    """
+                ).fetchall()
+            }
+
+            summary = conn.execute(
+                """
+                SELECT
+                    COUNT(*) AS pending_batches,
+                    MIN(strftime('%s', created_at)) AS oldest_created_epoch,
+                    MAX(max_record_id) AS highest_pending_record_id,
+                    SUM(attempts) AS total_attempts
+                FROM outbound_batches
+                """
+            ).fetchone()
+
+            oldest = conn.execute(
+                """
+                SELECT batch_id, attempts, last_error,
+                       last_attempt_at, next_attempt_at
+                FROM outbound_batches
+                ORDER BY
+                    CASE WHEN max_record_id IS NULL THEN 1 ELSE 0 END,
+                    max_record_id,
+                    created_at,
+                    batch_id
+                LIMIT 1
+                """
+            ).fetchone()
+        finally:
+            conn.close()
+
+        pending_batches = int(summary["pending_batches"] or 0)
+        checkpoint = (
+            int(state_rows["last_acked_record_id"])
+            if "last_acked_record_id" in state_rows
+            else None
+        )
+        highest_pending = summary["highest_pending_record_id"]
+
+        cursor_values = []
+        if checkpoint is not None:
+            cursor_values.append(checkpoint)
+        if highest_pending is not None:
+            cursor_values.append(int(highest_pending))
+        collection_cursor = max(cursor_values) if cursor_values else None
+
+        oldest_created = summary["oldest_created_epoch"]
+        oldest_age = None
+        if oldest_created is not None:
+            oldest_age = max(0.0, now_value - float(oldest_created))
+
+        next_attempt_at = (
+            float(oldest["next_attempt_at"])
+            if oldest is not None and oldest["next_attempt_at"] is not None
+            else None
+        )
+        retry_in = (
+            max(0.0, next_attempt_at - now_value)
+            if next_attempt_at is not None
+            else None
+        )
+        last_error = (
+            str(oldest["last_error"])
+            if oldest is not None and oldest["last_error"] not in (None, "")
+            else None
+        )
+
+        if pending_batches == 0:
+            status = "HEALTHY"
+        elif next_attempt_at is not None and next_attempt_at > now_value:
+            status = "RETRY_WAIT"
+        elif last_error:
+            status = "DEGRADED"
+        else:
+            status = "BACKLOG"
+
+        return {
+            "status": status,
+            "collector_id": state_rows.get("collector_id"),
+            "checkpoint": checkpoint,
+            "collection_cursor": collection_cursor,
+            "pending_batches": pending_batches,
+            "oldest_pending_age_seconds": (
+                round(oldest_age, 3) if oldest_age is not None else None
+            ),
+            "oldest_pending_batch_id": (
+                str(oldest["batch_id"]) if oldest is not None else None
+            ),
+            "oldest_pending_attempts": (
+                int(oldest["attempts"]) if oldest is not None else 0
+            ),
+            "total_attempts": int(summary["total_attempts"] or 0),
+            "last_error": last_error,
+            "last_attempt_at": (
+                float(oldest["last_attempt_at"])
+                if oldest is not None and oldest["last_attempt_at"] is not None
+                else None
+            ),
+            "next_attempt_at": next_attempt_at,
+            "retry_in_seconds": (
+                round(retry_in, 3) if retry_in is not None else None
+            ),
+            "last_successful_ack_at": (
+                float(state_rows["last_successful_ack_at"])
+                if "last_successful_ack_at" in state_rows
+                else None
+            ),
+        }

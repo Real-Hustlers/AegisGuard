@@ -465,6 +465,16 @@ try:
 except ImportError:
     from collector_api import create_collector_blueprint
 
+try:
+    from backend.analyzer.ingest_pipeline import process_normalized_collector_logs
+except ImportError:
+    from ingest_pipeline import process_normalized_collector_logs
+
+try:
+    from backend.analyzer.ingest_worker import start_default_ingest_worker_thread
+except ImportError:
+    from ingest_worker import start_default_ingest_worker_thread
+
 app.register_blueprint(create_collector_blueprint(get_connection))
 
 
@@ -565,35 +575,12 @@ def _ingest_live_batch(payload, collector_ip=None):
             "machine": payload.get("machine_id", "UNKNOWN"),
         }), 400
 
-    # This is the HTTP peer address of the Collector, not the source address
-    # inside a Windows event.  It becomes an automatic SOAR protected target.
-    if collector_ip:
-        record_collector_endpoint(machine_id, collector_ip)
-
-    # Avoid ML work for known retries.  The SQLite primary key is still the
-    # authoritative guard if two uploads race each other.
-    existing_ids = get_existing_log_ids(normalized)
-    pending = []
-    pending_ids = set()
-    for log in normalized:
-        identity = build_log_identity(log)
-        if identity in existing_ids or identity in pending_ids:
-            continue
-        pending_ids.add(identity)
-        pending.append(log)
-
     try:
-        classified = classify_records(pending) if pending else []
-        inserted = insert_new_security_logs(classified)
-        # Incident generation is deliberately after the retry-safe insert.
-        # Duplicate Collector uploads therefore cannot create duplicate SOAR
-        # recommendations or response attempts.
-        if inserted:
-            conn = get_connection()
-            try:
-                incident_response.scan_and_generate_incidents(conn)
-            finally:
-                conn.close()
+        result = process_normalized_collector_logs(
+            machine_id,
+            normalized,
+            collector_ip,
+        )
     except Exception as exc:
         debug_print(f"[INGEST] Batch failed for {machine_id}: {exc}")
         return jsonify({
@@ -604,7 +591,7 @@ def _ingest_live_batch(payload, collector_ip=None):
             "logs_received": len(normalized),
         }), 500
 
-    inserted_ids = {log["log_id"] for log in inserted}
+    inserted_ids = set(result["inserted_log_ids"])
     for log in normalized:
         identity = build_log_identity(log)
         debug_print(
@@ -616,13 +603,13 @@ def _ingest_live_batch(payload, collector_ip=None):
     elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
     debug_print(
         f"[INGEST] machine={machine_id} received={len(normalized)} "
-        f"new={len(inserted)} elapsed_ms={elapsed_ms}"
+        f"new={result['new_logs_added']} elapsed_ms={elapsed_ms}"
     )
     return jsonify({
         "status": "success",
         "machine": machine_id,
         "logs_received": len(normalized),
-        "new_logs_added": len(inserted),
+        "new_logs_added": result["new_logs_added"],
         "processing_ms": elapsed_ms,
     }), 200
 
@@ -2125,10 +2112,27 @@ if __name__ == "__main__":
     # persistence.  Do not replay legacy JSON history at startup: it can be
     # large, delays availability, and uses a different historical identity.
 
-    app.run(
-        host="0.0.0.0",
-        port=5000,
-        debug=False,
-        use_reloader=False,
-        threaded=True
+    (
+        _ingest_worker,
+        _ingest_thread,
+        _ingest_stop_event,
+        _recovered_batches,
+    ) = start_default_ingest_worker_thread(
+        get_connection,
     )
+
+    debug_print(
+        f"[INGEST WORKER] started; recovered={_recovered_batches}"
+    )
+
+    try:
+        app.run(
+            host="0.0.0.0",
+            port=5000,
+            debug=False,
+            use_reloader=False,
+            threaded=True
+        )
+    finally:
+        _ingest_stop_event.set()
+        _ingest_thread.join(timeout=5)
