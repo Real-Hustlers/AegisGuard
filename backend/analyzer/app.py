@@ -475,7 +475,15 @@ try:
 except ImportError:
     from ingest_worker import start_default_ingest_worker_thread
 
-app.register_blueprint(create_collector_blueprint(get_connection))
+app.register_blueprint(
+    create_collector_blueprint(
+        get_connection,
+        auth_required=True,
+        enrollment_token=os.environ.get(
+            "AEGISGUARD_COLLECTOR_ENROLLMENT_TOKEN"
+        ),
+    )
+)
 
 
 if warm_up_classifier is not None:

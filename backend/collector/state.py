@@ -85,6 +85,39 @@ class CollectorState:
         finally:
             conn.close()
 
+    def get_collector_credential(self) -> Optional[str]:
+        """Return the locally persisted device credential, if enrolled."""
+
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT value FROM collector_state WHERE key='collector_credential'"
+            ).fetchone()
+            return str(row["value"]) if row else None
+        finally:
+            conn.close()
+
+    def store_collector_credential(self, credential: str) -> None:
+        """Persist the issued collector credential for restart continuity."""
+
+        value = str(credential or "").strip()
+        if not value:
+            raise ValueError("collector credential must not be empty")
+
+        conn = self._connect()
+        try:
+            conn.execute(
+                """
+                INSERT INTO collector_state(key, value)
+                VALUES ('collector_credential', ?)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+                """,
+                (value,),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
     def get_checkpoint(self) -> Optional[int]:
         conn = self._connect()
         try:

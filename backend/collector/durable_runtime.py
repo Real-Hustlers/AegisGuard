@@ -1,11 +1,7 @@
-"""Durable Windows collector runtime.
-
-The live Windows collector writes every parsed batch to local SQLite before
-network delivery. A batch leaves the spool only after the analyzer returns the
-exact durable HTTP 202 acknowledgement for that collector_id and batch_id.
-"""
+"""Durable authenticated Windows collector runtime."""
 
 import hashlib
+import os
 import time
 from pathlib import Path
 from typing import Callable, Optional
@@ -15,15 +11,16 @@ import requests
 from backend.collector.state import CollectorState
 from backend.collector.transport import (
     build_batch_payload,
+    build_enrollment_payload,
     send_batch,
+    send_enrollment,
     validate_analyzer_url,
     validate_batch_ack,
+    validate_enrollment_response,
 )
 
 
 class DurableCollectorRuntime:
-    """Own durable collector identity, retry policy, and ACK checkpointing."""
-
     def __init__(
         self,
         state: CollectorState,
@@ -31,14 +28,22 @@ class DurableCollectorRuntime:
         ca_bundle=None,
         hostname: str = "",
         os_name: str = "",
+        enrollment_url: str = None,
+        enrollment_token: str = None,
+        auth_required: bool = False,
+        collector_version: str = None,
         sender: Callable = send_batch,
+        enrollment_sender: Callable = send_enrollment,
         ack_validator: Callable = validate_batch_ack,
+        enrollment_validator: Callable = validate_enrollment_response,
         retry_base_seconds: float = 2.0,
         retry_max_seconds: float = 60.0,
         retry_jitter_ratio: float = 0.2,
         clock: Callable[[], float] = time.time,
     ):
         validate_analyzer_url(analyzer_url)
+        if enrollment_url:
+            validate_analyzer_url(enrollment_url)
 
         retry_base_seconds = float(retry_base_seconds)
         retry_max_seconds = float(retry_max_seconds)
@@ -58,21 +63,40 @@ class DurableCollectorRuntime:
         self.ca_bundle = ca_bundle
         self.hostname = str(hostname)
         self.os_name = str(os_name)
+        self.enrollment_url = str(enrollment_url or "").strip() or None
+        self.enrollment_token = str(enrollment_token or "").strip() or None
+        self.auth_required = bool(auth_required)
+        self.collector_version = (
+            str(collector_version).strip()
+            if collector_version not in (None, "")
+            else None
+        )
         self.sender = sender
+        self.enrollment_sender = enrollment_sender
         self.ack_validator = ack_validator
+        self.enrollment_validator = enrollment_validator
         self.retry_base_seconds = retry_base_seconds
         self.retry_max_seconds = retry_max_seconds
         self.retry_jitter_ratio = retry_jitter_ratio
         self.clock = clock
         self.collector_id = state.get_or_create_collector_id()
 
+        if self.auth_required and not self.enrollment_url:
+            if not self.state.get_collector_credential():
+                raise ValueError(
+                    "collector_enrollment_url is required before first enrollment"
+                )
+
     @classmethod
     def from_config(cls, config, config_path, hostname: str, os_name: str):
-        """Build the runtime without creating state during module import."""
-
         analyzer_url = str(config.get("collector_ingest_url") or "").strip()
         if not analyzer_url:
             raise ValueError("collector_ingest_url is required")
+
+        auth_required = bool(config.get("collector_auth_required", True))
+        enrollment_url = str(
+            config.get("collector_enrollment_url") or ""
+        ).strip()
 
         config_path = Path(config_path)
         state_path = Path(
@@ -94,6 +118,12 @@ class DurableCollectorRuntime:
             ca_bundle=ca_bundle,
             hostname=hostname,
             os_name=os_name,
+            enrollment_url=enrollment_url or None,
+            enrollment_token=os.environ.get(
+                "AEGISGUARD_COLLECTOR_ENROLLMENT_TOKEN"
+            ),
+            auth_required=auth_required,
+            collector_version=config.get("collector_version"),
             retry_base_seconds=float(
                 config.get("collector_retry_base_seconds", 2.0)
             ),
@@ -110,8 +140,6 @@ class DurableCollectorRuntime:
         explicit_record: Optional[int],
         latest_record_provider: Callable[[], int],
     ) -> int:
-        """Return the restart-safe collection cursor."""
-
         if self.state.get_checkpoint() is None:
             existing_cursor = self.state.get_collection_cursor()
             if explicit_record is not None:
@@ -121,7 +149,6 @@ class DurableCollectorRuntime:
             else:
                 baseline = 0
             self.state.initialize_checkpoint(baseline)
-
         return self.collection_cursor()
 
     def collection_cursor(self) -> int:
@@ -131,9 +158,41 @@ class DurableCollectorRuntime:
     def checkpoint(self):
         return self.state.get_checkpoint()
 
-    def enqueue_logs(self, logs, record_ids) -> Optional[str]:
-        """Durably spool one parsed batch before any network attempt."""
+    def ensure_enrolled(self) -> Optional[str]:
+        if not self.auth_required:
+            return None
 
+        credential = self.state.get_collector_credential()
+        if credential:
+            return credential
+
+        if not self.enrollment_url:
+            raise ValueError("collector enrollment URL is unavailable")
+        if not self.enrollment_token:
+            raise ValueError(
+                "collector is not enrolled and bootstrap token is unavailable"
+            )
+
+        payload = build_enrollment_payload(
+            self.collector_id,
+            self.hostname,
+            self.os_name,
+            version=self.collector_version,
+        )
+        response = self.enrollment_sender(
+            self.enrollment_url,
+            payload,
+            self.enrollment_token,
+            timeout=30,
+            ca_bundle=self.ca_bundle,
+        )
+        body = self.enrollment_validator(response, payload)
+        credential = str(body["credential"]).strip()
+        self.state.store_collector_credential(credential)
+        self.enrollment_token = None
+        return credential
+
+    def enqueue_logs(self, logs, record_ids) -> Optional[str]:
         if not logs:
             return None
 
@@ -150,8 +209,6 @@ class DurableCollectorRuntime:
         return self.state.enqueue(payload, max(ids))
 
     def retry_delay_seconds(self, batch_id: str, attempts: int) -> float:
-        """Return deterministic capped exponential backoff with jitter."""
-
         attempt_number = max(1, int(attempts))
         exponent = attempt_number - 1
         uncapped = self.retry_base_seconds * (2 ** exponent)
@@ -174,6 +231,8 @@ class DurableCollectorRuntime:
         snapshot = self.state.transport_health(now=self.clock())
         snapshot.update({
             "analyzer_url": self.analyzer_url,
+            "auth_required": self.auth_required,
+            "enrolled": bool(self.state.get_collector_credential()),
             "retry_base_seconds": self.retry_base_seconds,
             "retry_max_seconds": self.retry_max_seconds,
             "retry_jitter_ratio": self.retry_jitter_ratio,
@@ -181,8 +240,6 @@ class DurableCollectorRuntime:
         return snapshot
 
     def flush_pending(self, limit: int = 20) -> bool:
-        """Drain due batches in RecordID order; defer retries until scheduled."""
-
         if int(limit) < 1:
             raise ValueError("limit must be at least 1")
 
@@ -210,11 +267,13 @@ class DurableCollectorRuntime:
                     return False
 
                 try:
+                    credential = self.ensure_enrolled()
                     response = self.sender(
                         self.analyzer_url,
                         payload,
                         timeout=30,
                         ca_bundle=self.ca_bundle,
+                        credential=credential,
                     )
                     self.ack_validator(response, payload)
                 except (
