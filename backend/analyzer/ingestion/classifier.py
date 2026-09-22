@@ -419,7 +419,7 @@ def _build_feature_vector(
                 0
             ),
 
-        "LOGON_SUCCESS":
+        "SUCCESSFUL_LOGIN":
             counts.get(
                 "LOGON_SUCCESS",
                 0
