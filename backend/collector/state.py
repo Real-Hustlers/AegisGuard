@@ -1,5 +1,6 @@
 """Durable local collector spool and checkpoint storage."""
 
+import base64
 import json
 import sqlite3
 import time
@@ -7,11 +8,21 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from backend.collector.credential_store import (
+    CredentialProtectionError,
+    default_credential_protector,
+)
+
 
 class CollectorState:
-    def __init__(self, path):
+    def __init__(self, path, credential_protector=None):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.credential_protector = (
+            credential_protector
+            if credential_protector is not None
+            else default_credential_protector()
+        )
         self._ensure_schema()
 
     def _connect(self):
@@ -85,36 +96,133 @@ class CollectorState:
         finally:
             conn.close()
 
-    def get_collector_credential(self) -> Optional[str]:
-        """Return the locally persisted device credential, if enrolled."""
+    _PROTECTED_CREDENTIAL_KEY = "collector_credential_protected_v1"
+    _LEGACY_CREDENTIAL_KEY = "collector_credential"
 
-        conn = self._connect()
-        try:
-            row = conn.execute(
-                "SELECT value FROM collector_state WHERE key='collector_credential'"
-            ).fetchone()
-            return str(row["value"]) if row else None
-        finally:
-            conn.close()
-
-    def store_collector_credential(self, credential: str) -> None:
-        """Persist the issued collector credential for restart continuity."""
-
+    def _protect_credential_value(self, credential: str) -> str:
         value = str(credential or "").strip()
         if not value:
             raise ValueError("collector credential must not be empty")
 
+        protected = self.credential_protector.protect(
+            value.encode("utf-8")
+        )
+        if not protected:
+            raise CredentialProtectionError(
+                "credential protector returned an empty value"
+            )
+        return base64.b64encode(protected).decode("ascii")
+
+    def _unprotect_credential_value(self, encoded: str) -> str:
+        try:
+            protected = base64.b64decode(
+                str(encoded).encode("ascii"),
+                validate=True,
+            )
+        except Exception as exc:
+            raise CredentialProtectionError(
+                "protected collector credential is not valid Base64"
+            ) from exc
+
+        plaintext = self.credential_protector.unprotect(protected)
+        try:
+            value = plaintext.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise CredentialProtectionError(
+                "protected collector credential is not valid UTF-8"
+            ) from exc
+
+        if not value:
+            raise CredentialProtectionError(
+                "protected collector credential is empty"
+            )
+        return value
+
+    def get_collector_credential(self) -> Optional[str]:
+        """Return the protected device credential, migrating S3-1 plaintext."""
+
         conn = self._connect()
         try:
+            protected_row = conn.execute(
+                """
+                SELECT value
+                FROM collector_state
+                WHERE key = ?
+                """,
+                (self._PROTECTED_CREDENTIAL_KEY,),
+            ).fetchone()
+
+            if protected_row is not None:
+                value = self._unprotect_credential_value(
+                    str(protected_row["value"])
+                )
+                conn.execute(
+                    "DELETE FROM collector_state WHERE key = ?",
+                    (self._LEGACY_CREDENTIAL_KEY,),
+                )
+                conn.commit()
+                return value
+
+            legacy_row = conn.execute(
+                """
+                SELECT value
+                FROM collector_state
+                WHERE key = ?
+                """,
+                (self._LEGACY_CREDENTIAL_KEY,),
+            ).fetchone()
+            if legacy_row is None:
+                return None
+
+            legacy_value = str(legacy_row["value"])
+            encoded = self._protect_credential_value(legacy_value)
+
+            conn.execute("BEGIN IMMEDIATE")
             conn.execute(
                 """
                 INSERT INTO collector_state(key, value)
-                VALUES ('collector_credential', ?)
+                VALUES (?, ?)
                 ON CONFLICT(key) DO UPDATE SET value=excluded.value
                 """,
-                (value,),
+                (self._PROTECTED_CREDENTIAL_KEY, encoded),
+            )
+            conn.execute(
+                "DELETE FROM collector_state WHERE key = ?",
+                (self._LEGACY_CREDENTIAL_KEY,),
             )
             conn.commit()
+            return legacy_value
+        except Exception:
+            if conn.in_transaction:
+                conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def store_collector_credential(self, credential: str) -> None:
+        """Protect and persist the device credential for restart continuity."""
+
+        encoded = self._protect_credential_value(credential)
+
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                """
+                INSERT INTO collector_state(key, value)
+                VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+                """,
+                (self._PROTECTED_CREDENTIAL_KEY, encoded),
+            )
+            conn.execute(
+                "DELETE FROM collector_state WHERE key = ?",
+                (self._LEGACY_CREDENTIAL_KEY,),
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
         finally:
             conn.close()
 

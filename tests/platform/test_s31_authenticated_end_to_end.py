@@ -24,6 +24,19 @@ from backend.storage.collector_identity import (
 from backend.storage.migrations import ensure_platform_schema
 
 
+class _TestProtector:
+    PREFIX = b"TEST-PROTECTED:"
+
+    def protect(self, plaintext: bytes) -> bytes:
+        return self.PREFIX + bytes(plaintext)[::-1]
+
+    def unprotect(self, protected: bytes) -> bytes:
+        value = bytes(protected)
+        if not value.startswith(self.PREFIX):
+            raise ValueError("invalid test credential")
+        return value[len(self.PREFIX):][::-1]
+
+
 class _ResponseAdapter:
     def __init__(self, response):
         self._response = response
@@ -217,7 +230,7 @@ class S31AuthenticatedCollectorEndToEndTests(unittest.TestCase):
             conn.close()
 
     def test_enroll_deliver_restart_reuse_and_revocation_fail_closed(self):
-        collector_state = CollectorState(self.collector_db)
+        collector_state = CollectorState(self.collector_db, credential_protector=_TestProtector())
         collector_state.initialize_checkpoint(100)
 
         runtime = self.make_runtime(
@@ -302,7 +315,7 @@ class S31AuthenticatedCollectorEndToEndTests(unittest.TestCase):
 
         # 3. A restart must reuse the durable credential and must not require
         # or repeat bootstrap enrollment.
-        restarted_state = CollectorState(self.collector_db)
+        restarted_state = CollectorState(self.collector_db, credential_protector=_TestProtector())
         restarted = self.make_runtime(
             restarted_state,
             enrollment_token=None,

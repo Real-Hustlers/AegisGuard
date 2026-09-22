@@ -17,6 +17,19 @@ from backend.collector.transport import (
 )
 
 
+class _TestProtector:
+    PREFIX = b"TEST-PROTECTED:"
+
+    def protect(self, plaintext: bytes) -> bytes:
+        return self.PREFIX + bytes(plaintext)[::-1]
+
+    def unprotect(self, protected: bytes) -> bytes:
+        value = bytes(protected)
+        if not value.startswith(self.PREFIX):
+            raise ValueError("invalid test credential")
+        return value[len(self.PREFIX):][::-1]
+
+
 class _Clock:
     def __init__(self, value=1000.0):
         self.value = float(value)
@@ -53,11 +66,11 @@ class AuthenticatedCollectorRuntimeTests(unittest.TestCase):
     def test_collector_credential_persists_but_is_not_exposed_by_health(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "collector-state.db"
-            state = CollectorState(path)
+            state = CollectorState(path, credential_protector=_TestProtector())
             self.assertIsNone(state.get_collector_credential())
             state.store_collector_credential("device-secret-001")
 
-            reopened = CollectorState(path)
+            reopened = CollectorState(path, credential_protector=_TestProtector())
             self.assertEqual(
                 reopened.get_collector_credential(),
                 "device-secret-001",
@@ -124,7 +137,7 @@ class AuthenticatedCollectorRuntimeTests(unittest.TestCase):
 
     def test_first_delivery_enrolls_once_and_authenticates(self):
         with tempfile.TemporaryDirectory() as tmp:
-            state = CollectorState(Path(tmp) / "collector-state.db")
+            state = CollectorState(Path(tmp) / "collector-state.db", credential_protector=_TestProtector())
             state.initialize_checkpoint(100)
             enrollment_calls = []
             batch_credentials = []
@@ -170,7 +183,7 @@ class AuthenticatedCollectorRuntimeTests(unittest.TestCase):
     def test_restart_reuses_stored_credential_without_bootstrap_token(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "collector-state.db"
-            state = CollectorState(path)
+            state = CollectorState(path, credential_protector=_TestProtector())
             state.initialize_checkpoint(100)
             state.store_collector_credential("device-secret-001")
             sent_credentials = []
@@ -183,7 +196,7 @@ class AuthenticatedCollectorRuntimeTests(unittest.TestCase):
                 return self.accepted_response(payload)
 
             runtime = DurableCollectorRuntime(
-                CollectorState(path),
+                CollectorState(path, credential_protector=_TestProtector()),
                 "https://siem.example.test/api/collector/v1/batches",
                 hostname="HOST01",
                 os_name="Windows-11",
@@ -205,7 +218,7 @@ class AuthenticatedCollectorRuntimeTests(unittest.TestCase):
 
     def test_missing_bootstrap_token_keeps_batch_durable_and_backs_off(self):
         with tempfile.TemporaryDirectory() as tmp:
-            state = CollectorState(Path(tmp) / "collector-state.db")
+            state = CollectorState(Path(tmp) / "collector-state.db", credential_protector=_TestProtector())
             state.initialize_checkpoint(100)
             clock = _Clock()
 
