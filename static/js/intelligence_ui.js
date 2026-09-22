@@ -10,7 +10,9 @@
         dashboard: {},
         alerts: [],
         events: [],
-        incidents: []
+        incidents: [],
+        legacyMlTelemetry: {},
+        snapshotAuthoritative: false
     };
 
     function asArray(value) {
@@ -333,6 +335,7 @@
     }
 
     function renderDashboard(dashboard, alerts, events) {
+        if (state.snapshotAuthoritative) return;
         state.dashboard = asObject(dashboard);
         state.alerts = asArray(alerts);
         state.events = asArray(events);
@@ -340,12 +343,74 @@
     }
 
     function renderIncidents(incidents) {
+        if (state.snapshotAuthoritative) return;
         state.incidents = asArray(incidents);
         renderAll();
     }
 
+
+    function renderSnapshot(snapshot) {
+        const payload = asObject(snapshot);
+        const findings = asObject(payload.findings);
+        const telemetry = asObject(payload.legacy_ml_telemetry);
+        const predictions = asArray(telemetry.predictions);
+
+        state.snapshotAuthoritative = true;
+        state.legacyMlTelemetry = telemetry;
+        state.dashboard = {
+            ml_summary: {
+                prediction: predictions.length ? predictions[0].prediction : 'UNKNOWN',
+                confidence: telemetry.average_confidence,
+                count: telemetry.sample_count
+            }
+        };
+        state.alerts = [
+            ...asArray(findings.rule),
+            ...asArray(findings.ml),
+            ...asArray(findings.correlation)
+        ];
+        state.events = [];
+        state.incidents = asArray(payload.attack_stories);
+
+        renderAll();
+
+        const status = document.getElementById('intelDataStatus');
+        const scope = asObject(payload.scope);
+        if (status) {
+            status.textContent = scope.truncated
+                ? `SNAPSHOT ${scope.events_analyzed || 0}/${scope.total_events || 0}`
+                : 'READ-ONLY SNAPSHOT';
+            status.className = 'badge badge-live';
+        }
+
+        const mlContainer = document.getElementById('intelMlTelemetry');
+        if (mlContainer && telemetry.limitation) {
+            mlContainer.insertAdjacentHTML(
+                'beforeend',
+                `<div class="ag-intel-note"><strong>Legacy persisted ML telemetry:</strong> ${escapeHtml(telemetry.limitation)} Model identity available: ${telemetry.model_identity_available ? 'yes' : 'no'}.</div>`
+            );
+        }
+    }
+
+    function renderError(error) {
+        const status = document.getElementById('intelDataStatus');
+        if (!status) return;
+
+        status.textContent = state.snapshotAuthoritative
+            ? 'SNAPSHOT STALE'
+            : 'SNAPSHOT DEGRADED';
+        status.className = 'badge badge-high';
+        status.title = String(
+            (error && error.message)
+            || error
+            || 'Intelligence snapshot unavailable'
+        );
+    }
+
     window.AegisIntelligenceUI = {
         renderDashboard,
-        renderIncidents
+        renderIncidents,
+        renderSnapshot,
+        renderError
     };
 })();
