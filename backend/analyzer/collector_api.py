@@ -29,6 +29,9 @@ from backend.storage.collector_identity import (
     CollectorRotationError,
     CollectorRecoveryConflictError,
     CollectorRecoveryError,
+    CollectorCertificateRotationConflictError,
+    CollectorCertificateRotationError,
+    stage_collector_certificate_rotation,
 )
 from backend.storage.collector_ingest import persist_collector_batch
 
@@ -253,6 +256,74 @@ def create_collector_blueprint(
             "recovery_id": result["recovery_id"],
             "duplicate": bool(result["duplicate"]),
             "recovered_at": result["recovered_at"],
+        })
+        response.status_code = 200
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        return response
+
+    @blueprint.post("/api/collector/v1/certificate/rotate")
+    def rotate_client_certificate():
+        if not mtls_required:
+            return _json_error("collector mTLS certificate rotation is disabled", 503)
+
+        payload = request.get_json(silent=True) or {}
+        collector_id = str(
+            request.headers.get("X-AegisGuard-Collector-ID") or ""
+        ).strip()
+        presented_credential = str(
+            request.headers.get(COLLECTOR_CREDENTIAL_HEADER) or ""
+        )
+        if not collector_id or not presented_credential:
+            return _json_error("collector authentication failed", 401)
+        if str(payload.get("collector_id") or "").strip() != collector_id:
+            return _json_error("collector_id header/body mismatch", 400)
+
+        try:
+            presented_certificate = resolver()
+        except CollectorIdentityError:
+            return _json_error("collector client certificate verification failed", 401)
+        if not presented_certificate:
+            return _json_error("collector client certificate verification failed", 401)
+
+        conn = connection_factory()
+        try:
+            try:
+                authenticate_collector(
+                    conn,
+                    collector_id,
+                    presented_credential,
+                    hostname=str(payload.get("hostname") or "").strip(),
+                )
+                result = stage_collector_certificate_rotation(
+                    conn,
+                    collector_id,
+                    presented_certificate,
+                    payload.get("new_certificate_fingerprint"),
+                    payload.get("certificate_rotation_id"),
+                )
+            except CollectorRevokedError:
+                return _json_error("collector is revoked", 403)
+            except CollectorCertificateRotationConflictError as exc:
+                return _json_error(str(exc), 409)
+            except CollectorAuthenticationError:
+                return _json_error("collector authentication failed", 401)
+            except CollectorCertificateRotationError as exc:
+                return _json_error(str(exc), 400)
+            except CollectorIdentityError as exc:
+                return _json_error(str(exc), 400)
+        finally:
+            conn.close()
+
+        response = jsonify({
+            "status": "certificate_rotation_staged",
+            "collector_id": result["collector_id"],
+            "certificate_rotation_id": result["rotation_id"],
+            "new_certificate_fingerprint": result["new_certificate_fingerprint"],
+            "duplicate": bool(result["duplicate"]),
+            "completed": bool(result["completed"]),
+            "staged_at": result["staged_at"],
+            "rotated_at": result["rotated_at"],
         })
         response.status_code = 200
         response.headers["Cache-Control"] = "no-store, max-age=0"

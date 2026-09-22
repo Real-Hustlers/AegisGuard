@@ -118,6 +118,10 @@ class PlatformSchemaTests(unittest.TestCase):
         self.assertIn("credential_recovered_at", collector_columns)
         self.assertIn("certificate_fingerprint", collector_columns)
         self.assertIn("certificate_bound_at", collector_columns)
+        self.assertIn("pending_certificate_fingerprint", collector_columns)
+        self.assertIn("certificate_rotation_id", collector_columns)
+        self.assertIn("certificate_rotation_started_at", collector_columns)
+        self.assertIn("certificate_rotated_at", collector_columns)
 
 
 if __name__ == "__main__":
