@@ -137,9 +137,10 @@
         ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #2d3748; }
     </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/aegisguard-enterprise.css') }}">
 </head>
 <body>
-    <aside class="sidebar">
+    <aside class="sidebar" id="primarySidebar" aria-label="AegisGuard primary navigation">
         <div class="brand"><i class="ph ph-shield-check"></i> AEGISGUARD</div>
         <div class="sys-status-small">
             <span><i class="ph ph-wifi-slash"></i> AIR-GAPPED</span>
@@ -150,10 +151,11 @@
             <span class="time" id="dashboard-time">--:--:--</span>
             <span class="date mono" id="dashboard-date" style="font-size: 12px; margin-left: 5px;">--- -- ----</span>
         </div>
-        <ul class="nav-menu">
+        <ul class="nav-menu" aria-label="Security workspaces">
             <li class="nav-item active" data-target="view-dashboard"><i class="ph ph-squares-four"></i> Dashboard</li>
             <li class="nav-item" data-target="view-logs"><i class="ph ph-terminal-window"></i> Event Logs<span id="navEventsBadge" class="nav-badge">0</span></li>
             <li class="nav-item" data-target="view-threats"><i class="ph ph-warning"></i> Threats <span id="navThreatsBadge" class="nav-badge" style="border: 1px solid var(--border-color)">0</span></li>
+            <li class="nav-item" data-target="view-intelligence"><i class="ph ph-brain"></i> Intelligence</li>
             <li class="nav-item" data-target="view-incident-response"><i class="ph ph-shield-warning"></i> Incident Response<span id="irBadge" class="nav-badge" style="background: var(--red-dim); border: 1px solid var(--red);">0</span></li>
             <li class="nav-item" data-target="view-devices"><i class="ph ph-hard-drives"></i> Devices</li>
             <li class="nav-item" data-target="view-settings"><i class="ph ph-gear"></i> Settings</li>
@@ -161,7 +163,7 @@
         <div class="sidebar-footer">VERSION 1.0.0-BETA<br>SIH25235 • Real Hustlers</div>
     </aside>
 
-    <main class="main-content">
+    <main class="main-content" id="mainContent">
         <header class="topbar">
             <div class="breadcrumbs"><span>AEGISGUARD</span> > <span class="current" id="breadcrumb-current">SECURITY OVERVIEW</span></div>
             <div class="topbar-actions">
@@ -250,6 +252,81 @@
                 <div id="threatPanelTitle" class="panel-title" style="margin-bottom:15px;">Critical & High Severity Events (0)</div>
                 <div id="threatList">
                     <!-- Filled dynamically from /api/alerts -->
+                </div>
+            </div>
+        </section>
+
+        <section id="view-intelligence" class="view-section">
+            <div class="ag-intel-heading">
+                <div>
+                    <div class="ag-intel-eyebrow">DETECTION INTELLIGENCE</div>
+                    <h2>Security Intelligence Workspace</h2>
+                    <div class="panel-subtitle">Read-only presentation of detection, ML, MITRE ATT&amp;CK, and multi-stage attack context.</div>
+                </div>
+                <span id="intelDataStatus" class="badge badge-info" role="status" aria-live="polite">WAITING FOR DATA</span>
+            </div>
+
+            <div class="ag-intel-kpis" aria-label="Intelligence summary">
+                <div class="ag-intel-kpi">
+                    <div class="ag-intel-kpi-label">Rule Findings</div>
+                    <div id="intelRuleCount" class="ag-intel-kpi-value">0</div>
+                    <div class="ag-intel-kpi-help">Structured RULE findings exposed to the UI</div>
+                </div>
+                <div class="ag-intel-kpi">
+                    <div class="ag-intel-kpi-label">ML Findings</div>
+                    <div id="intelMlCount" class="ag-intel-kpi-value">0</div>
+                    <div class="ag-intel-kpi-help">Structured ML findings exposed to the UI</div>
+                </div>
+                <div class="ag-intel-kpi">
+                    <div class="ag-intel-kpi-label">Correlation Findings</div>
+                    <div id="intelCorrelationCount" class="ag-intel-kpi-value">0</div>
+                    <div class="ag-intel-kpi-help">Structured correlation findings exposed to the UI</div>
+                </div>
+                <div class="ag-intel-kpi">
+                    <div class="ag-intel-kpi-label">ATT&amp;CK Techniques</div>
+                    <div id="intelMitreCount" class="ag-intel-kpi-value">0</div>
+                    <div class="ag-intel-kpi-help">Unique techniques visible in current API data</div>
+                </div>
+                <div class="ag-intel-kpi">
+                    <div class="ag-intel-kpi-label">Attack Stories</div>
+                    <div id="intelStoryCount" class="ag-intel-kpi-value">0</div>
+                    <div class="ag-intel-kpi-help">Structured multi-stage timelines available</div>
+                </div>
+            </div>
+
+            <div class="ag-intel-grid">
+                <div class="panel ag-intel-panel">
+                    <div class="panel-title">Detection Source Visibility</div>
+                    <div class="panel-subtitle">Rule, ML, and correlation origins are counted only when the API explicitly exposes them.</div>
+                    <div id="intelDetectionMix" class="ag-intel-content">
+                        <div class="ag-intel-empty">Waiting for structured detection-source data.</div>
+                    </div>
+                </div>
+
+                <div class="panel ag-intel-panel">
+                    <div class="panel-title">MITRE ATT&amp;CK Coverage</div>
+                    <div class="panel-subtitle">Techniques are rendered from current alert, incident, and ML summary mappings.</div>
+                    <div id="intelMitreCoverage" class="ag-intel-content">
+                        <div class="ag-intel-empty">No ATT&amp;CK technique data available yet.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ag-intel-grid">
+                <div class="panel ag-intel-panel">
+                    <div class="panel-title">ML Intelligence</div>
+                    <div class="panel-subtitle">Current classifier summary from the existing dashboard contract.</div>
+                    <div id="intelMlTelemetry" class="ag-intel-content">
+                        <div class="ag-intel-empty">Waiting for ML telemetry.</div>
+                    </div>
+                </div>
+
+                <div class="panel ag-intel-panel">
+                    <div class="panel-title">Multi-stage Attack Story</div>
+                    <div class="panel-subtitle">Chronological attack stages are shown only when structured story metadata is present.</div>
+                    <div id="intelAttackStory" class="ag-intel-content">
+                        <div class="ag-intel-empty">No structured attack-story timeline is exposed by the current incident API.</div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -435,6 +512,8 @@
     <script src="{{ url_for('static', filename='js/icons.js') }}"></script>
     <script src="{{ url_for('static', filename='js/chart.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/frontend_shell.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/intelligence_ui.js') }}"></script>
     <script>
         const navItems = document.querySelectorAll('.nav-item');
         const views = document.querySelectorAll('.view-section');
