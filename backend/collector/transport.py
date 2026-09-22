@@ -256,6 +256,131 @@ def validate_recovery_response(response, payload):
     return body
 
 
+def certificate_fingerprint_from_client_cert(client_cert) -> str:
+    import hashlib
+    import ssl
+    from pathlib import Path
+
+    certificate_path = (
+        client_cert[0]
+        if isinstance(client_cert, (tuple, list))
+        else client_cert
+    )
+    path = Path(str(certificate_path or ""))
+    if not str(path):
+        raise ValueError("client certificate path is required")
+
+    pem = path.read_text(encoding="utf-8")
+    try:
+        der = ssl.PEM_cert_to_DER_cert(pem)
+    except Exception as exc:
+        raise ValueError("client certificate PEM is invalid") from exc
+    return hashlib.sha256(der).hexdigest()
+
+
+def build_certificate_rotation_payload(
+    collector_id: str,
+    hostname: str,
+    rotation_id: str,
+    new_certificate_fingerprint: str,
+):
+    if not collector_id:
+        raise ValueError("collector_id is required")
+    if not hostname:
+        raise ValueError("hostname is required")
+    if not rotation_id:
+        raise ValueError("certificate rotation_id is required")
+
+    fingerprint = str(new_certificate_fingerprint or "").strip().lower()
+    if not fingerprint:
+        raise ValueError("new certificate fingerprint is required")
+
+    return {
+        "collector_id": str(collector_id),
+        "hostname": str(hostname),
+        "certificate_rotation_id": str(rotation_id),
+        "new_certificate_fingerprint": fingerprint,
+    }
+
+
+def send_certificate_rotation(
+    rotation_url: str,
+    payload,
+    credential: str,
+    timeout: int = 30,
+    ca_bundle=None,
+    session=None,
+    client_cert=None,
+):
+    validate_analyzer_url(rotation_url)
+
+    current = str(credential or "").strip()
+    if not current:
+        raise ValueError("current collector credential is required")
+
+    body = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    verify = ca_bundle if ca_bundle else True
+    client = session or requests
+    return client.post(
+        rotation_url,
+        data=body.encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "X-AegisGuard-Collector-ID": payload["collector_id"],
+            COLLECTOR_CREDENTIAL_HEADER: current,
+        },
+        timeout=timeout,
+        verify=verify,
+        cert=client_cert,
+    )
+
+
+def validate_certificate_rotation_response(response, payload):
+    if getattr(response, "status_code", None) != 200:
+        raise ValueError(
+            f"collector certificate rotation requires HTTP 200; got "
+            f"{getattr(response, 'status_code', None)}"
+        )
+
+    try:
+        body = response.json()
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "collector certificate rotation response must contain JSON"
+        ) from exc
+
+    if (
+        not isinstance(body, dict)
+        or body.get("status") != "certificate_rotation_staged"
+    ):
+        raise ValueError(
+            "collector certificate rotation status must be certificate_rotation_staged"
+        )
+
+    expected = {
+        "collector_id": str(payload.get("collector_id") or ""),
+        "certificate_rotation_id": str(
+            payload.get("certificate_rotation_id") or ""
+        ),
+        "new_certificate_fingerprint": str(
+            payload.get("new_certificate_fingerprint") or ""
+        ).lower(),
+    }
+    for field, expected_value in expected.items():
+        actual = str(body.get(field) or "")
+        if actual.lower() != expected_value.lower():
+            raise ValueError(
+                f"collector certificate rotation {field} mismatch"
+            )
+
+    return body
+
+
 def build_rotation_payload(
     collector_id: str,
     hostname: str,

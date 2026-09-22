@@ -5,6 +5,7 @@
   "collector_enrollment_url": "http://127.0.0.1:5000/api/collector/v1/enroll",
   "collector_rotation_url": "http://127.0.0.1:5000/api/collector/v1/rotate",
   "collector_recovery_url": "http://127.0.0.1:5000/api/collector/v1/recover",
+  "collector_certificate_rotation_url": "http://127.0.0.1:5000/api/collector/v1/certificate/rotate",
   "collector_mtls_required": false,
   "collector_client_certificate": null,
   "collector_client_key": null,

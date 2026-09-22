@@ -16,15 +16,19 @@ from backend.collector.transport import (
     build_enrollment_payload,
     build_recovery_payload,
     build_rotation_payload,
+    build_certificate_rotation_payload,
+    certificate_fingerprint_from_client_cert,
     send_batch,
     send_enrollment,
     send_recovery,
     send_rotation,
+    send_certificate_rotation,
     validate_analyzer_url,
     validate_batch_ack,
     validate_enrollment_response,
     validate_recovery_response,
     validate_rotation_response,
+    validate_certificate_rotation_response,
 )
 
 
@@ -41,6 +45,7 @@ class DurableCollectorRuntime:
         rotation_url: str = None,
         recovery_url: str = None,
         recovery_token: str = None,
+        certificate_rotation_url: str = None,
         client_cert=None,
         mtls_required: bool = False,
         auth_required: bool = False,
@@ -49,13 +54,18 @@ class DurableCollectorRuntime:
         enrollment_sender: Callable = send_enrollment,
         rotation_sender: Callable = send_rotation,
         recovery_sender: Callable = send_recovery,
+        certificate_rotation_sender: Callable = send_certificate_rotation,
         ack_validator: Callable = validate_batch_ack,
         enrollment_validator: Callable = validate_enrollment_response,
         rotation_validator: Callable = validate_rotation_response,
         recovery_validator: Callable = validate_recovery_response,
+        certificate_rotation_validator: Callable = (
+            validate_certificate_rotation_response
+        ),
         credential_factory: Callable = None,
         rotation_id_factory: Callable = None,
         recovery_id_factory: Callable = None,
+        certificate_rotation_id_factory: Callable = None,
         retry_base_seconds: float = 2.0,
         retry_max_seconds: float = 60.0,
         retry_jitter_ratio: float = 0.2,
@@ -68,6 +78,8 @@ class DurableCollectorRuntime:
             validate_analyzer_url(rotation_url)
         if recovery_url:
             validate_analyzer_url(recovery_url)
+        if certificate_rotation_url:
+            validate_analyzer_url(certificate_rotation_url)
 
         retry_base_seconds = float(retry_base_seconds)
         retry_max_seconds = float(retry_max_seconds)
@@ -92,6 +104,22 @@ class DurableCollectorRuntime:
         self.rotation_url = str(rotation_url or "").strip() or None
         self.recovery_url = str(recovery_url or "").strip() or None
         self.recovery_token = str(recovery_token or "").strip() or None
+        self.certificate_rotation_url = str(
+            certificate_rotation_url or ""
+        ).strip() or None
+
+        active_certificate = (
+            state.get_active_client_certificate_reference()
+        )
+        if active_certificate:
+            client_cert = active_certificate
+
+        pending_certificate = (
+            state.get_pending_client_certificate_rotation()
+        )
+        if pending_certificate and pending_certificate["staged"]:
+            client_cert = pending_certificate["client_cert"]
+
         self.client_cert = client_cert
         self.mtls_required = bool(mtls_required)
         self.auth_required = bool(auth_required)
@@ -108,13 +136,24 @@ class DurableCollectorRuntime:
         self.enrollment_sender = enrollment_sender
         self.rotation_sender = rotation_sender
         self.recovery_sender = recovery_sender
+        self.certificate_rotation_sender = (
+            certificate_rotation_sender
+        )
         self.ack_validator = ack_validator
         self.enrollment_validator = enrollment_validator
         self.rotation_validator = rotation_validator
         self.recovery_validator = recovery_validator
+        self.certificate_rotation_validator = (
+            certificate_rotation_validator
+        )
         self.credential_factory = credential_factory if credential_factory is not None else lambda: secrets.token_urlsafe(32)
         self.rotation_id_factory = rotation_id_factory if rotation_id_factory is not None else lambda: str(uuid.uuid4())
         self.recovery_id_factory = recovery_id_factory if recovery_id_factory is not None else lambda: str(uuid.uuid4())
+        self.certificate_rotation_id_factory = (
+            certificate_rotation_id_factory
+            if certificate_rotation_id_factory is not None
+            else lambda: str(uuid.uuid4())
+        )
         self.retry_base_seconds = retry_base_seconds
         self.retry_max_seconds = retry_max_seconds
         self.retry_jitter_ratio = retry_jitter_ratio
@@ -142,6 +181,9 @@ class DurableCollectorRuntime:
         ).strip()
         recovery_url = str(
             config.get("collector_recovery_url") or ""
+        ).strip()
+        certificate_rotation_url = str(
+            config.get("collector_certificate_rotation_url") or ""
         ).strip()
 
         config_path = Path(config_path)
@@ -198,6 +240,9 @@ class DurableCollectorRuntime:
             recovery_url=recovery_url or None,
             recovery_token=os.environ.get(
                 "AEGISGUARD_COLLECTOR_RECOVERY_TOKEN"
+            ),
+            certificate_rotation_url=(
+                certificate_rotation_url or None
             ),
             client_cert=client_cert,
             mtls_required=mtls_required,
@@ -324,8 +369,98 @@ class DurableCollectorRuntime:
             client_cert=self.client_cert,
         )
         body = self.recovery_validator(response, payload)
+        self._complete_certificate_transition_after_authenticated_success()
         self.state.commit_credential_recovery(recovery_id)
         self.recovery_token = None
+        return body
+
+    def _complete_certificate_transition_after_authenticated_success(
+        self,
+    ) -> bool:
+        pending = self.state.get_pending_client_certificate_rotation()
+        if not pending or not pending["staged"]:
+            return False
+        if self.client_cert != pending["client_cert"]:
+            return False
+
+        self.state.complete_client_certificate_rotation(
+            pending["rotation_id"]
+        )
+        return True
+
+    def rotate_client_certificate(self, new_client_cert=None):
+        """Stage a replacement certificate without invalidating the old one."""
+
+        if not self.mtls_required:
+            raise ValueError(
+                "client certificate rotation requires mTLS mode"
+            )
+        if not self.certificate_rotation_url:
+            raise ValueError(
+                "collector certificate rotation URL is unavailable"
+            )
+
+        credential = self.ensure_enrolled()
+        pending = self.state.get_pending_client_certificate_rotation()
+
+        if pending is None:
+            if not new_client_cert:
+                raise ValueError(
+                    "new client certificate reference is required"
+                )
+
+            fingerprint = certificate_fingerprint_from_client_cert(
+                new_client_cert
+            )
+            rotation_id = str(
+                self.certificate_rotation_id_factory() or ""
+            ).strip()
+            if not rotation_id:
+                raise ValueError(
+                    "generated certificate rotation_id is empty"
+                )
+
+            self.state.begin_client_certificate_rotation(
+                rotation_id,
+                new_client_cert,
+                fingerprint,
+            )
+            pending = self.state.get_pending_client_certificate_rotation()
+
+        if pending["staged"]:
+            self.client_cert = pending["client_cert"]
+            return {
+                "status": "certificate_rotation_staged",
+                "collector_id": self.collector_id,
+                "certificate_rotation_id": pending["rotation_id"],
+                "new_certificate_fingerprint": pending["fingerprint"],
+                "duplicate": True,
+                "local_resume": True,
+            }
+
+        payload = build_certificate_rotation_payload(
+            self.collector_id,
+            self.hostname,
+            pending["rotation_id"],
+            pending["fingerprint"],
+        )
+        response = self.certificate_rotation_sender(
+            self.certificate_rotation_url,
+            payload,
+            credential=credential,
+            timeout=30,
+            ca_bundle=self.ca_bundle,
+            client_cert=self.client_cert,
+        )
+        body = self.certificate_rotation_validator(
+            response,
+            payload,
+        )
+
+        self.state.mark_client_certificate_rotation_staged(
+            pending["rotation_id"]
+        )
+        self.client_cert = pending["client_cert"]
         return body
 
     def rotate_credential(self):
@@ -398,6 +533,7 @@ class DurableCollectorRuntime:
             )
 
         body = self.rotation_validator(response, payload)
+        self._complete_certificate_transition_after_authenticated_success()
         self.state.commit_credential_rotation(rotation_id)
         return body
 
@@ -443,6 +579,9 @@ class DurableCollectorRuntime:
             "auth_required": self.auth_required,
             "mtls_required": self.mtls_required,
             "mtls_configured": bool(self.client_cert),
+            "certificate_rotation_pending": bool(
+                self.state.get_pending_client_certificate_rotation()
+            ),
             "enrolled": bool(self.state.get_collector_credential()),
             "retry_base_seconds": self.retry_base_seconds,
             "retry_max_seconds": self.retry_max_seconds,
@@ -488,6 +627,7 @@ class DurableCollectorRuntime:
                         client_cert=self.client_cert,
                     )
                     self.ack_validator(response, payload)
+                    self._complete_certificate_transition_after_authenticated_success()
                 except (
                     requests.RequestException,
                     ValueError,

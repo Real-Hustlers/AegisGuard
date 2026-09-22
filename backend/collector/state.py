@@ -566,6 +566,241 @@ class CollectorState:
         finally:
             conn.close()
 
+    _ACTIVE_CLIENT_CERTIFICATE_REF_KEY = (
+        "collector_active_client_certificate_ref_v1"
+    )
+    _PENDING_CLIENT_CERTIFICATE_ROTATION_KEY = (
+        "collector_pending_client_certificate_rotation_v1"
+    )
+
+    @staticmethod
+    def _client_certificate_reference(client_cert):
+        if isinstance(client_cert, (tuple, list)):
+            if len(client_cert) != 2:
+                raise ValueError(
+                    "client certificate tuple must contain certificate and key paths"
+                )
+            certificate = str(client_cert[0] or "").strip()
+            key = str(client_cert[1] or "").strip()
+            if not certificate or not key:
+                raise ValueError(
+                    "client certificate and key paths must not be empty"
+                )
+            return {"certificate": certificate, "key": key}
+
+        certificate = str(client_cert or "").strip()
+        if not certificate:
+            raise ValueError("client certificate path must not be empty")
+        return {"certificate": certificate, "key": None}
+
+    @staticmethod
+    def _client_certificate_from_reference(reference):
+        certificate = str(reference.get("certificate") or "").strip()
+        key = str(reference.get("key") or "").strip()
+        if not certificate:
+            raise ValueError("client certificate reference is incomplete")
+        return (certificate, key) if key else certificate
+
+    def get_active_client_certificate_reference(self):
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._ACTIVE_CLIENT_CERTIFICATE_REF_KEY,),
+            ).fetchone()
+            if row is None:
+                return None
+            return self._client_certificate_from_reference(
+                json.loads(str(row["value"]))
+            )
+        finally:
+            conn.close()
+
+    def get_pending_client_certificate_rotation(self):
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_CLIENT_CERTIFICATE_ROTATION_KEY,),
+            ).fetchone()
+            if row is None:
+                return None
+
+            value = json.loads(str(row["value"]))
+            return {
+                "rotation_id": str(value["rotation_id"]),
+                "fingerprint": str(value["fingerprint"]),
+                "staged": bool(value.get("staged", False)),
+                "client_cert": self._client_certificate_from_reference(
+                    value["client_cert"]
+                ),
+            }
+        finally:
+            conn.close()
+
+    def begin_client_certificate_rotation(
+        self,
+        rotation_id: str,
+        client_cert,
+        fingerprint: str,
+    ) -> None:
+        rotation_value = str(rotation_id or "").strip()
+        fingerprint_value = str(fingerprint or "").strip().lower()
+        if not rotation_value:
+            raise ValueError("certificate rotation_id must not be empty")
+        if not fingerprint_value:
+            raise ValueError("certificate fingerprint must not be empty")
+
+        value = {
+            "rotation_id": rotation_value,
+            "fingerprint": fingerprint_value,
+            "staged": False,
+            "client_cert": self._client_certificate_reference(client_cert),
+        }
+
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_CLIENT_CERTIFICATE_ROTATION_KEY,),
+            ).fetchone()
+
+            if row is not None:
+                existing = json.loads(str(row["value"]))
+                if existing != value:
+                    conn.rollback()
+                    raise ValueError(
+                        "another client certificate rotation is pending"
+                    )
+                conn.commit()
+                return
+
+            conn.execute(
+                "INSERT INTO collector_state(key, value) VALUES (?, ?)",
+                (
+                    self._PENDING_CLIENT_CERTIFICATE_ROTATION_KEY,
+                    json.dumps(
+                        value,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ),
+                ),
+            )
+            conn.commit()
+        except Exception:
+            if conn.in_transaction:
+                conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def mark_client_certificate_rotation_staged(
+        self,
+        rotation_id: str,
+    ) -> None:
+        rotation_value = str(rotation_id or "").strip()
+        if not rotation_value:
+            raise ValueError("certificate rotation_id must not be empty")
+
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_CLIENT_CERTIFICATE_ROTATION_KEY,),
+            ).fetchone()
+            if row is None:
+                conn.rollback()
+                raise ValueError(
+                    "no client certificate rotation is pending"
+                )
+
+            value = json.loads(str(row["value"]))
+            if str(value.get("rotation_id") or "") != rotation_value:
+                conn.rollback()
+                raise ValueError(
+                    "pending client certificate rotation_id mismatch"
+                )
+
+            value["staged"] = True
+            conn.execute(
+                "UPDATE collector_state SET value = ? WHERE key = ?",
+                (
+                    json.dumps(
+                        value,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ),
+                    self._PENDING_CLIENT_CERTIFICATE_ROTATION_KEY,
+                ),
+            )
+            conn.commit()
+        except Exception:
+            if conn.in_transaction:
+                conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def complete_client_certificate_rotation(
+        self,
+        rotation_id: str,
+    ) -> None:
+        rotation_value = str(rotation_id or "").strip()
+        if not rotation_value:
+            raise ValueError("certificate rotation_id must not be empty")
+
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT value FROM collector_state WHERE key = ?",
+                (self._PENDING_CLIENT_CERTIFICATE_ROTATION_KEY,),
+            ).fetchone()
+            if row is None:
+                conn.commit()
+                return
+
+            value = json.loads(str(row["value"]))
+            if str(value.get("rotation_id") or "") != rotation_value:
+                conn.rollback()
+                raise ValueError(
+                    "pending client certificate rotation_id mismatch"
+                )
+            if not bool(value.get("staged", False)):
+                conn.rollback()
+                raise ValueError(
+                    "client certificate rotation is not staged"
+                )
+
+            conn.execute(
+                """
+                INSERT INTO collector_state(key, value)
+                VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+                """,
+                (
+                    self._ACTIVE_CLIENT_CERTIFICATE_REF_KEY,
+                    json.dumps(
+                        value["client_cert"],
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ),
+                ),
+            )
+            conn.execute(
+                "DELETE FROM collector_state WHERE key = ?",
+                (self._PENDING_CLIENT_CERTIFICATE_ROTATION_KEY,),
+            )
+            conn.commit()
+        except Exception:
+            if conn.in_transaction:
+                conn.rollback()
+            raise
+        finally:
+            conn.close()
+
     def get_checkpoint(self) -> Optional[int]:
         conn = self._connect()
         try:
