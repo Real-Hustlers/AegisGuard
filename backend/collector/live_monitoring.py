@@ -26,6 +26,83 @@ UPLOAD_RETRIES = 3
 RETRY_DELAY = 2
 
 
+def get_heartbeat_interval_seconds(config=None):
+    source = CONFIG if config is None else config
+    value = source.get(
+        "collector_heartbeat_interval_seconds",
+        30,
+    )
+    try:
+        interval = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "collector_heartbeat_interval_seconds must be numeric"
+        ) from exc
+    if interval <= 0:
+        raise ValueError(
+            "collector_heartbeat_interval_seconds must be greater than zero"
+        )
+    return interval
+
+
+def _heartbeat_enabled(runtime):
+    heartbeat_url = getattr(runtime, "heartbeat_url", None)
+    return (
+        getattr(runtime, "auth_required", False) is True
+        and isinstance(heartbeat_url, str)
+        and bool(heartbeat_url.strip())
+    )
+
+
+def maybe_send_heartbeat(
+    runtime,
+    next_heartbeat_at,
+    interval_seconds,
+    *,
+    now=None,
+):
+    """Attempt one scheduled heartbeat without owning durable log state."""
+
+    if not _heartbeat_enabled(runtime):
+        return next_heartbeat_at, False
+
+    now_value = (
+        time.monotonic()
+        if now is None
+        else float(now)
+    )
+    due_at = (
+        0.0
+        if next_heartbeat_at is None
+        else float(next_heartbeat_at)
+    )
+    if now_value < due_at:
+        return due_at, False
+
+    next_due = now_value + float(interval_seconds)
+
+    try:
+        body = runtime.heartbeat()
+    except (
+        requests.RequestException,
+        ValueError,
+        KeyError,
+        TypeError,
+    ) as exc:
+        print(
+            "[HEARTBEAT FAILED] "
+            f"{exc}. Collection and durable delivery continue."
+        )
+        return next_due, False
+
+    print(
+        "[HEARTBEAT OK] "
+        f"collector={body.get('collector_id', runtime.collector_id)} "
+        f"last_heartbeat_at={body.get('last_heartbeat_at')}"
+    )
+    return next_due, True
+
+
 # ============================================================
 # SEND BATCH OF LOGS TO ANALYZER
 # ============================================================
@@ -503,6 +580,9 @@ def start_live_monitor(
         runtime.checkpoint()
     )
 
+    heartbeat_interval = get_heartbeat_interval_seconds()
+    next_heartbeat_at = 0.0
+
     # --------------------------------------------------------
     # Continuous monitoring loop
     # --------------------------------------------------------
@@ -533,6 +613,12 @@ def start_live_monitor(
 
             runtime.flush_pending()
             last_record = runtime.collection_cursor()
+
+            next_heartbeat_at, _heartbeat_sent = maybe_send_heartbeat(
+                runtime,
+                next_heartbeat_at,
+                heartbeat_interval,
+            )
 
             time.sleep(
                 2
@@ -693,6 +779,12 @@ def start_live_monitor(
                     "Collection will continue and delivery will retry "
                     "on the next polling cycle."
                 )
+
+        next_heartbeat_at, _heartbeat_sent = maybe_send_heartbeat(
+            runtime,
+            next_heartbeat_at,
+            heartbeat_interval,
+        )
 
         # ----------------------------------------------------
         # Wait before next polling cycle
