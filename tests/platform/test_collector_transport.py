@@ -71,6 +71,48 @@ class CollectorStateTests(unittest.TestCase):
             self.assertEqual(reopened.get_checkpoint(), 105)
             self.assertEqual(reopened.get_collection_cursor(), 105)
 
+    def test_existing_collector_state_is_migrated_for_retry_metadata(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "collector-state.db"
+            conn = sqlite3.connect(str(path))
+            try:
+                conn.executescript(
+                    """
+                    CREATE TABLE collector_state (
+                        key TEXT PRIMARY KEY,
+                        value TEXT NOT NULL
+                    );
+
+                    CREATE TABLE outbound_batches (
+                        batch_id TEXT PRIMARY KEY,
+                        payload_json TEXT NOT NULL,
+                        max_record_id INTEGER,
+                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        attempts INTEGER NOT NULL DEFAULT 0,
+                        last_error TEXT
+                    );
+                    """
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+            CollectorState(path)
+
+            conn = sqlite3.connect(str(path))
+            try:
+                columns = {
+                    row[1]
+                    for row in conn.execute(
+                        "PRAGMA table_info(outbound_batches)"
+                    ).fetchall()
+                }
+            finally:
+                conn.close()
+
+            self.assertIn("last_attempt_at", columns)
+            self.assertIn("next_attempt_at", columns)
+
 
 class TransportPolicyTests(unittest.TestCase):
     def test_remote_plain_http_is_rejected(self):

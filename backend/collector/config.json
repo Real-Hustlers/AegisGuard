@@ -4,6 +4,9 @@
   "collector_ingest_url": "http://127.0.0.1:5000/api/collector/v1/batches",
   "collector_state_file": "collector_state.db",
   "ca_bundle": null,
+  "collector_retry_base_seconds": 2,
+  "collector_retry_max_seconds": 60,
+  "collector_retry_jitter_ratio": 0.2,
   "event_ids": [
     4624,
     4625,
