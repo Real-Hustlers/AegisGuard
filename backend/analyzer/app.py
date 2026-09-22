@@ -466,6 +466,11 @@ except ImportError:
     from collector_api import create_collector_blueprint
 
 try:
+    from backend.analyzer.intelligence.api import create_intelligence_blueprint
+except ImportError:
+    from intelligence.api import create_intelligence_blueprint
+
+try:
     from backend.analyzer.ingest_pipeline import process_normalized_collector_logs
 except ImportError:
     from ingest_pipeline import process_normalized_collector_logs
@@ -493,6 +498,11 @@ app.register_blueprint(
             in {"1", "true", "yes", "on"}
         ),
     )
+)
+
+
+app.register_blueprint(
+    create_intelligence_blueprint(get_connection)
 )
 
 

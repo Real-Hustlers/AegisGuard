@@ -934,7 +934,28 @@ function loadDeviceData() {
         });
 }
 
+function loadIntelligenceSnapshot() {
+    if (!window.AegisIntelligenceUI) return;
+
+    fetch('/api/intelligence?event_limit=500')
+        .then((response) => {
+            if (!response.ok) {
+                throw new Error(`Intelligence snapshot failed: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then((snapshot) => {
+            window.AegisIntelligenceUI.renderSnapshot(snapshot);
+        })
+        .catch((error) => {
+            console.error('Intelligence snapshot load failed:', error);
+            window.AegisIntelligenceUI.renderError(error);
+        });
+}
+
 function loadDashboardData() {
+    loadIntelligenceSnapshot();
+
     Promise.all([
         fetch('/api/dashboard').then((response) => response.json()),
         fetch('/api/alerts').then((response) => response.json()),
