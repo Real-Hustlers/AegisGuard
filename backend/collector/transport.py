@@ -109,6 +109,7 @@ def send_enrollment(
     timeout: int = 30,
     ca_bundle=None,
     session=None,
+    client_cert=None,
 ):
     validate_analyzer_url(enrollment_url)
 
@@ -133,6 +134,7 @@ def send_enrollment(
         },
         timeout=timeout,
         verify=verify,
+        cert=client_cert,
     )
 
 
@@ -195,6 +197,7 @@ def send_recovery(
     timeout: int = 30,
     ca_bundle=None,
     session=None,
+    client_cert=None,
 ):
     validate_analyzer_url(recovery_url)
 
@@ -220,6 +223,7 @@ def send_recovery(
         },
         timeout=timeout,
         verify=verify,
+        cert=client_cert,
     )
 
 
@@ -282,6 +286,7 @@ def send_rotation(
     timeout: int = 30,
     ca_bundle=None,
     session=None,
+    client_cert=None,
 ):
     validate_analyzer_url(rotation_url)
 
@@ -308,6 +313,7 @@ def send_rotation(
         },
         timeout=timeout,
         verify=verify,
+        cert=client_cert,
     )
 
 
@@ -347,6 +353,7 @@ def send_batch(
     ca_bundle=None,
     session=None,
     credential=None,
+    client_cert=None,
 ):
     validate_analyzer_url(analyzer_url)
 
@@ -374,6 +381,7 @@ def send_batch(
         headers=headers,
         timeout=timeout,
         verify=verify,
+        cert=client_cert,
     )
 
 

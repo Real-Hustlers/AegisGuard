@@ -19,6 +19,9 @@ from backend.storage.collector_identity import (
     CollectorIdentityError,
     CollectorRevokedError,
     authenticate_collector,
+    authenticate_collector_certificate,
+    certificate_fingerprint_from_pem,
+    normalize_certificate_fingerprint,
     enroll_collector,
     rotate_collector_credential,
     recover_collector_credential,
@@ -35,6 +38,30 @@ ENROLLMENT_TOKEN_HEADER = "X-AegisGuard-Enrollment-Token"
 RECOVERY_TOKEN_HEADER = "X-AegisGuard-Recovery-Token"
 
 
+def _verified_client_certificate_fingerprint():
+    verification = str(
+        request.environ.get("SSL_CLIENT_VERIFY") or ""
+    ).upper()
+    if verification != "SUCCESS":
+        return None
+
+    direct_fingerprint = request.environ.get(
+        "SSL_CLIENT_FINGERPRINT"
+    )
+    if direct_fingerprint:
+        return normalize_certificate_fingerprint(
+            str(direct_fingerprint)
+        )
+
+    pem_certificate = request.environ.get("SSL_CLIENT_CERT")
+    if not pem_certificate:
+        return None
+
+    return certificate_fingerprint_from_pem(
+        str(pem_certificate)
+    )
+
+
 def _json_error(message, status_code):
     return jsonify({
         "status": "error",
@@ -49,6 +76,8 @@ def create_collector_blueprint(
     enrollment_token=None,
     recovery_token=None,
     credential_factory=None,
+    mtls_required=False,
+    client_certificate_resolver=None,
 ):
     """Build the collector API blueprint.
 
@@ -61,6 +90,56 @@ def create_collector_blueprint(
     """
 
     blueprint = Blueprint("collector_ingest_v1", __name__)
+    resolver = (
+        client_certificate_resolver
+        if client_certificate_resolver is not None
+        else _verified_client_certificate_fingerprint
+    )
+
+    def require_client_certificate(collector_id=None):
+        if not mtls_required:
+            return None, None
+
+        try:
+            fingerprint = resolver()
+        except CollectorIdentityError:
+            return None, _json_error(
+                "collector client certificate verification failed",
+                401,
+            )
+
+        if not fingerprint:
+            return None, _json_error(
+                "collector client certificate verification failed",
+                401,
+            )
+
+        if collector_id:
+            conn = connection_factory()
+            try:
+                try:
+                    authenticate_collector_certificate(
+                        conn,
+                        collector_id,
+                        fingerprint,
+                    )
+                except CollectorRevokedError:
+                    return None, _json_error(
+                        "collector is revoked",
+                        403,
+                    )
+                except (
+                    CollectorAuthenticationError,
+                    CollectorIdentityError,
+                ):
+                    return None, _json_error(
+                        "collector client certificate verification failed",
+                        401,
+                    )
+            finally:
+                conn.close()
+
+        return fingerprint, None
 
     @blueprint.post("/api/collector/v1/enroll")
     def enroll():
@@ -81,6 +160,12 @@ def create_collector_blueprint(
         collector_id = str(payload.get("collector_id") or "").strip()
         hostname = str(payload.get("hostname") or "").strip()
 
+        certificate_fingerprint, certificate_error = (
+            require_client_certificate()
+        )
+        if certificate_error is not None:
+            return certificate_error
+
         conn = connection_factory()
         try:
             result = enroll_collector(
@@ -91,6 +176,7 @@ def create_collector_blueprint(
                 display_name=payload.get("display_name"),
                 metadata=payload.get("metadata"),
                 credential_factory=credential_factory,
+                certificate_fingerprint=certificate_fingerprint,
             )
         except CollectorEnrollmentError as exc:
             return _json_error(str(exc), 409)
@@ -132,6 +218,12 @@ def create_collector_blueprint(
         payload = request.get_json(silent=True) or {}
         collector_id = str(payload.get("collector_id") or "").strip()
         hostname = str(payload.get("hostname") or "").strip()
+
+        _certificate, certificate_error = require_client_certificate(
+            collector_id
+        )
+        if certificate_error is not None:
+            return certificate_error
 
         conn = connection_factory()
         try:
@@ -183,6 +275,12 @@ def create_collector_blueprint(
 
         if str(payload.get("collector_id") or "").strip() != collector_id:
             return _json_error("collector_id header/body mismatch", 400)
+
+        _certificate, certificate_error = require_client_certificate(
+            collector_id
+        )
+        if certificate_error is not None:
+            return certificate_error
 
         conn = connection_factory()
         try:
@@ -243,6 +341,12 @@ def create_collector_blueprint(
 
         if str(payload.get("batch_id") or "").strip() != header_batch_id:
             return _json_error("batch_id header/body mismatch", 400)
+
+        _certificate, certificate_error = require_client_certificate(
+            header_collector_id
+        )
+        if certificate_error is not None:
+            return certificate_error
 
         conn = connection_factory()
         try:

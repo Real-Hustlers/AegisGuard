@@ -41,6 +41,8 @@ class DurableCollectorRuntime:
         rotation_url: str = None,
         recovery_url: str = None,
         recovery_token: str = None,
+        client_cert=None,
+        mtls_required: bool = False,
         auth_required: bool = False,
         collector_version: str = None,
         sender: Callable = send_batch,
@@ -90,7 +92,13 @@ class DurableCollectorRuntime:
         self.rotation_url = str(rotation_url or "").strip() or None
         self.recovery_url = str(recovery_url or "").strip() or None
         self.recovery_token = str(recovery_token or "").strip() or None
+        self.client_cert = client_cert
+        self.mtls_required = bool(mtls_required)
         self.auth_required = bool(auth_required)
+        if self.mtls_required and not self.client_cert:
+            raise ValueError(
+                "collector mTLS requires a client certificate"
+            )
         self.collector_version = (
             str(collector_version).strip()
             if collector_version not in (None, "")
@@ -150,6 +158,32 @@ class DurableCollectorRuntime:
                 ca_path = config_path.parent / ca_path
             ca_bundle = str(ca_path)
 
+        client_certificate = config.get(
+            "collector_client_certificate"
+        )
+        client_key = config.get("collector_client_key")
+        if client_key and not client_certificate:
+            raise ValueError(
+                "collector_client_certificate is required with collector_client_key"
+            )
+
+        client_cert = None
+        if client_certificate:
+            cert_path = Path(str(client_certificate))
+            if not cert_path.is_absolute():
+                cert_path = config_path.parent / cert_path
+            if client_key:
+                key_path = Path(str(client_key))
+                if not key_path.is_absolute():
+                    key_path = config_path.parent / key_path
+                client_cert = (str(cert_path), str(key_path))
+            else:
+                client_cert = str(cert_path)
+
+        mtls_required = bool(
+            config.get("collector_mtls_required", False)
+        )
+
         return cls(
             CollectorState(state_path),
             analyzer_url,
@@ -165,6 +199,8 @@ class DurableCollectorRuntime:
             recovery_token=os.environ.get(
                 "AEGISGUARD_COLLECTOR_RECOVERY_TOKEN"
             ),
+            client_cert=client_cert,
+            mtls_required=mtls_required,
             auth_required=auth_required,
             collector_version=config.get("collector_version"),
             retry_base_seconds=float(
@@ -228,6 +264,7 @@ class DurableCollectorRuntime:
             self.enrollment_token,
             timeout=30,
             ca_bundle=self.ca_bundle,
+            client_cert=self.client_cert,
         )
         body = self.enrollment_validator(response, payload)
         credential = str(body["credential"]).strip()
@@ -284,6 +321,7 @@ class DurableCollectorRuntime:
             self.recovery_token,
             timeout=30,
             ca_bundle=self.ca_bundle,
+            client_cert=self.client_cert,
         )
         body = self.recovery_validator(response, payload)
         self.state.commit_credential_recovery(recovery_id)
@@ -343,6 +381,7 @@ class DurableCollectorRuntime:
             credential=current,
             timeout=30,
             ca_bundle=self.ca_bundle,
+            client_cert=self.client_cert,
         )
 
         if (
@@ -355,6 +394,7 @@ class DurableCollectorRuntime:
                 credential=new_credential,
                 timeout=30,
                 ca_bundle=self.ca_bundle,
+                client_cert=self.client_cert,
             )
 
         body = self.rotation_validator(response, payload)
@@ -401,6 +441,8 @@ class DurableCollectorRuntime:
         snapshot.update({
             "analyzer_url": self.analyzer_url,
             "auth_required": self.auth_required,
+            "mtls_required": self.mtls_required,
+            "mtls_configured": bool(self.client_cert),
             "enrolled": bool(self.state.get_collector_credential()),
             "retry_base_seconds": self.retry_base_seconds,
             "retry_max_seconds": self.retry_max_seconds,
@@ -443,6 +485,7 @@ class DurableCollectorRuntime:
                         timeout=30,
                         ca_bundle=self.ca_bundle,
                         credential=credential,
+                        client_cert=self.client_cert,
                     )
                     self.ack_validator(response, payload)
                 except (

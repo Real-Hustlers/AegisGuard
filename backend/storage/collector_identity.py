@@ -59,6 +59,81 @@ def credential_fingerprint(credential: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def normalize_certificate_fingerprint(value: str) -> str:
+    normalized = _require(value, "certificate fingerprint")
+    normalized = normalized.replace(":", "").lower()
+    if (
+        len(normalized) != 64
+        or any(ch not in "0123456789abcdef" for ch in normalized)
+    ):
+        raise CollectorIdentityError(
+            "certificate fingerprint must be SHA-256 hex"
+        )
+    return normalized
+
+
+def certificate_fingerprint_from_pem(pem_certificate: str) -> str:
+    import ssl
+
+    pem = _require(pem_certificate, "client certificate")
+    try:
+        der = ssl.PEM_cert_to_DER_cert(pem)
+    except Exception as exc:
+        raise CollectorIdentityError(
+            "client certificate PEM is invalid"
+        ) from exc
+    return hashlib.sha256(der).hexdigest()
+
+
+def authenticate_collector_certificate(
+    conn,
+    collector_id: str,
+    certificate_fingerprint: str,
+) -> Dict[str, Any]:
+    collector_id = _require(collector_id, "collector_id")
+    presented = normalize_certificate_fingerprint(
+        certificate_fingerprint
+    )
+    row = conn.execute(
+        """
+        SELECT hostname, status, revoked_at,
+               certificate_fingerprint, certificate_bound_at
+        FROM collectors
+        WHERE collector_id = ?
+        """,
+        (collector_id,),
+    ).fetchone()
+
+    if row is None:
+        raise CollectorAuthenticationError("unknown collector")
+
+    status = str(row[1] or "").upper()
+    if status == "REVOKED" or row[2] not in (None, ""):
+        raise CollectorRevokedError("collector is revoked")
+    if status != "ENROLLED":
+        raise CollectorAuthenticationError(
+            f"collector status {status or 'EMPTY'} is not allowed"
+        )
+
+    stored = str(row[3] or "")
+    if not stored:
+        raise CollectorAuthenticationError(
+            "collector has no bound client certificate"
+        )
+    if not hmac.compare_digest(stored, presented):
+        raise CollectorAuthenticationError(
+            "collector client certificate mismatch"
+        )
+
+    return {
+        "collector_id": collector_id,
+        "hostname": str(row[0] or ""),
+        "status": status,
+        "certificate_fingerprint": stored,
+        "certificate_bound_at": row[4],
+    }
+
+
 def _generate_credential() -> str:
     # 32 random bytes -> roughly 256 bits of entropy before URL-safe encoding.
     return secrets.token_urlsafe(32)
@@ -73,6 +148,7 @@ def enroll_collector(
     display_name: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
     credential_factory: Optional[Callable[[], str]] = None,
+    certificate_fingerprint: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Enroll one collector and issue its credential exactly once.
 
@@ -110,6 +186,11 @@ def enroll_collector(
         factory = credential_factory or _generate_credential
         credential = _require(factory(), "generated credential")
         fingerprint = credential_fingerprint(credential)
+        bound_certificate = (
+            normalize_certificate_fingerprint(certificate_fingerprint)
+            if certificate_fingerprint not in (None, "")
+            else None
+        )
 
         conn.execute(
             """
@@ -120,8 +201,9 @@ def enroll_collector(
                 version,
                 status,
                 credential_fingerprint,
-                metadata_json
-            ) VALUES (?, ?, ?, ?, 'ENROLLED', ?, ?)
+                metadata_json,
+                certificate_fingerprint
+            ) VALUES (?, ?, ?, ?, 'ENROLLED', ?, ?, ?)
             """,
             (
                 collector_id,
@@ -130,8 +212,18 @@ def enroll_collector(
                 version,
                 fingerprint,
                 metadata_json,
+                bound_certificate,
             ),
         )
+        if bound_certificate:
+            conn.execute(
+                """
+                UPDATE collectors
+                SET certificate_bound_at = CURRENT_TIMESTAMP
+                WHERE collector_id = ?
+                """,
+                (collector_id,),
+            )
         conn.commit()
     except CollectorIdentityError:
         raise
