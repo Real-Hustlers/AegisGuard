@@ -485,6 +485,13 @@ app.register_blueprint(
         recovery_token=os.environ.get(
             "AEGISGUARD_COLLECTOR_RECOVERY_TOKEN"
         ),
+        mtls_required=(
+            os.environ.get(
+                "AEGISGUARD_COLLECTOR_MTLS_REQUIRED",
+                "false",
+            ).strip().lower()
+            in {"1", "true", "yes", "on"}
+        ),
     )
 )
 
@@ -640,15 +647,15 @@ def upload_logs():
     Pipeline:
 
         Collector
-            ↓
+            â†“
         windows_logs.json
-            ↓
+            â†“
         merge_logs()
-            ↓
+            â†“
         classifier
-            ↓
+            â†“
         SQLite
-            ↓
+            â†“
         correlation engine
 
     Only one upload may execute this pipeline at a time.
