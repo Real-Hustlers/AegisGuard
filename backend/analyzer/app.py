@@ -647,15 +647,15 @@ def upload_logs():
     Pipeline:
 
         Collector
-            â†“
+            Ã¢â€ â€œ
         windows_logs.json
-            â†“
+            Ã¢â€ â€œ
         merge_logs()
-            â†“
+            Ã¢â€ â€œ
         classifier
-            â†“
+            Ã¢â€ â€œ
         SQLite
-            â†“
+            Ã¢â€ â€œ
         correlation engine
 
     Only one upload may execute this pipeline at a time.
@@ -2125,6 +2125,18 @@ def alert_summary():
 # ============================================================
 
 if __name__ == "__main__":
+
+    if (
+        os.environ.get(
+            "AEGISGUARD_COLLECTOR_MTLS_REQUIRED",
+            "false",
+        ).strip().lower()
+        in {"1", "true", "yes", "on"}
+    ):
+        raise RuntimeError(
+            "collector mTLS mode cannot use the direct Flask server; "
+            "start backend.analyzer.mtls_server instead"
+        )
 
     # The Collector hot path performs incremental classification and SQLite
     # persistence.  Do not replay legacy JSON history at startup: it can be
