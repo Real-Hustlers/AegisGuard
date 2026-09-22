@@ -390,6 +390,59 @@ def create_collector_blueprint(
         response.headers["Pragma"] = "no-cache"
         return response
 
+    @blueprint.post("/api/collector/v1/heartbeat")
+    def heartbeat():
+        payload = request.get_json(silent=True) or {}
+
+        collector_id = str(
+            request.headers.get("X-AegisGuard-Collector-ID") or ""
+        ).strip()
+        presented_credential = str(
+            request.headers.get(COLLECTOR_CREDENTIAL_HEADER) or ""
+        )
+
+        if not collector_id or not presented_credential:
+            return _json_error("collector authentication failed", 401)
+
+        if str(payload.get("collector_id") or "").strip() != collector_id:
+            return _json_error("collector_id header/body mismatch", 400)
+
+        hostname = str(payload.get("hostname") or "").strip()
+        if not hostname:
+            return _json_error("hostname is required", 400)
+
+        _certificate, certificate_error = require_client_certificate(
+            collector_id
+        )
+        if certificate_error is not None:
+            return certificate_error
+
+        conn = connection_factory()
+        try:
+            try:
+                identity = authenticate_collector(
+                    conn,
+                    collector_id,
+                    presented_credential,
+                    hostname=hostname,
+                )
+            except CollectorRevokedError:
+                return _json_error("collector is revoked", 403)
+            except (
+                CollectorAuthenticationError,
+                CollectorIdentityError,
+            ):
+                return _json_error("collector authentication failed", 401)
+        finally:
+            conn.close()
+
+        return jsonify({
+            "status": "alive",
+            "collector_id": identity["collector_id"],
+            "hostname": identity["hostname"],
+            "last_seen_at": identity["last_seen_at"],
+        }), 200
+
     @blueprint.post("/api/collector/v1/batches")
     def accept_collector_batch():
         payload = request.get_json(silent=True) or {}

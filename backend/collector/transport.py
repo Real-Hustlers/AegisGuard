@@ -167,6 +167,92 @@ def validate_enrollment_response(response, payload):
     return body
 
 
+def build_heartbeat_payload(
+    collector_id: str,
+    hostname: str,
+    version: str = None,
+):
+    if not collector_id:
+        raise ValueError("collector_id is required")
+    if not hostname:
+        raise ValueError("hostname is required")
+
+    payload = {
+        "collector_id": str(collector_id),
+        "hostname": str(hostname),
+    }
+    if version:
+        payload["version"] = str(version)
+    return payload
+
+
+def send_heartbeat(
+    heartbeat_url: str,
+    payload,
+    credential: str,
+    timeout: int = 30,
+    ca_bundle=None,
+    session=None,
+    client_cert=None,
+):
+    validate_analyzer_url(heartbeat_url)
+
+    credential_value = str(credential or "").strip()
+    if not credential_value:
+        raise ValueError("collector credential is required")
+
+    body = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+
+    verify = ca_bundle if ca_bundle else True
+    client = session or requests
+    return client.post(
+        heartbeat_url,
+        data=body.encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "X-AegisGuard-Collector-ID": payload["collector_id"],
+            COLLECTOR_CREDENTIAL_HEADER: credential_value,
+        },
+        timeout=timeout,
+        verify=verify,
+        cert=client_cert,
+    )
+
+
+def validate_heartbeat_response(response, payload):
+    if getattr(response, "status_code", None) != 200:
+        raise ValueError(
+            f"collector heartbeat requires HTTP 200; got "
+            f"{getattr(response, 'status_code', None)}"
+        )
+
+    try:
+        body = response.json()
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "collector heartbeat response must contain JSON"
+        ) from exc
+
+    if not isinstance(body, dict) or body.get("status") != "alive":
+        raise ValueError("collector heartbeat status must be alive")
+
+    expected_collector = str(payload.get("collector_id") or "")
+    expected_hostname = str(payload.get("hostname") or "")
+    if str(body.get("collector_id") or "") != expected_collector:
+        raise ValueError("collector heartbeat collector_id mismatch")
+    if str(body.get("hostname") or "") != expected_hostname:
+        raise ValueError("collector heartbeat hostname mismatch")
+    if not str(body.get("last_seen_at") or "").strip():
+        raise ValueError("collector heartbeat last_seen_at is missing")
+
+    return body
+
+
 def build_recovery_payload(
     collector_id: str,
     hostname: str,
