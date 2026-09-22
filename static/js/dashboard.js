@@ -961,116 +961,30 @@ function loadDashboardData() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    // The dashboard owns exactly one one-second clock interval.
+    if (window.__aegisDashboardInitialized) return;
+    window.__aegisDashboardInitialized = true;
+
     updateDashboardClock();
     setInterval(updateDashboardClock, 1000);
 
-    // Initial loads
     loadDashboardData();
     loadDeviceData();
     loadIncidentResponseData();
 
-    // Setup periodic polling
-    setInterval(loadDashboardData, 5000);
-    setInterval(loadDeviceData, 10000);
-    setInterval(loadIncidentResponseData, 3000);
+    // /api/events is a comparatively large response, so keep background
+    // polling useful without creating needless local traffic.
+    setInterval(loadDashboardData, 15000);
+    setInterval(loadDeviceData, 30000);
+    setInterval(loadIncidentResponseData, 10000);
 
-    // Register event listeners
     const deviceSyncBtn = document.getElementById('deviceSyncBtn');
     if (deviceSyncBtn) {
-        deviceSyncBtn.addEventListener('click', () => {
-            loadDeviceData();
-        });
+        deviceSyncBtn.addEventListener('click', loadDeviceData);
     }
 
-
-    // Register event listeners
     const toggleAuto = document.getElementById('toggleAutoResponse');
     const toggleSim = document.getElementById('toggleSimulationMode');
     const resetBtn = document.getElementById('irResetBtn');
-
-    if (toggleAuto) {
-        toggleAuto.addEventListener('change', () => {
-            updateSettings(toggleAuto.checked, toggleSim.checked);
-        });
-    }
-    if (toggleSim) {
-        toggleSim.addEventListener('change', () => {
-            updateSettings(toggleAuto.checked, toggleSim.checked);
-        });
-    }
-    if (resetBtn) {
-        resetBtn.addEventListener('click', () => {
-            if (confirm('Are you sure you want to reset all incidents and execution logs?')) {
-                fetch('/api/incidents/reset', { method: 'POST' })
-                    .then(r => r.json())
-                    .then(() => {
-                        loadIncidentResponseData();
-                    });
-            }
-        });
-    }
-
-    const soarMode = document.getElementById('soarModeSelect');
-    const soarDryRun = document.getElementById('toggleSoarDryRun');
-    if (soarMode) soarMode.addEventListener('change', () => updateSoarSettings({soar_mode: soarMode.value}));
-    if (soarDryRun) soarDryRun.addEventListener('change', () => updateSoarSettings({soar_dry_run: soarDryRun.checked}));
-
-    // Modal close button and keyboard handlers
-    const alertModal = document.getElementById('alertModal');
-    const alertModalClose = document.getElementById('alertModalClose');
-    if (alertModalClose) alertModalClose.addEventListener('click', closeModal);
-    if (alertModal) {
-        alertModal.addEventListener('click', (ev) => {
-            if (ev.target === alertModal) closeModal();
-        });
-    }
-   window.addEventListener('DOMContentLoaded', () => {
-    // =========================================================
-    // INITIAL DATA LOAD
-    // =========================================================
-    loadDashboardData();
-    loadDeviceData();
-    loadIncidentResponseData();
-
-
-    // =========================================================
-    // PERIODIC DATA REFRESH
-    // =========================================================
-    // Dashboard contains a large /api/events response (~722 KB),
-    // so don't request it every 5 seconds.
-    setInterval(() => {
-        loadDashboardData();
-    }, 15000); // every 15 seconds
-
-    setInterval(() => {
-        loadDeviceData();
-    }, 30000); // every 30 seconds
-
-    setInterval(() => {
-        loadIncidentResponseData();
-    }, 10000); // every 10 seconds
-
-
-    // =========================================================
-    // DEVICE SYNC BUTTON
-    // =========================================================
-    const deviceSyncBtn = document.getElementById('deviceSyncBtn');
-
-    if (deviceSyncBtn) {
-        deviceSyncBtn.addEventListener('click', () => {
-            loadDeviceData();
-        });
-    }
-
-
-    // =========================================================
-    // AUTO RESPONSE / SIMULATION MODE
-    // =========================================================
-    const toggleAuto = document.getElementById('toggleAutoResponse');
-    const toggleSim = document.getElementById('toggleSimulationMode');
-    const resetBtn = document.getElementById('irResetBtn');
-
 
     if (toggleAuto) {
         toggleAuto.addEventListener('change', () => {
@@ -1081,7 +995,6 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-
     if (toggleSim) {
         toggleSim.addEventListener('change', () => {
             updateSettings(
@@ -1091,87 +1004,58 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-
-    // =========================================================
-    // RESET INCIDENTS
-    // =========================================================
     if (resetBtn) {
         resetBtn.addEventListener('click', () => {
-
             const confirmed = confirm(
                 'Are you sure you want to reset all incidents and execution logs?'
             );
+            if (!confirmed) return;
 
-            if (!confirmed) {
-                return;
-            }
-
-            fetch('/api/incidents/reset', {
-                method: 'POST'
-            })
-                .then(response => {
+            fetch('/api/incidents/reset', { method: 'POST' })
+                .then((response) => {
                     if (!response.ok) {
-                        throw new Error(
-                            `Reset request failed: ${response.status}`
-                        );
+                        throw new Error(`Reset request failed: ${response.status}`);
                     }
-
                     return response.json();
                 })
-                .then(result => {
-                    console.log('Incident reset:', result);
-
-                    // Reload incident data after reset
-                    loadIncidentResponseData();
-                })
-                .catch(error => {
-                    console.error(
-                        'Failed to reset incidents:',
-                        error
-                    );
-
-                    alert(
-                        'Failed to reset incidents. Check the server console.'
-                    );
+                .then(() => loadIncidentResponseData())
+                .catch((error) => {
+                    console.error('Failed to reset incidents:', error);
+                    alert('Failed to reset incidents. Check the server console.');
                 });
         });
     }
 
-
-    // =========================================================
-    // ALERT MODAL
-    // =========================================================
-    const alertModal = document.getElementById('alertModal');
-    const alertModalClose = document.getElementById('alertModalClose');
-
-
-    if (alertModalClose) {
-        alertModalClose.addEventListener('click', closeModal);
+    const soarMode = document.getElementById('soarModeSelect');
+    const soarDryRun = document.getElementById('toggleSoarDryRun');
+    if (soarMode) {
+        soarMode.addEventListener('change', () => {
+            updateSoarSettings({ soar_mode: soarMode.value });
+        });
     }
-
-
-    if (alertModal) {
-        alertModal.addEventListener('click', (event) => {
-            if (event.target === alertModal) {
-                closeModal();
-            }
+    if (soarDryRun) {
+        soarDryRun.addEventListener('change', () => {
+            updateSoarSettings({ soar_dry_run: soarDryRun.checked });
         });
     }
 
+    const alertModal = document.getElementById('alertModal');
+    const alertModalClose = document.getElementById('alertModalClose');
+    if (alertModalClose) {
+        alertModalClose.addEventListener('click', closeModal);
+    }
+    if (alertModal) {
+        alertModal.addEventListener('click', (event) => {
+            if (event.target === alertModal) closeModal();
+        });
+    }
 
-    // =========================================================
-    // ESC KEY → CLOSE MODAL
-    // =========================================================
     window.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') {
-            closeModal();
-        }
+        if (event.key === 'Escape') closeModal();
     });
-
 
     console.log(
         '%cAegisGuard dashboard initialized successfully',
         'color:#22d3ee;font-weight:bold;'
     );
-});
 });
