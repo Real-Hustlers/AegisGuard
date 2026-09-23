@@ -439,7 +439,8 @@ except ImportError:
     except Exception as e:
 
         debug_print(
-            f"Classifier import failed: {e}"
+            "Classifier import failed: "
+            f"{redact_sensitive_text(e)}"
         )
 
         classify_logs = None
@@ -973,7 +974,7 @@ def upload_logs():
 
                         debug_print(
                             "Backup failed: "
-                            f"{backup_error}"
+                            f"{redact_sensitive_text(backup_error)}"
                         )
 
                     existing_logs = []
@@ -1260,14 +1261,14 @@ def run_ml_classification():
         debug_print(
             "Startup classification skipped "
             "because merged_logs.json "
-            f"is invalid: {e}"
+            f"is invalid: {redact_sensitive_text(e)}"
         )
 
     except Exception as e:
 
         debug_print(
             "Startup classification error: "
-            f"{e}"
+            f"{redact_sensitive_text(e)}"
         )
 
 

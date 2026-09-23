@@ -12,11 +12,21 @@ try:
         persist_raw_logs,
         raw_output_enabled,
     )
+    from backend.collector.diagnostics import (
+        sanitize_diagnostic,
+        sanitize_http_response,
+        sanitize_url_for_diagnostics,
+    )
 except ImportError:
     from config_loader import load_config
     from raw_output import (
         persist_raw_logs,
         raw_output_enabled,
+    )
+    from diagnostics import (
+        sanitize_diagnostic,
+        sanitize_http_response,
+        sanitize_url_for_diagnostics,
     )
 
 
@@ -48,7 +58,9 @@ def send_logs(parsed_logs):
     }
 
     print("\nSending logs to Analyzer:")
-    print(ANALYZER)
+    print(
+        sanitize_url_for_diagnostics(ANALYZER)
+    )
 
     try:
         response = requests.post(
@@ -64,7 +76,7 @@ def send_logs(parsed_logs):
 
         print(
             "Analyzer Response:",
-            response.text
+            sanitize_http_response(response),
         )
 
         return response.status_code == 200
@@ -73,7 +85,7 @@ def send_logs(parsed_logs):
 
         print(
             "Failed to connect to Analyzer:",
-            e
+            sanitize_diagnostic(e),
         )
 
         return False
@@ -144,7 +156,9 @@ ConvertTo-Json -Depth 4
     if result.returncode != 0:
 
         print("\nPowerShell Error:")
-        print(result.stderr)
+        print(
+            sanitize_diagnostic(result.stderr)
+        )
 
         return []
 
@@ -187,7 +201,7 @@ ConvertTo-Json -Depth 4
 
         print(
             "JSON error:",
-            e
+            sanitize_diagnostic(e),
         )
 
         print(
@@ -257,7 +271,8 @@ if __name__ == "__main__":
     print("=" * 60)
 
     print(
-        f"\nAnalyzer URL : {ANALYZER}"
+        "\nAnalyzer URL :",
+        sanitize_url_for_diagnostics(ANALYZER),
     )
 
     print(

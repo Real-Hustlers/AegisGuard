@@ -11,6 +11,7 @@ from typing import Callable, Optional
 import requests
 
 from backend.collector.state import CollectorState
+from backend.collector.diagnostics import sanitize_diagnostic
 from backend.collector.transport import (
     build_batch_payload,
     build_enrollment_payload,
@@ -710,14 +711,16 @@ class DurableCollectorRuntime:
                         attempt_number,
                     )
                     next_time = now + delay
+                    safe_error = sanitize_diagnostic(exc)
                     self.state.mark_attempt(
                         batch_id,
-                        str(exc),
+                        safe_error,
                         attempted_at=now,
                         next_attempt_at=next_time,
                     )
                     print(
-                        f"[DURABLE UPLOAD] batch={batch_id} failed: {exc}; "
+                        f"[DURABLE UPLOAD] batch={batch_id} "
+                        f"failed: {safe_error}; "
                         f"attempt={attempt_number} retry_in={delay:.2f}s",
                         flush=True,
                     )

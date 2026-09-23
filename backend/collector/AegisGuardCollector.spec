@@ -1,4 +1,4 @@
-# -*- mode: python ; coding: utf-8 -*-
+﻿# -*- mode: python ; coding: utf-8 -*-
 
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_data_files
@@ -62,10 +62,18 @@ a = Analysis(
         "backend.collector.parser",
         "backend.collector.detector",
         "backend.collector.config_loader",
+
+        # Durable authenticated Collector runtime
         "backend.collector.durable_runtime",
         "backend.collector.state",
         "backend.collector.transport",
         "backend.collector.credential_store",
+
+        # S7 privacy / diagnostics
+        "backend.collector.diagnostics",
+        "backend.platform.data_privacy",
+
+        # Enterprise deployment paths
         "backend.deployment.runtime_paths",
 
         # Networking
