@@ -27,6 +27,7 @@ _MIN_PASSWORD_LENGTH = 12
 _MAX_PASSWORD_LENGTH = 1024
 _MAX_USERNAME_LENGTH = 128
 _MAX_USER_AGENT_LENGTH = 512
+_CSRF_CONTEXT = b"aegisguard-csrf-v1"
 
 
 class UserAuthError(ValueError):
@@ -178,6 +179,29 @@ def session_token_fingerprint(token: str) -> str:
     if not value:
         raise SessionAuthenticationError("session token is required")
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def csrf_token_for_session_token(token: str) -> str:
+    value = str(token or "").strip()
+    if not value:
+        raise SessionAuthenticationError("session token is required")
+    digest = hmac.new(
+        value.encode("utf-8"),
+        _CSRF_CONTEXT,
+        hashlib.sha256,
+    ).digest()
+    return _b64_encode(digest)
+
+
+def verify_session_csrf(token: str, csrf_token: str) -> bool:
+    provided = str(csrf_token or "").strip()
+    if not provided:
+        return False
+    try:
+        expected = csrf_token_for_session_token(token)
+    except SessionAuthenticationError:
+        return False
+    return hmac.compare_digest(provided, expected)
 
 
 def create_user(
@@ -354,6 +378,7 @@ def create_session(
     return {
         "session_id": session_id,
         "token": token,
+        "csrf_token": csrf_token_for_session_token(token),
         "expires_at": _format_timestamp(expires_at),
     }
 
@@ -363,6 +388,7 @@ def authenticate_session(
     token: str,
     *,
     now: Optional[datetime] = None,
+    idle_timeout_seconds: Optional[int] = None,
 ):
     token_hash = session_token_fingerprint(token)
     row = conn.execute(
@@ -370,6 +396,7 @@ def authenticate_session(
         SELECT s.session_id,
                s.user_id,
                s.expires_at,
+               s.last_seen_at,
                s.revoked_at,
                u.username,
                u.role,
@@ -385,16 +412,26 @@ def authenticate_session(
     if row is None:
         raise SessionAuthenticationError("invalid session")
 
-    if row[3] not in (None, ""):
+    if row[4] not in (None, ""):
         raise SessionAuthenticationError("session is revoked")
 
-    if not bool(row[6]):
+    if not bool(row[7]):
         raise SessionAuthenticationError("user is inactive")
 
     now_value = _utc_now() if now is None else now.astimezone(timezone.utc)
     expires_at = _parse_timestamp(row[2])
     if now_value >= expires_at:
         raise SessionAuthenticationError("session is expired")
+
+    if idle_timeout_seconds is not None:
+        idle_timeout = int(idle_timeout_seconds)
+        if idle_timeout <= 0:
+            raise UserValidationError(
+                "session idle timeout must be greater than zero"
+            )
+        last_seen_at = _parse_timestamp(row[3])
+        if now_value >= last_seen_at + timedelta(seconds=idle_timeout):
+            raise SessionAuthenticationError("session idle timeout")
 
     conn.execute(
         """
@@ -409,8 +446,8 @@ def authenticate_session(
     return {
         "session_id": str(row[0]),
         "user_id": str(row[1]),
-        "username": str(row[4]),
-        "role": str(row[5]),
+        "username": str(row[5]),
+        "role": str(row[6]),
         "active": True,
         "expires_at": _format_timestamp(expires_at),
     }

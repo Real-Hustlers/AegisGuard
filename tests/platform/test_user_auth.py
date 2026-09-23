@@ -7,6 +7,7 @@ from pathlib import Path
 from flask import Flask
 
 from backend.analyzer.auth_api import (
+    AUTH_CSRF_HEADER,
     AUTH_SESSION_COOKIE,
     create_auth_blueprint,
 )
@@ -231,7 +232,11 @@ class UserAuthenticationTests(unittest.TestCase):
         after_restart = restarted.get("/api/auth/me")
         self.assertEqual(after_restart.status_code, 200)
 
-        logout = restarted.post("/api/auth/logout")
+        csrf_token = after_restart.get_json()["csrf_token"]
+        logout = restarted.post(
+            "/api/auth/logout",
+            headers={AUTH_CSRF_HEADER: csrf_token},
+        )
         self.assertEqual(logout.status_code, 200)
 
         after_logout = restarted.get("/api/auth/me")

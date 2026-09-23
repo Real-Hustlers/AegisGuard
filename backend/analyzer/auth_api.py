@@ -2,6 +2,15 @@
 
 from flask import Blueprint, jsonify, request
 
+from backend.storage.login_throttle import (
+    DEFAULT_LOGIN_BLOCK_SECONDS,
+    DEFAULT_LOGIN_FAILURE_LIMIT,
+    DEFAULT_LOGIN_WINDOW_SECONDS,
+    LoginThrottledError,
+    check_login_allowed,
+    clear_login_failures,
+    record_login_failure,
+)
 from backend.storage.user_auth import (
     SessionAuthenticationError,
     UserAuthenticationError,
@@ -9,12 +18,16 @@ from backend.storage.user_auth import (
     authenticate_session,
     authenticate_user,
     create_session,
+    csrf_token_for_session_token,
     revoke_session,
+    verify_session_csrf,
 )
 
 
 AUTH_SESSION_COOKIE = "aegisguard_session"
+AUTH_CSRF_HEADER = "X-AegisGuard-CSRF"
 DEFAULT_SESSION_TTL_SECONDS = 8 * 60 * 60
+DEFAULT_SESSION_IDLE_TIMEOUT_SECONDS = 30 * 60
 
 
 def _error(message, status_code):
@@ -31,12 +44,27 @@ def create_auth_blueprint(
     *,
     cookie_secure=True,
     session_ttl_seconds=DEFAULT_SESSION_TTL_SECONDS,
+    session_idle_timeout_seconds=DEFAULT_SESSION_IDLE_TIMEOUT_SECONDS,
+    login_failure_limit=DEFAULT_LOGIN_FAILURE_LIMIT,
+    login_window_seconds=DEFAULT_LOGIN_WINDOW_SECONDS,
+    login_block_seconds=DEFAULT_LOGIN_BLOCK_SECONDS,
 ):
     blueprint = Blueprint("aegisguard_user_auth", __name__)
 
     ttl = int(session_ttl_seconds)
+    idle_timeout = int(session_idle_timeout_seconds)
+    failure_limit = int(login_failure_limit)
+    failure_window = int(login_window_seconds)
+    block_seconds = int(login_block_seconds)
+
     if ttl <= 0:
         raise ValueError("session_ttl_seconds must be greater than zero")
+    if idle_timeout <= 0:
+        raise ValueError(
+            "session_idle_timeout_seconds must be greater than zero"
+        )
+    if failure_limit <= 0 or failure_window <= 0 or block_seconds <= 0:
+        raise ValueError("login throttle settings must be greater than zero")
 
     def _set_session_cookie(response, token):
         response.set_cookie(
@@ -67,26 +95,52 @@ def create_auth_blueprint(
         if not username.strip() or not password:
             return _error("username and password are required", 400)
 
+        peer_ip = request.remote_addr
         conn = connection_factory()
         try:
+            try:
+                check_login_allowed(
+                    conn,
+                    username,
+                    peer_ip,
+                )
+            except LoginThrottledError:
+                return _error("too many login attempts", 429)
+
             try:
                 user = authenticate_user(
                     conn,
                     username,
                     password,
                 )
-                session = create_session(
-                    conn,
-                    user["user_id"],
-                    ttl_seconds=ttl,
-                    peer_ip=request.remote_addr,
-                    user_agent=request.headers.get("User-Agent"),
-                )
             except (
                 UserAuthenticationError,
                 UserValidationError,
             ):
+                throttle = record_login_failure(
+                    conn,
+                    username,
+                    peer_ip,
+                    failure_limit=failure_limit,
+                    window_seconds=failure_window,
+                    block_seconds=block_seconds,
+                )
+                if throttle["blocked_until"] is not None:
+                    return _error("too many login attempts", 429)
                 return _error("invalid username or password", 401)
+
+            clear_login_failures(
+                conn,
+                username,
+                peer_ip,
+            )
+            session = create_session(
+                conn,
+                user["user_id"],
+                ttl_seconds=ttl,
+                peer_ip=peer_ip,
+                user_agent=request.headers.get("User-Agent"),
+            )
         finally:
             conn.close()
 
@@ -98,6 +152,7 @@ def create_auth_blueprint(
                 "role": user["role"],
             },
             "expires_at": session["expires_at"],
+            "csrf_token": session["csrf_token"],
         })
         _set_session_cookie(response, session["token"])
         return response, 200
@@ -111,7 +166,11 @@ def create_auth_blueprint(
         conn = connection_factory()
         try:
             try:
-                session = authenticate_session(conn, token)
+                session = authenticate_session(
+                    conn,
+                    token,
+                    idle_timeout_seconds=idle_timeout,
+                )
             except SessionAuthenticationError:
                 return _error("authentication required", 401)
         finally:
@@ -125,12 +184,19 @@ def create_auth_blueprint(
                 "role": session["role"],
             },
             "expires_at": session["expires_at"],
+            "csrf_token": csrf_token_for_session_token(token),
         }), 200
 
     @blueprint.post("/api/auth/logout")
     def logout():
         token = request.cookies.get(AUTH_SESSION_COOKIE)
         if token:
+            if not verify_session_csrf(
+                token,
+                request.headers.get(AUTH_CSRF_HEADER),
+            ):
+                return _error("csrf token required", 403)
+
             conn = connection_factory()
             try:
                 try:

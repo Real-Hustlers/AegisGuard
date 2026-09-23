@@ -3,8 +3,15 @@ import unittest
 from pathlib import Path
 
 from backend.analyzer import app as analyzer_app
-from backend.analyzer.auth_api import AUTH_SESSION_COOKIE
-from backend.storage.user_auth import create_session, create_user
+from backend.analyzer.auth_api import (
+    AUTH_CSRF_HEADER,
+    AUTH_SESSION_COOKIE,
+)
+from backend.storage.user_auth import (
+    create_session,
+    create_user,
+    csrf_token_for_session_token,
+)
 
 
 class SoarApiTests(unittest.TestCase):
@@ -44,6 +51,9 @@ class SoarApiTests(unittest.TestCase):
             AUTH_SESSION_COOKIE,
             session["token"],
         )
+        self.csrf_token = csrf_token_for_session_token(
+            session["token"]
+        )
 
     def tearDown(self):
         for database, path, initialized in self.original:
@@ -58,9 +68,14 @@ class SoarApiTests(unittest.TestCase):
         settings = self.client.get("/api/incidents/settings").get_json()
         self.assertEqual(settings["soar_mode"], "MANUAL")
         self.assertTrue(settings["soar_dry_run"])
-        action = self.client.post("/api/soar/block-ip", json={
-            "ip": "8.8.8.8", "reason": "controlled demo"
-        })
+        action = self.client.post(
+            "/api/soar/block-ip",
+            json={
+                "ip": "8.8.8.8",
+                "reason": "controlled demo",
+            },
+            headers={AUTH_CSRF_HEADER: self.csrf_token},
+        )
         self.assertEqual(action.status_code, 200)
         self.assertEqual(action.get_json()["status"], "DRY_RUN")
         recent = self.client.get("/api/response-actions")

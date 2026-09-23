@@ -90,6 +90,7 @@ class PlatformSchemaTests(unittest.TestCase):
             "settings",
             "platform_schema_migrations",
             "collector_ingest_batches",
+            "auth_login_throttle",
         }
         self.assertTrue(required.issubset(tables))
 
