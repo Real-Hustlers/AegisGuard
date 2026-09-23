@@ -4,6 +4,8 @@ import json
 import sqlite3
 from typing import Any, Dict, Optional, Tuple
 
+from backend.platform.data_privacy import redact_sensitive_text
+
 
 def persist_collector_batch(
     conn: sqlite3.Connection,
@@ -141,6 +143,7 @@ def mark_collector_batch_processed(
         UPDATE collector_ingest_batches
         SET state = 'PROCESSED',
             processed_at = CURRENT_TIMESTAMP,
+            payload_json = '{}',
             last_error = NULL
         WHERE batch_id = ? AND state = 'PROCESSING'
         """,
@@ -157,6 +160,7 @@ def mark_collector_batch_failed(
 ) -> bool:
     """Mark one claimed batch as failed while preserving its error."""
 
+    safe_error = redact_sensitive_text(error)
     cursor = conn.execute(
         """
         UPDATE collector_ingest_batches
@@ -165,7 +169,7 @@ def mark_collector_batch_failed(
             last_error = ?
         WHERE batch_id = ? AND state = 'PROCESSING'
         """,
-        (str(error), str(batch_id)),
+        (safe_error, str(batch_id)),
     )
     conn.commit()
     return cursor.rowcount == 1
