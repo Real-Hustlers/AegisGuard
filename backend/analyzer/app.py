@@ -466,6 +466,11 @@ except ImportError:
     from collector_api import create_collector_blueprint
 
 try:
+    from backend.analyzer.auth_api import create_auth_blueprint
+except ImportError:
+    from auth_api import create_auth_blueprint
+
+try:
     from backend.analyzer.intelligence.api import create_intelligence_blueprint
 except ImportError:
     from intelligence.api import create_intelligence_blueprint
@@ -496,6 +501,26 @@ app.register_blueprint(
                 "false",
             ).strip().lower()
             in {"1", "true", "yes", "on"}
+        ),
+    )
+)
+
+
+app.register_blueprint(
+    create_auth_blueprint(
+        get_connection,
+        cookie_secure=(
+            os.environ.get(
+                "AEGISGUARD_SESSION_COOKIE_SECURE",
+                "true",
+            ).strip().lower()
+            in {"1", "true", "yes", "on"}
+        ),
+        session_ttl_seconds=int(
+            os.environ.get(
+                "AEGISGUARD_SESSION_TTL_SECONDS",
+                str(8 * 60 * 60),
+            )
         ),
     )
 )
