@@ -68,50 +68,556 @@ function formatRelativeTime(timestamp) {
     return `${diffHours} hr${diffHours === 1 ? '' : 's'}`;
 }
 
-function deviceStatusClass(status) {
-    if (status === 'critical') return 'critical';
-    if (status === 'warning') return 'warning';
-    return '';
+function collectorVisualState(collector) {
+    const identity = collector.identity || {};
+    const liveness = collector.liveness || {};
+    const observed = collector.server_observed || {};
+    const reported = collector.collector_reported || {};
+    const queue = collector.server_queue || {};
+
+    const livenessState = String(
+        liveness.state || 'NEVER_SEEN'
+    ).toUpperCase();
+
+    if (
+        String(identity.status || '').toUpperCase()
+        === 'REVOKED'
+    ) {
+        return {
+            cardClass: 'critical',
+            dot: 'var(--red)',
+            label: 'REVOKED'
+        };
+    }
+
+    if (livenessState === 'STALE') {
+        return {
+            cardClass: 'warning',
+            dot: 'var(--orange)',
+            label: 'STALE'
+        };
+    }
+
+    if (livenessState === 'NEVER_SEEN') {
+        return {
+            cardClass: '',
+            dot: '#64748b',
+            label: 'NEVER SEEN'
+        };
+    }
+
+    if (
+        observed.mtls_required
+        && !observed.mtls_verified
+    ) {
+        return {
+            cardClass: 'critical',
+            dot: 'var(--red)',
+            label: 'TRUST DEGRADED'
+        };
+    }
+
+    const transport = String(
+        reported.transport_status || ''
+    ).toUpperCase();
+
+    if (
+        transport === 'DEGRADED'
+        || transport === 'RETRY_WAIT'
+        || transport === 'BACKLOG'
+        || Number(queue.failed || 0) > 0
+    ) {
+        return {
+            cardClass: 'warning',
+            dot: 'var(--orange)',
+            label: transport || 'ATTENTION'
+        };
+    }
+
+    if (livenessState === 'CURRENT') {
+        return {
+            cardClass: '',
+            dot: 'var(--green)',
+            label: 'CURRENT'
+        };
+    }
+
+    if (
+        transport === 'HEALTHY'
+        || identity.status === 'ENROLLED'
+    ) {
+        return {
+            cardClass: '',
+            dot: 'var(--green)',
+            label: transport || 'ENROLLED'
+        };
+    }
+
+    return {
+        cardClass: '',
+        dot: '#64748b',
+        label: 'NO HEALTH REPORT'
+    };
 }
 
-function renderDevices(devices) {
-    const container = document.getElementById('deviceGrid');
-    const header = document.getElementById('deviceCountText');
+function renderCollectors(collectors) {
+    const container = document.getElementById(
+        'deviceGrid'
+    );
+    const header = document.getElementById(
+        'deviceCountText'
+    );
+
     if (!container) return;
+
+    const items = Array.isArray(collectors)
+        ? collectors
+        : [];
+
+    const enrolled = items.filter(
+        (collector) =>
+            String(
+                (collector.identity || {}).status || ''
+            ).toUpperCase() === 'ENROLLED'
+    ).length;
+
+    const revoked = items.filter(
+        (collector) =>
+            String(
+                (collector.identity || {}).status || ''
+            ).toUpperCase() === 'REVOKED'
+    ).length;
+
+    const backlog = items.filter(
+        (collector) => {
+            const reported = (
+                collector.collector_reported || {}
+            );
+
+            const queue = (
+                collector.server_queue || {}
+            );
+
+            return (
+                String(
+                    reported.transport_status || ''
+                ).toUpperCase() === 'BACKLOG'
+                || Number(queue.queued || 0) > 0
+                || Number(queue.processing || 0) > 0
+            );
+        }
+    ).length;
+
+    const assetCount = items.reduce(
+        (total, collector) =>
+            total
+            + (
+                Array.isArray(collector.assets)
+                    ? collector.assets.length
+                    : 0
+            ),
+        0
+    );
+
+    setText(
+        'assetCollectorCount',
+        formatter.format(items.length)
+    );
+
+    setText(
+        'assetEnrolledCount',
+        formatter.format(enrolled)
+    );
+
+    setText(
+        'assetRevokedCount',
+        formatter.format(revoked)
+    );
+
+    setText(
+        'assetBacklogCount',
+        formatter.format(backlog)
+    );
+
     if (header) {
-        header.textContent = `Air-gapped network — ${devices.length} total devices`;
+        header.textContent = (
+            `${items.length} registered collectors`
+            + ` ? ${assetCount} linked assets`
+        );
     }
 
-    if (!devices.length) {
-        container.innerHTML = '<div class="device-card"><div style="font-size:14px; color:#94a3b8;">No devices detected yet.</div></div>';
-        return;
-    }
-
-    container.innerHTML = devices.map((device) => {
-        const statusClass = deviceStatusClass(device.status);
-        const statusDot = device.status === 'critical'
-            ? 'var(--red)'
-            : device.status === 'warning'
-                ? 'var(--orange)'
-                : 'var(--green)';
-
-        return `
-            <div class="device-card ${statusClass}">
-                <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
-                    <div class="text-white" style="font-weight:600; display:flex; align-items:center; gap:8px;">
-                        <span class="status-dot" style="background:${statusDot}"></span> ${escapeHtml(device.hostname)}
-                    </div>
-                    <i class="ph ph-eye text-main"></i>
-                </div>
-                <div style="font-size:11px; margin-bottom:2px;">${escapeHtml(device.os)}</div>
-                <div class="mono text-cyan" style="font-size:12px; margin-bottom:20px;">${escapeHtml(device.ip)}</div>
-                <div style="display:flex; justify-content:space-between; font-size:11px;">
-                    <span>${formatter.format(device.event_count)} events</span>
-                    <span class="text-white">${formatRelativeTime(device.last_seen)}</span>
+    if (!items.length) {
+        container.innerHTML = `
+            <div class="device-card">
+                <div style="font-size:14px;color:#94a3b8;">
+                    No enterprise collectors are registered.
                 </div>
             </div>
         `;
-    }).join('');
+        return;
+    }
+
+    container.innerHTML = items.map(
+        (collector) => {
+            const identity = (
+                collector.identity || {}
+            );
+
+            const security = (
+                collector.security || {}
+            );
+
+            const liveness = (
+                collector.liveness || {}
+            );
+
+            const observed = (
+                collector.server_observed || {}
+            );
+
+            const reported = (
+                collector.collector_reported || {}
+            );
+
+            const queue = (
+                collector.server_queue || {}
+            );
+
+            const assets = Array.isArray(
+                collector.assets
+            )
+                ? collector.assets
+                : [];
+
+            const state = collectorVisualState(
+                collector
+            );
+
+            const hostname = (
+                identity.hostname
+                || 'Unknown host'
+            );
+
+            const displayName = (
+                identity.display_name
+                || hostname
+            );
+
+            const peerIp = (
+                observed.peer_ip
+                || 'Not observed'
+            );
+
+            const heartbeat = (
+                observed.last_heartbeat_at
+                || observed.last_seen_at
+                || 'Never'
+            );
+
+            const livenessState = String(
+                liveness.state
+                || 'NEVER_SEEN'
+            ).toUpperCase();
+
+            const transport = String(
+                reported.transport_status
+                || 'NOT REPORTED'
+            ).toUpperCase();
+
+            const credentialState = String(
+                security.credential_state
+                || 'UNKNOWN'
+            ).toUpperCase();
+
+            const certificateState = String(
+                security.certificate_state
+                || 'UNKNOWN'
+            ).toUpperCase();
+
+            const mtls = observed.mtls_required
+                ? (
+                    observed.mtls_verified
+                        ? 'VERIFIED'
+                        : 'NOT VERIFIED'
+                )
+                : 'NOT REQUIRED';
+
+            const pendingReported = (
+                reported.pending_batches == null
+                    ? 'N/A'
+                    : String(
+                        reported.pending_batches
+                    )
+            );
+
+            const checkpoint = (
+                reported.checkpoint == null
+                    ? 'N/A'
+                    : String(
+                        reported.checkpoint
+                    )
+            );
+
+            const serverPending = (
+                Number(queue.queued || 0)
+                + Number(queue.processing || 0)
+            );
+
+            const version = (
+                reported.reported_version
+                || reported.registered_version
+                || 'Not reported'
+            );
+
+            const assetHtml = assets.length
+                ? assets.map((asset) => `
+                    <div
+                        style="
+                            margin-top:8px;
+                            padding:8px;
+                            border:1px solid var(--border-color);
+                            border-radius:4px;
+                            background:rgba(255,255,255,0.02);
+                        "
+                    >
+                        <div
+                            class="text-white"
+                            style="font-size:11px;font-weight:600;"
+                        >
+                            ${escapeHtml(
+                                asset.hostname
+                                || asset.asset_id
+                                || 'Asset'
+                            )}
+                        </div>
+                        <div style="font-size:10px;margin-top:3px;">
+                            ${escapeHtml(
+                                asset.os || 'Unknown OS'
+                            )}
+                            ?
+                            <span class="mono">
+                                ${escapeHtml(
+                                    asset.primary_ip
+                                    || 'No IP'
+                                )}
+                            </span>
+                        </div>
+                    </div>
+                `).join('')
+                : `
+                    <div
+                        class="ag-intel-empty"
+                        style="margin-top:8px;"
+                    >
+                        No linked asset record.
+                    </div>
+                `;
+
+            return `
+                <div class="device-card ${state.cardClass}">
+                    <div
+                        style="
+                            display:flex;
+                            justify-content:space-between;
+                            align-items:flex-start;
+                            gap:12px;
+                            margin-bottom:14px;
+                        "
+                    >
+                        <div>
+                            <div
+                                class="text-white"
+                                style="
+                                    font-weight:600;
+                                    display:flex;
+                                    align-items:center;
+                                    gap:8px;
+                                "
+                            >
+                                <span
+                                    class="status-dot"
+                                    style="background:${state.dot}"
+                                ></span>
+                                ${escapeHtml(displayName)}
+                            </div>
+
+                            <div
+                                class="mono"
+                                style="
+                                    margin-top:4px;
+                                    font-size:10px;
+                                    color:#94a3b8;
+                                "
+                            >
+                                ${escapeHtml(
+                                    identity.collector_id || ''
+                                )}
+                            </div>
+                        </div>
+
+                        <span class="badge badge-info">
+                            ${escapeHtml(state.label)}
+                        </span>
+                    </div>
+
+                    <div
+                        style="
+                            display:grid;
+                            grid-template-columns:
+                                repeat(2,minmax(0,1fr));
+                            gap:10px;
+                        "
+                    >
+                        <div>
+                            <div style="font-size:9px;text-transform:uppercase;">
+                                Server-observed peer
+                            </div>
+                            <div class="mono text-cyan" style="font-size:11px;">
+                                ${escapeHtml(peerIp)}
+                            </div>
+                        </div>
+
+                        <div>
+                            <div style="font-size:9px;text-transform:uppercase;">
+                                Version
+                            </div>
+                            <div class="mono" style="font-size:11px;">
+                                ${escapeHtml(version)}
+                            </div>
+                        </div>
+
+                        <div>
+                            <div style="font-size:9px;text-transform:uppercase;">
+                                Liveness
+                            </div>
+                            <div style="font-size:11px;">
+                                ${escapeHtml(livenessState)}
+                            </div>
+                        </div>
+
+                        <div>
+                            <div style="font-size:9px;text-transform:uppercase;">
+                                Transport
+                            </div>
+                            <div style="font-size:11px;">
+                                ${escapeHtml(transport)}
+                            </div>
+                        </div>
+
+                        <div>
+                            <div style="font-size:9px;text-transform:uppercase;">
+                                Last heartbeat
+                            </div>
+                            <div style="font-size:11px;">
+                                ${escapeHtml(
+                                    formatRelativeTime(
+                                        heartbeat
+                                    )
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        style="
+                            margin-top:14px;
+                            padding-top:12px;
+                            border-top:1px solid var(--border-color);
+                        "
+                    >
+                        <div
+                            class="panel-subtitle"
+                            style="margin:0 0 7px;"
+                        >
+                            Server-authoritative trust state
+                        </div>
+
+                        <div
+                            style="
+                                display:flex;
+                                flex-wrap:wrap;
+                                gap:6px;
+                            "
+                        >
+                            <span class="badge badge-info">
+                                Credential:
+                                ${escapeHtml(credentialState)}
+                            </span>
+
+                            <span class="badge badge-info">
+                                Certificate:
+                                ${escapeHtml(certificateState)}
+                            </span>
+
+                            <span class="badge badge-info">
+                                mTLS:
+                                ${escapeHtml(mtls)}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div
+                        style="
+                            margin-top:12px;
+                            padding-top:12px;
+                            border-top:1px solid var(--border-color);
+                        "
+                    >
+                        <div
+                            class="panel-subtitle"
+                            style="margin:0 0 7px;"
+                        >
+                            Collector-reported operational health
+                        </div>
+
+                        <div style="font-size:11px;line-height:1.8;">
+                            Pending batches:
+                            <span class="mono text-cyan">
+                                ${escapeHtml(pendingReported)}
+                            </span>
+                            <br>
+                            ACK checkpoint:
+                            <span class="mono">
+                                ${escapeHtml(checkpoint)}
+                            </span>
+                            <br>
+                            Server pending queue:
+                            <span class="mono">
+                                ${escapeHtml(
+                                    String(serverPending)
+                                )}
+                            </span>
+                            <br>
+                            Failed server batches:
+                            <span class="mono">
+                                ${escapeHtml(
+                                    String(
+                                        Number(queue.failed || 0)
+                                    )
+                                )}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div
+                        style="
+                            margin-top:12px;
+                            padding-top:12px;
+                            border-top:1px solid var(--border-color);
+                        "
+                    >
+                        <div
+                            class="panel-subtitle"
+                            style="margin:0;"
+                        >
+                            Linked Assets (${assets.length})
+                        </div>
+                        ${assetHtml}
+                    </div>
+                </div>
+            `;
+        }
+    ).join('');
 }
 
 function renderAlerts(alerts) {
@@ -926,11 +1432,30 @@ function loadIncidentResponseData() {
 }
 
 function loadDeviceData() {
-    fetch('/api/devices')
-        .then((response) => response.json())
-        .then((devices) => renderDevices(devices))
+    fetch('/api/collectors')
+        .then((response) => {
+            if (!response.ok) {
+                throw new Error(
+                    `Collector inventory failed: ${response.status}`
+                );
+            }
+
+            return response.json();
+        })
+        .then((payload) => {
+            renderCollectors(
+                Array.isArray(payload.collectors)
+                    ? payload.collectors
+                    : []
+            );
+        })
         .catch((error) => {
-            console.error('Device load failed:', error);
+            console.error(
+                'Collector inventory load failed:',
+                error
+            );
+
+            renderCollectors([]);
         });
 }
 
