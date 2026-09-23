@@ -19,6 +19,7 @@ from backend.storage.collector_ingest import (
     mark_collector_batch_failed,
     mark_collector_batch_processed,
     recover_processing_collector_batches,
+    scrub_expired_failed_payloads,
 )
 
 Processor = Callable[[Dict[str, Any], Optional[str]], Any]
@@ -126,6 +127,7 @@ def recover_interrupted_ingest(connection_factory) -> int:
 
     conn = connection_factory()
     try:
+        scrub_expired_failed_payloads(conn)
         return recover_processing_collector_batches(conn)
     finally:
         conn.close()

@@ -12,6 +12,7 @@ from backend.collector.credential_store import (
     CredentialProtectionError,
     default_credential_protector,
 )
+from backend.platform.sqlite_security import configure_sqlite_data_security
 
 
 class CollectorState:
@@ -31,6 +32,7 @@ class CollectorState:
         conn.execute("PRAGMA busy_timeout = 30000")
         conn.execute("PRAGMA journal_mode = WAL")
         conn.execute("PRAGMA synchronous = FULL")
+        configure_sqlite_data_security(conn)
         return conn
 
     def _ensure_schema(self):
