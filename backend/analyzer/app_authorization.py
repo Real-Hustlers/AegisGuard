@@ -145,6 +145,13 @@ def install_application_authorization(
             conn.close()
 
         role = str(session.get("role") or "").upper()
+        g.aegisguard_authenticated_user = {
+            "user_id": session["user_id"],
+            "username": session["username"],
+            "role": role,
+            "session_id": session["session_id"],
+        }
+
         if role not in allowed_roles:
             return _json_error(
                 "forbidden",
