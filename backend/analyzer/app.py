@@ -522,6 +522,13 @@ except ImportError:
     from sensitive_audit import install_sensitive_operation_auditing
 
 try:
+    from backend.analyzer.privacy_projection import (
+        install_application_privacy_projection,
+    )
+except ImportError:
+    from privacy_projection import install_application_privacy_projection
+
+try:
     from backend.analyzer.intelligence.api import create_intelligence_blueprint
     from backend.analyzer.intelligence.ml_runtime import (
         create_configured_ml_runtime_provider,
@@ -663,6 +670,8 @@ install_application_authorization(
         )
     ),
 )
+
+install_application_privacy_projection(app)
 
 install_sensitive_operation_auditing(
     app,

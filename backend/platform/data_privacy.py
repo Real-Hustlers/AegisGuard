@@ -62,6 +62,22 @@ _SECURITY_SENSITIVE_FIELDS = frozenset({
     "body",
     "description",
     "incident_report",
+    "ip",
+    "device",
+    "event",
+    "message",
+    "target_ip",
+    "hostnames",
+    "source_ips",
+    "destination_ips",
+    "users",
+    "processes",
+    "file_paths",
+    "related_entities",
+    "notes",
+    "evidence_references",
+    "resolution_summary",
+    "soar_allowlist",
 })
 
 _PUBLIC_FIELDS = frozenset({
