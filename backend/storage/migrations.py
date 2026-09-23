@@ -8,8 +8,15 @@ legacy tables or columns.
 import sqlite3
 from typing import Callable, Iterable, Tuple
 
+from backend.storage.audit_integrity import (
+    DEFAULT_AUDIT_RETENTION_DAYS,
+    GENESIS_AUDIT_HASH,
+    compute_audit_event_hash,
+    retention_until_for_timestamp,
+)
 
-LATEST_PLATFORM_SCHEMA_VERSION = 8
+
+LATEST_PLATFORM_SCHEMA_VERSION = 9
 Migration = Tuple[int, str, Callable[[sqlite3.Connection], None]]
 
 
@@ -367,6 +374,105 @@ def _migration_008_application_login_throttle(
     )
 
 
+def _migration_009_audit_integrity_retention(
+    conn: sqlite3.Connection,
+) -> None:
+    for column, definition in (
+        ("chain_sequence", "INTEGER"),
+        ("previous_hash", "TEXT"),
+        ("event_hash", "TEXT"),
+        ("retention_until", "TEXT"),
+    ):
+        _add_column_if_missing(
+            conn,
+            "audit_events",
+            column,
+            definition,
+        )
+
+    rows = conn.execute(
+        """
+        SELECT rowid,
+               audit_id,
+               timestamp,
+               actor_user_id,
+               actor_type,
+               action,
+               target_type,
+               target_id,
+               outcome,
+               peer_ip,
+               correlation_id,
+               details_json
+        FROM audit_events
+        ORDER BY rowid ASC
+        """
+    ).fetchall()
+
+    previous_hash = GENESIS_AUDIT_HASH
+    for sequence, row in enumerate(rows, start=1):
+        retention_until = retention_until_for_timestamp(
+            row[2],
+            DEFAULT_AUDIT_RETENTION_DAYS,
+        )
+        event_hash = compute_audit_event_hash(
+            chain_sequence=sequence,
+            audit_id=row[1],
+            timestamp=row[2],
+            actor_user_id=row[3],
+            actor_type=row[4],
+            action=row[5],
+            target_type=row[6],
+            target_id=row[7],
+            outcome=row[8],
+            peer_ip=row[9],
+            correlation_id=row[10],
+            details_json=row[11],
+            retention_until=retention_until,
+            previous_hash=previous_hash,
+        )
+        conn.execute(
+            """
+            UPDATE audit_events
+            SET chain_sequence = ?,
+                previous_hash = ?,
+                event_hash = ?,
+                retention_until = ?
+            WHERE rowid = ?
+            """,
+            (
+                sequence,
+                previous_hash,
+                event_hash,
+                retention_until,
+                row[0],
+            ),
+        )
+        previous_hash = event_hash
+
+    _execute_script_transactionally(
+        conn,
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_audit_chain_sequence
+            ON audit_events(chain_sequence);
+
+        CREATE INDEX IF NOT EXISTS idx_audit_retention_until
+            ON audit_events(retention_until);
+
+        CREATE TRIGGER IF NOT EXISTS trg_audit_retention_delete
+        BEFORE DELETE ON audit_events
+        WHEN OLD.retention_until IS NULL
+          OR datetime(OLD.retention_until) > CURRENT_TIMESTAMP
+        BEGIN
+            SELECT RAISE(
+                ABORT,
+                'audit event retention active'
+            );
+        END;
+        """
+    )
+
+
 MIGRATIONS: Iterable[Migration] = (
     (1, "enterprise_foundation", _migration_001_enterprise_foundation),
     (2, "collector_ingest_queue", _migration_002_collector_ingest_queue),
@@ -399,6 +505,11 @@ MIGRATIONS: Iterable[Migration] = (
         8,
         "application_login_throttle",
         _migration_008_application_login_throttle,
+    ),
+    (
+        9,
+        "audit_integrity_retention",
+        _migration_009_audit_integrity_retention,
     ),
 )
 

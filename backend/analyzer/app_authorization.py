@@ -31,6 +31,9 @@ ALL_APPLICATION_ROLES = frozenset({
 _DEVICE_API_PREFIX = "/api/collector/v1/"
 _LEGACY_DEVICE_UPLOAD_PATH = "/api/upload_logs"
 _AUTH_API_PREFIX = "/api/auth/"
+_ADMIN_READ_PREFIXES = (
+    "/api/audit/",
+)
 
 # The existing endpoint is simulation-only: app.py rejects enforce=True and
 # directs live response actions through the constrained SOAR endpoints.
@@ -81,6 +84,11 @@ def required_roles_for_request(path: str, method: str):
         return None
 
     if method_value in {"GET", "HEAD"}:
+        if any(
+            path_value.startswith(prefix)
+            for prefix in _ADMIN_READ_PREFIXES
+        ):
+            return frozenset({ROLE_ADMINISTRATOR})
         return ALL_APPLICATION_ROLES
 
     if path_value in _ANALYST_MUTATION_PATHS:

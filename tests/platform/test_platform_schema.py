@@ -109,6 +109,17 @@ class PlatformSchemaTests(unittest.TestCase):
         self.assertIn("requested_by_user_id", response_columns)
         self.assertIn("simulation_result", response_columns)
 
+        audit_columns = {
+            row[1]
+            for row in self.conn.execute(
+                "PRAGMA table_info(audit_events)"
+            )
+        }
+        self.assertIn("chain_sequence", audit_columns)
+        self.assertIn("previous_hash", audit_columns)
+        self.assertIn("event_hash", audit_columns)
+        self.assertIn("retention_until", audit_columns)
+
         collector_columns = {
             row[1]
             for row in self.conn.execute("PRAGMA table_info(collectors)")
