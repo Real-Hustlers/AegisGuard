@@ -9,6 +9,13 @@ from datetime import datetime, timezone
 from typing import Any, Mapping, Optional
 
 from backend.platform.contracts import AuditEvent
+from backend.storage.audit_integrity import (
+    DEFAULT_AUDIT_RETENTION_DAYS,
+    GENESIS_AUDIT_HASH,
+    compute_audit_event_hash,
+    retention_until_for_timestamp,
+    validate_retention_days,
+)
 
 
 AUDIT_ACTOR_TYPES = frozenset({
@@ -183,6 +190,7 @@ def record_audit_event(
     correlation_id: Optional[str] = None,
     details: Optional[Mapping[str, Any]] = None,
     now: Optional[datetime] = None,
+    retention_days: int = DEFAULT_AUDIT_RETENTION_DAYS,
 ) -> AuditEvent:
     """Append one server-generated audit event and return its stable contract.
 
@@ -236,6 +244,13 @@ def record_audit_event(
     timestamp_value = _format_timestamp(
         _utc_now() if now is None else now
     )
+    retention_days_value = validate_retention_days(
+        retention_days
+    )
+    retention_until = retention_until_for_timestamp(
+        timestamp_value,
+        retention_days_value,
+    )
     audit_id = "audit-" + uuid.uuid4().hex
     details_json = json.dumps(
         sanitized_details,
@@ -245,6 +260,42 @@ def record_audit_event(
     )
 
     try:
+        conn.execute("BEGIN IMMEDIATE")
+
+        head = conn.execute(
+            """
+            SELECT chain_sequence,
+                   event_hash
+            FROM audit_events
+            ORDER BY chain_sequence DESC
+            LIMIT 1
+            """
+        ).fetchone()
+
+        if head is None:
+            chain_sequence = 1
+            previous_hash = GENESIS_AUDIT_HASH
+        else:
+            chain_sequence = int(head[0]) + 1
+            previous_hash = str(head[1])
+
+        event_hash = compute_audit_event_hash(
+            chain_sequence=chain_sequence,
+            audit_id=audit_id,
+            timestamp=timestamp_value,
+            actor_user_id=user_id,
+            actor_type=actor,
+            action=action_value,
+            target_type=target_type_value,
+            target_id=target_id_value,
+            outcome=outcome_value,
+            peer_ip=peer_ip_value,
+            correlation_id=correlation_value,
+            details_json=details_json,
+            retention_until=retention_until,
+            previous_hash=previous_hash,
+        )
+
         conn.execute(
             """
             INSERT INTO audit_events(
@@ -258,8 +309,12 @@ def record_audit_event(
                 outcome,
                 peer_ip,
                 correlation_id,
-                details_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                details_json,
+                chain_sequence,
+                previous_hash,
+                event_hash,
+                retention_until
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 audit_id,
@@ -273,6 +328,10 @@ def record_audit_event(
                 peer_ip_value,
                 correlation_value,
                 details_json,
+                chain_sequence,
+                previous_hash,
+                event_hash,
+                retention_until,
             ),
         )
         conn.commit()

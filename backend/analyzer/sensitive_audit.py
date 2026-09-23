@@ -8,6 +8,10 @@ from typing import Any, Optional
 from flask import g, request
 
 from backend.analyzer.audit_context import current_request_audit_context
+from backend.storage.audit_integrity import (
+    DEFAULT_AUDIT_RETENTION_DAYS,
+    validate_retention_days,
+)
 from backend.storage.audit_log import record_audit_event
 
 
@@ -131,6 +135,28 @@ def _audit_spec(response) -> Optional[dict[str, Any]]:
             "details": details,
         }
 
+    if method == "GET" and path == "/api/audit/events":
+        return {
+            "actor_type": "USER",
+            "actor_user_id": user["user_id"],
+            "action": "AUDIT.READ",
+            "outcome": outcome,
+            "target_type": "AUDIT_LOG",
+            "target_id": "events",
+            "details": details,
+        }
+
+    if method == "GET" and path == "/api/audit/integrity":
+        return {
+            "actor_type": "USER",
+            "actor_user_id": user["user_id"],
+            "action": "AUDIT.VERIFY",
+            "outcome": outcome,
+            "target_type": "AUDIT_LOG",
+            "target_id": "integrity",
+            "details": details,
+        }
+
     if method != "POST":
         return None
 
@@ -230,13 +256,20 @@ def _audit_spec(response) -> Optional[dict[str, Any]]:
     return None
 
 
-def install_sensitive_operation_auditing(app, connection_factory):
+def install_sensitive_operation_auditing(
+    app,
+    connection_factory,
+    *,
+    retention_days=DEFAULT_AUDIT_RETENTION_DAYS,
+):
     """Persist one audit event for each classified sensitive operation.
 
     Audit writer failures are intentionally not swallowed. A security-sensitive
     request must not appear successful to the caller when its audit record
     could not be persisted.
     """
+
+    retention = validate_retention_days(retention_days)
 
     @app.after_request
     def audit_sensitive_operation(response):
@@ -258,6 +291,7 @@ def install_sensitive_operation_auditing(app, connection_factory):
                 peer_ip=context["peer_ip"],
                 correlation_id=context["correlation_id"],
                 details=spec.get("details"),
+                retention_days=retention,
             )
         finally:
             conn.close()

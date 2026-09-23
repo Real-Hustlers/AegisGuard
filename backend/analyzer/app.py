@@ -485,6 +485,11 @@ except ImportError:
     from audit_context import install_request_correlation
 
 try:
+    from backend.analyzer.audit_api import create_audit_blueprint
+except ImportError:
+    from audit_api import create_audit_blueprint
+
+try:
     from backend.analyzer.browser_security import (
         install_browser_security_headers,
     )
@@ -597,6 +602,18 @@ app.register_blueprint(
     )
 )
 
+app.register_blueprint(
+    create_audit_blueprint(
+        get_connection,
+        retention_days=int(
+            os.environ.get(
+                "AEGISGUARD_AUDIT_RETENTION_DAYS",
+                "365",
+            )
+        ),
+    )
+)
+
 
 install_request_correlation(app)
 
@@ -614,6 +631,12 @@ install_application_authorization(
 install_sensitive_operation_auditing(
     app,
     get_connection,
+    retention_days=int(
+        os.environ.get(
+            "AEGISGUARD_AUDIT_RETENTION_DAYS",
+            "365",
+        )
+    ),
 )
 
 install_browser_security_headers(app)
