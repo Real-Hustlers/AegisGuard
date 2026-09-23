@@ -1,12 +1,23 @@
-import json
-
-from collector import collect_security_logs, send_logs
-from parser import parse_event
-from detector import detect_threat
-from config_loader import load_config
-
-# NEW
-from live_monitoring import start_live_monitor
+try:
+    from backend.collector.collector import (
+        collect_security_logs,
+        save_raw_logs,
+        send_logs,
+    )
+    from backend.collector.parser import parse_event
+    from backend.collector.detector import detect_threat
+    from backend.collector.config_loader import load_config
+    from backend.collector.live_monitoring import start_live_monitor
+except ImportError:
+    from collector import (
+        collect_security_logs,
+        save_raw_logs,
+        send_logs,
+    )
+    from parser import parse_event
+    from detector import detect_threat
+    from config_loader import load_config
+    from live_monitoring import start_live_monitor
 
 
 def main():
@@ -29,8 +40,8 @@ def main():
 
     print(f"Collected {len(raw_logs)} Security Events.\n")
 
-    with open(config["raw_output_file"], "w", encoding="utf-8") as file:
-        json.dump(raw_logs, file, indent=4, default=str)
+    # Governed by S7-D/S7-F. Disabled unless explicitly opted in.
+    save_raw_logs(raw_logs)
 
     parsed_logs = []
 

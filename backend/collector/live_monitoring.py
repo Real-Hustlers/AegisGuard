@@ -8,6 +8,11 @@ from backend.collector.parser import parse_event
 from backend.collector.detector import detect_threat
 from backend.collector.config_loader import get_config_path, load_config
 from backend.collector.durable_runtime import DurableCollectorRuntime
+from backend.collector.diagnostics import (
+    sanitize_diagnostic,
+    sanitize_http_response,
+    sanitize_url_for_diagnostics,
+)
 
 
 # ============================================================
@@ -91,7 +96,8 @@ def maybe_send_heartbeat(
     ) as exc:
         print(
             "[HEARTBEAT FAILED] "
-            f"{exc}. Collection and durable delivery continue."
+            f"{sanitize_diagnostic(exc)}. "
+            "Collection and durable delivery continue."
         )
         return next_due, False
 
@@ -162,7 +168,7 @@ def send_logs(parsed_logs):
 
                     print(
                         "[Analyzer Response]",
-                        response_data
+                        sanitize_diagnostic(response_data),
                     )
 
                 except ValueError:
@@ -183,7 +189,7 @@ def send_logs(parsed_logs):
 
                 print(
                     "Analyzer response:",
-                    response.text
+                    sanitize_http_response(response),
                 )
 
                 return False
@@ -232,18 +238,20 @@ def send_logs(parsed_logs):
             )
 
             print(
-                f"Analyzer URL: {ANALYZER}"
+                "Analyzer URL:",
+                sanitize_url_for_diagnostics(ANALYZER),
             )
 
             print(
-                f"Error: {e}"
+                "Error:",
+                sanitize_diagnostic(e),
             )
 
         except requests.RequestException as e:
 
             print(
                 "[UPLOAD ERROR]",
-                e
+                sanitize_diagnostic(e),
             )
 
         if attempt < UPLOAD_RETRIES:
@@ -294,7 +302,7 @@ def _run_powershell(cmd):
 
         print(
             "PowerShell timed out:",
-            e
+            sanitize_diagnostic(e),
         )
 
         return None
@@ -303,7 +311,7 @@ def _run_powershell(cmd):
 
         print(
             "PowerShell execution failed:",
-            e
+            sanitize_diagnostic(e),
         )
 
         return None
@@ -341,7 +349,7 @@ ConvertTo-Json
     )
 
     print(
-        result.stderr
+        sanitize_diagnostic(result.stderr)
     )
 
     if result.returncode != 0:
@@ -457,7 +465,7 @@ ConvertTo-Json -Depth 4
         )
 
         print(
-            result.stderr
+            sanitize_diagnostic(result.stderr)
         )
 
         error_text = (result.stderr or "").lower()
@@ -484,11 +492,12 @@ ConvertTo-Json -Depth 4
 
         print(
             "Failed to parse PowerShell JSON:",
-            e
+            sanitize_diagnostic(e),
         )
 
         print(
-            result.stdout
+            "Raw PowerShell output omitted because it may "
+            "contain Windows Security event data."
         )
 
         return []
@@ -543,7 +552,9 @@ def start_live_monitor(
 
     print(
         "Analyzer URL:",
-        runtime.analyzer_url
+        sanitize_url_for_diagnostics(
+            runtime.analyzer_url
+        ),
     )
 
     print("Collector hostname:", platform.node())
@@ -599,7 +610,7 @@ def start_live_monitor(
 
             print(
                 "[ERROR] Event collection failed:",
-                e
+                sanitize_diagnostic(e),
             )
 
             time.sleep(
@@ -720,15 +731,14 @@ def start_live_monitor(
 
                 print(
                     f"[+] {record_id} "
-                    f"{parsed.get('event_type', 'UNKNOWN')} "
-                    f"{parsed.get('user', 'UNKNOWN')}"
+                    f"{parsed.get('event_type', 'UNKNOWN')}"
                 )
 
             except Exception as e:
 
                 print(
                     "[ERROR] Failed to process event:",
-                    e
+                    sanitize_diagnostic(e),
                 )
 
         # ====================================================
@@ -807,7 +817,9 @@ if __name__ == "__main__":
 
     except PermissionError as e:
 
-        print(e)
+        print(
+            sanitize_diagnostic(e)
+        )
 
     except KeyboardInterrupt:
 

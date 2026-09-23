@@ -62,6 +62,8 @@ a = Analysis(
         "backend.collector.parser",
         "backend.collector.detector",
         "backend.collector.config_loader",
+        "backend.collector.diagnostics",
+        "backend.platform.data_privacy",
 
         # Networking
         "requests",
