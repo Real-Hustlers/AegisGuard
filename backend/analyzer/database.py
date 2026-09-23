@@ -5,6 +5,8 @@ import sys
 import threading
 from pathlib import Path
 
+from backend.platform.sqlite_security import configure_sqlite_data_security
+
 
 # ============================================================
 # DATABASE PATH
@@ -88,6 +90,8 @@ def get_connection():
     conn.execute(
         "PRAGMA foreign_keys = ON"
     )
+
+    configure_sqlite_data_security(conn)
 
     # --------------------------------------------------------
     # Initialize schema only once per running process

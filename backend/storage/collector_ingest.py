@@ -2,9 +2,62 @@
 
 import json
 import sqlite3
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
 
 from backend.platform.data_privacy import redact_sensitive_text
+
+
+DEFAULT_FAILED_PAYLOAD_RETENTION_DAYS = 30
+MAX_FAILED_PAYLOAD_RETENTION_DAYS = 365
+
+
+def _failed_payload_cutoff(
+    *,
+    retention_days: int,
+    now: Optional[datetime] = None,
+) -> str:
+    days = int(retention_days)
+    if days <= 0 or days > MAX_FAILED_PAYLOAD_RETENTION_DAYS:
+        raise ValueError(
+            "failed payload retention days must be between 1 and "
+            f"{MAX_FAILED_PAYLOAD_RETENTION_DAYS}"
+        )
+
+    current = datetime.now(timezone.utc) if now is None else now
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    current = current.astimezone(timezone.utc)
+
+    return (
+        current - timedelta(days=days)
+    ).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def scrub_expired_failed_payloads(
+    conn: sqlite3.Connection,
+    *,
+    retention_days: int = DEFAULT_FAILED_PAYLOAD_RETENTION_DAYS,
+    now: Optional[datetime] = None,
+) -> int:
+    """Scrub expired raw payload copies from FAILED ingest rows."""
+
+    cutoff = _failed_payload_cutoff(
+        retention_days=retention_days,
+        now=now,
+    )
+    cursor = conn.execute(
+        """
+        UPDATE collector_ingest_batches
+        SET payload_json = '{}'
+        WHERE state = 'FAILED'
+          AND received_at < ?
+          AND payload_json != '{}'
+        """,
+        (cutoff,),
+    )
+    conn.commit()
+    return int(cursor.rowcount)
 
 
 def persist_collector_batch(
