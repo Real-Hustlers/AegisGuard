@@ -29,6 +29,7 @@ env/
 # ============================================================
 
 data/windows_logs.json
+raw_security_logs.json
 
 output/
 backend/analyzer/output/
