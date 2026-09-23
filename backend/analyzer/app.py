@@ -490,6 +490,13 @@ except ImportError:
     from audit_api import create_audit_blueprint
 
 try:
+    from backend.analyzer.incident_api import create_incident_blueprint
+    from backend.analyzer.incident_service import list_incidents
+except ImportError:
+    from incident_api import create_incident_blueprint
+    from incident_service import list_incidents
+
+try:
     from backend.analyzer.browser_security import (
         install_browser_security_headers,
     )
@@ -611,6 +618,12 @@ app.register_blueprint(
                 "365",
             )
         ),
+    )
+)
+
+app.register_blueprint(
+    create_incident_blueprint(
+        get_connection,
     )
 )
 
@@ -1318,202 +1331,18 @@ def devices():
 
 @app.route("/api/incidents")
 def get_incidents():
-    """Fetch all incidents."""
+    """Fetch unified incident summaries with legacy-compatible fields."""
 
     conn = get_connection()
-
     try:
-
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT
-                incident_id,
-                log_id,
-                threat_type,
-                hostname,
-                os,
-                source_ip,
-                user,
-                process,
-                file_path,
-                severity,
-                timestamp,
-                status,
-                action_taken,
-                command_executed,
-                playbook_steps,
-                incident_report,
-                alert_status,
-                mitre
-            FROM incidents
-            ORDER BY timestamp DESC
-        """)
-
-        rows = cursor.fetchall()
-
+        incidents = list_incidents(
+            conn,
+            limit=500,
+        )
     finally:
-
         conn.close()
 
-    incidents = []
-
-    for r in rows:
-
-        # ----------------------------------------------------
-        # Incident report
-        # ----------------------------------------------------
-
-        incident_report = None
-
-        try:
-
-            incident_report = (
-                json.loads(
-                    r["incident_report"]
-                )
-                if r["incident_report"]
-                else None
-            )
-
-        except Exception:
-
-            incident_report = (
-                r["incident_report"]
-            )
-
-        # ----------------------------------------------------
-        # Playbook
-        # ----------------------------------------------------
-
-        try:
-
-            playbook_steps = (
-                json.loads(
-                    r["playbook_steps"]
-                )
-                if r["playbook_steps"]
-                else []
-            )
-
-        except Exception:
-
-            playbook_steps = []
-
-        # ----------------------------------------------------
-        # MITRE
-        # ----------------------------------------------------
-
-        try:
-
-            mitre = (
-                json.loads(
-                    r["mitre"]
-                )
-                if r["mitre"]
-                else {
-                    "technique_id": "Unknown",
-                    "technique": "Unknown",
-                    "tactic": "Unknown",
-                }
-            )
-
-        except Exception:
-
-            mitre = {
-                "technique_id": "Unknown",
-                "technique": "Unknown",
-                "tactic": "Unknown",
-            }
-
-        # ----------------------------------------------------
-        # Response object
-        # ----------------------------------------------------
-
-        incidents.append({
-
-            "incident_id":
-                r["incident_id"],
-
-            "log_id":
-                r["log_id"],
-
-            "threat_type":
-                r["threat_type"],
-
-            "hostname":
-                r["hostname"],
-
-            "os":
-                r["os"],
-
-            "source_ip":
-                r["source_ip"],
-
-            "user":
-                r["user"],
-
-            "process":
-                r["process"],
-
-            "file_path":
-                r["file_path"],
-
-            "severity":
-                r["severity"],
-
-            "timestamp":
-                r["timestamp"],
-
-            "status":
-                r["status"],
-
-            "action_taken":
-                r["action_taken"],
-
-            "command_executed":
-                r["command_executed"],
-
-            "playbook_steps":
-                playbook_steps,
-
-            "incident_report":
-                incident_report,
-
-            "ml_prediction":
-                (
-                    incident_report.get(
-                        "ml_prediction"
-                    )
-                    if isinstance(
-                        incident_report,
-                        dict
-                    )
-                    else None
-                ),
-
-            "ml_confidence":
-                (
-                    incident_report.get(
-                        "ml_confidence"
-                    )
-                    if isinstance(
-                        incident_report,
-                        dict
-                    )
-                    else None
-                ),
-
-            "alert_status":
-                r["alert_status"],
-
-            "mitre":
-                mitre,
-        })
-
-    return jsonify(
-        incidents
-    )
+    return jsonify(incidents)
 
 
 # ============================================================

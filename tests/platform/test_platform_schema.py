@@ -91,6 +91,13 @@ class PlatformSchemaTests(unittest.TestCase):
             "platform_schema_migrations",
             "collector_ingest_batches",
             "auth_login_throttle",
+            "incident_finding_refs",
+            "incident_event_refs",
+            "incident_mitre_mappings",
+            "incident_related_entities",
+            "incident_notes",
+            "incident_evidence_refs",
+            "incident_lifecycle_history",
         }
         self.assertTrue(required.issubset(tables))
 
@@ -106,6 +113,13 @@ class PlatformSchemaTests(unittest.TestCase):
 
         self.assertIn("lifecycle_status", incident_columns)
         self.assertIn("assigned_user_id", incident_columns)
+        self.assertIn("candidate_id", incident_columns)
+        self.assertIn("candidate_fingerprint", incident_columns)
+        self.assertIn("confidence", incident_columns)
+        self.assertIn("attack_story_id", incident_columns)
+        self.assertIn("attack_story_version", incident_columns)
+        self.assertIn("opened_at", incident_columns)
+        self.assertIn("resolution_summary", incident_columns)
         self.assertIn("requested_by_user_id", response_columns)
         self.assertIn("simulation_result", response_columns)
 
