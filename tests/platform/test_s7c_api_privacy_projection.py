@@ -128,7 +128,7 @@ class S7CPrivacyProjectionTests(unittest.TestCase):
         self.assertEqual(incident["related_entities"], REDACTED)
         self.assertEqual(incident["notes"], REDACTED)
 
-    def test_non_soc_api_is_not_over_redacted(self):
+    def test_intelligence_api_is_privacy_projected_for_viewer(self):
         client = self.make_app().test_client()
         response = client.get(
             "/api/intelligence",
@@ -138,9 +138,9 @@ class S7CPrivacyProjectionTests(unittest.TestCase):
 
         self.assertEqual(
             payload["description"],
-            "non-sensitive technique description",
+            REDACTED,
         )
-        self.assertEqual(payload["source_ip"], "10.0.0.5")
+        self.assertEqual(payload["source_ip"], REDACTED)
 
 
 if __name__ == "__main__":

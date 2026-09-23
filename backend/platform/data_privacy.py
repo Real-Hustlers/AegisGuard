@@ -43,6 +43,7 @@ _SECRET_KEY_PARTS = (
 
 _SECURITY_SENSITIVE_FIELDS = frozenset({
     "raw_log",
+    "raw_event",
     "payload_json",
     "normalized_json",
     "username",
