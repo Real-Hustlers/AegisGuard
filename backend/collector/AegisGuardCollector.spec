@@ -42,8 +42,6 @@ a = Analysis(
 
     pathex=[
         str(PROJECT_ROOT),
-        str(PROJECT_ROOT / "backend"),
-        str(COLLECTOR_DIR),
     ],
 
     binaries=[],

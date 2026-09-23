@@ -449,6 +449,22 @@ def test_collector_spec_contains_enterprise_runtime_modules():
 
 
 
+def test_collector_spec_does_not_shadow_stdlib_platform():
+    source = (
+        ROOT
+        / "backend/collector/AegisGuardCollector.spec"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    # Adding PROJECT_ROOT/backend as a top-level search path makes
+    # backend/platform shadow Python's standard-library platform module
+    # in the frozen Collector.
+    assert (
+        'str(PROJECT_ROOT / "backend")'
+        not in source
+    )
+
 
 def test_windows_deployment_powershell_scripts_parse():
     import os
