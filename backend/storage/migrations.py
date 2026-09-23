@@ -16,7 +16,7 @@ from backend.storage.audit_integrity import (
 )
 
 
-LATEST_PLATFORM_SCHEMA_VERSION = 9
+LATEST_PLATFORM_SCHEMA_VERSION = 10
 Migration = Tuple[int, str, Callable[[sqlite3.Connection], None]]
 
 
@@ -473,6 +473,239 @@ def _migration_009_audit_integrity_retention(
     )
 
 
+def _migration_010_unified_incident_platform(
+    conn: sqlite3.Connection,
+) -> None:
+    # Platform migrations are also used by isolated auth/platform tests where
+    # the legacy Analyzer schema has not been initialized first. Migration v1
+    # deliberately tolerated a missing legacy incidents table, so v10 must
+    # self-heal that historical case instead of assuming the table exists.
+    #
+    # Use the complete legacy-compatible base shape here. If the Analyzer
+    # schema already created the table this is a no-op; on a fresh platform
+    # database it prevents later Analyzer startup from inheriting an
+    # incomplete incidents table.
+    _execute_script_transactionally(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS incidents (
+            incident_id TEXT PRIMARY KEY,
+            log_id TEXT,
+            threat_type TEXT,
+            hostname TEXT,
+            os TEXT,
+            source_ip TEXT,
+            user TEXT,
+            process TEXT,
+            file_path TEXT,
+            severity TEXT,
+            timestamp TEXT,
+            status TEXT,
+            action_taken TEXT,
+            command_executed TEXT,
+            playbook_steps TEXT,
+            incident_report TEXT,
+            alert_status TEXT,
+            mitre TEXT
+        );
+        """
+    )
+
+    # A legacy database may contain only a partial incidents table. Re-assert
+    # the complete legacy Analyzer column shape first, then the platform/S6
+    # columns. _add_column_if_missing() keeps this additive and idempotent.
+    for column, definition in (
+        ("log_id", "TEXT"),
+        ("threat_type", "TEXT"),
+        ("hostname", "TEXT"),
+        ("os", "TEXT"),
+        ("source_ip", "TEXT"),
+        ("user", "TEXT"),
+        ("process", "TEXT"),
+        ("file_path", "TEXT"),
+        ("severity", "TEXT"),
+        ("timestamp", "TEXT"),
+        ("status", "TEXT"),
+        ("action_taken", "TEXT"),
+        ("command_executed", "TEXT"),
+        ("playbook_steps", "TEXT"),
+        ("incident_report", "TEXT"),
+        ("alert_status", "TEXT"),
+        ("mitre", "TEXT"),
+        ("title", "TEXT"),
+        ("description", "TEXT"),
+        ("lifecycle_status", "TEXT NOT NULL DEFAULT 'OPEN'"),
+        ("priority", "TEXT"),
+        ("assigned_user_id", "TEXT"),
+        ("updated_at", "TEXT"),
+        ("resolved_at", "TEXT"),
+        ("closed_at", "TEXT"),
+        ("disposition", "TEXT"),
+        ("notes", "TEXT"),
+        ("candidate_id", "TEXT"),
+        ("candidate_fingerprint", "TEXT"),
+        ("confidence", "REAL"),
+        ("attack_story_id", "TEXT"),
+        ("attack_story_version", "TEXT"),
+        ("opened_at", "TEXT"),
+        ("resolution_summary", "TEXT"),
+    ):
+        _add_column_if_missing(
+            conn,
+            "incidents",
+            column,
+            definition,
+        )
+
+    conn.execute(
+        """
+        UPDATE incidents
+        SET title = COALESCE(
+                NULLIF(title, ''),
+                NULLIF(threat_type, ''),
+                incident_id
+            ),
+            lifecycle_status = COALESCE(
+                NULLIF(lifecycle_status, ''),
+                'OPEN'
+            ),
+            opened_at = COALESCE(
+                NULLIF(opened_at, ''),
+                NULLIF(timestamp, ''),
+                CURRENT_TIMESTAMP
+            ),
+            updated_at = COALESCE(
+                NULLIF(updated_at, ''),
+                NULLIF(timestamp, ''),
+                CURRENT_TIMESTAMP
+            )
+        """
+    )
+
+    _execute_script_transactionally(
+        conn,
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_incidents_candidate_id
+            ON incidents(candidate_id)
+            WHERE candidate_id IS NOT NULL
+              AND candidate_id != '';
+
+        CREATE INDEX IF NOT EXISTS idx_incidents_lifecycle_updated
+            ON incidents(lifecycle_status, updated_at DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_incidents_assigned_updated
+            ON incidents(assigned_user_id, updated_at DESC);
+
+        CREATE TABLE IF NOT EXISTS incident_finding_refs (
+            incident_id TEXT NOT NULL,
+            finding_id TEXT NOT NULL,
+            PRIMARY KEY(incident_id, finding_id),
+            FOREIGN KEY(incident_id)
+                REFERENCES incidents(incident_id)
+                ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS incident_event_refs (
+            incident_id TEXT NOT NULL,
+            event_id TEXT NOT NULL,
+            PRIMARY KEY(incident_id, event_id),
+            FOREIGN KEY(incident_id)
+                REFERENCES incidents(incident_id)
+                ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS incident_mitre_mappings (
+            incident_id TEXT NOT NULL,
+            technique_id TEXT NOT NULL,
+            technique TEXT NOT NULL,
+            tactic TEXT NOT NULL,
+            PRIMARY KEY(
+                incident_id,
+                technique_id,
+                tactic
+            ),
+            FOREIGN KEY(incident_id)
+                REFERENCES incidents(incident_id)
+                ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS incident_related_entities (
+            incident_id TEXT NOT NULL,
+            entity_type TEXT NOT NULL,
+            entity_value TEXT NOT NULL,
+            PRIMARY KEY(
+                incident_id,
+                entity_type,
+                entity_value
+            ),
+            FOREIGN KEY(incident_id)
+                REFERENCES incidents(incident_id)
+                ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS incident_notes (
+            note_id TEXT PRIMARY KEY,
+            incident_id TEXT NOT NULL,
+            author_user_id TEXT NOT NULL,
+            body TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(incident_id)
+                REFERENCES incidents(incident_id)
+                ON DELETE CASCADE,
+            FOREIGN KEY(author_user_id)
+                REFERENCES users(user_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_incident_notes_incident_created
+            ON incident_notes(incident_id, created_at);
+
+        CREATE TABLE IF NOT EXISTS incident_evidence_refs (
+            evidence_id TEXT PRIMARY KEY,
+            incident_id TEXT NOT NULL,
+            reference_type TEXT NOT NULL,
+            reference_id TEXT NOT NULL,
+            description TEXT,
+            added_by_user_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(
+                incident_id,
+                reference_type,
+                reference_id
+            ),
+            FOREIGN KEY(incident_id)
+                REFERENCES incidents(incident_id)
+                ON DELETE CASCADE,
+            FOREIGN KEY(added_by_user_id)
+                REFERENCES users(user_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_incident_evidence_incident_created
+            ON incident_evidence_refs(incident_id, created_at);
+
+        CREATE TABLE IF NOT EXISTS incident_lifecycle_history (
+            history_id TEXT PRIMARY KEY,
+            incident_id TEXT NOT NULL,
+            from_status TEXT,
+            to_status TEXT,
+            actor_user_id TEXT,
+            action TEXT NOT NULL,
+            reason TEXT,
+            administrative_override INTEGER NOT NULL DEFAULT 0
+                CHECK(administrative_override IN (0,1)),
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(incident_id)
+                REFERENCES incidents(incident_id)
+                ON DELETE CASCADE,
+            FOREIGN KEY(actor_user_id)
+                REFERENCES users(user_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_incident_history_incident_created
+            ON incident_lifecycle_history(incident_id, created_at);
+        """
+    )
+
+
 MIGRATIONS: Iterable[Migration] = (
     (1, "enterprise_foundation", _migration_001_enterprise_foundation),
     (2, "collector_ingest_queue", _migration_002_collector_ingest_queue),
@@ -510,6 +743,11 @@ MIGRATIONS: Iterable[Migration] = (
         9,
         "audit_integrity_retention",
         _migration_009_audit_integrity_retention,
+    ),
+    (
+        10,
+        "unified_incident_platform",
+        _migration_010_unified_incident_platform,
     ),
 )
 

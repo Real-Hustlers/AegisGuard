@@ -110,7 +110,7 @@ class S53AuditClosureEndToEndTests(unittest.TestCase):
     def test_schema_v9_adds_audit_chain_and_retention_columns(self):
         conn = self.connection_factory()
         try:
-            self.assertEqual(LATEST_PLATFORM_SCHEMA_VERSION, 9)
+            self.assertEqual(LATEST_PLATFORM_SCHEMA_VERSION, 10)
             columns = {
                 row[1]
                 for row in conn.execute(

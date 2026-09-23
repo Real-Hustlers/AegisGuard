@@ -40,6 +40,11 @@ _ADMIN_READ_PREFIXES = (
 _ANALYST_MUTATION_PATHS = frozenset({
     "/api/incidents/execute",
 })
+_ANALYST_INCIDENT_SUFFIXES = (
+    "/transition",
+    "/notes",
+    "/evidence",
+)
 
 
 def _json_error(error, message, status_code):
@@ -92,6 +97,19 @@ def required_roles_for_request(path: str, method: str):
         return ALL_APPLICATION_ROLES
 
     if path_value in _ANALYST_MUTATION_PATHS:
+        return frozenset({
+            ROLE_ADMINISTRATOR,
+            ROLE_ANALYST,
+        })
+
+    if (
+        method_value == "POST"
+        and path_value.startswith("/api/incidents/")
+        and any(
+            path_value.endswith(suffix)
+            for suffix in _ANALYST_INCIDENT_SUFFIXES
+        )
+    ):
         return frozenset({
             ROLE_ADMINISTRATOR,
             ROLE_ANALYST,
