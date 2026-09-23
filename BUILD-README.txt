@@ -111,3 +111,39 @@ Optional explicit override:
 
 The mTLS Windows startup scripts now execute the packaged Analyzer listener
 directly and do not require Python or a source checkout on the deployed host.
+
+Packaged Collector deployment
+-----------------------------
+
+Build:
+
+    python -m PyInstaller backend/collector/AegisGuardCollector.spec
+
+The Collector executable is installed under:
+
+    %ProgramFiles%\AegisGuard\Collector
+
+Writable configuration and durable Collector state live under:
+
+    %ProgramData%\AegisGuard\Collector
+
+The supported frozen configuration path can be overridden with:
+
+    AEGISGUARD_COLLECTOR_CONFIG
+
+The enterprise Collector installer requires an HTTPS Analyzer base URL and
+configures the existing authenticated durable Collector endpoints with mTLS.
+
+The installer deliberately does not persist enrollment or recovery bootstrap
+tokens.
+
+A fresh Collector installation therefore remains disabled by default until
+the deployment operator provisions the existing one-time bootstrap trust
+through the approved runtime mechanism.
+
+S7-D local raw-output policy is preserved:
+
+    raw_output_enabled = false
+
+Optional local raw-log copies remain disabled unless explicitly enabled later
+through the governed Collector configuration.

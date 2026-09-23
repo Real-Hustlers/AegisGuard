@@ -1,4 +1,4 @@
-﻿param(
+param(
     [Parameter(Mandatory = $true)]
     [string]$AnalyzerExe,
 
@@ -28,26 +28,20 @@
 
 $ErrorActionPreference = "Stop"
 
-$identity = (
-    [Security.Principal.WindowsIdentity]
-    ::GetCurrent()
-)
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 
-$principal = New-Object `
-    Security.Principal.WindowsPrincipal(
+$principal = (
+    [Security.Principal.WindowsPrincipal]::new(
         $identity
     )
+)
 
 $isAdmin = $principal.IsInRole(
-    [Security.Principal.WindowsBuiltInRole]
-    ::Administrator
+    [Security.Principal.WindowsBuiltInRole]::Administrator
 )
 
 if (-not $isAdmin) {
-    throw (
-        "Administrator privileges "
-        + "are required."
-    )
+    throw "Administrator privileges are required."
 }
 
 $AnalyzerExe = (
@@ -85,22 +79,16 @@ $Runner = Join-Path `
 if (-not (
     Test-Path $Runner -PathType Leaf
 )) {
-    throw (
-        "mTLS runner was not found: "
-        + $Runner
-    )
+    throw "mTLS runner was not found: $Runner"
 }
 
-function Quote-Argument(
-    [string]$Value
-) {
-    return (
-        '"'
-        + (
-            $Value -replace '"', '\"'
-        )
-        + '"'
+function Quote-Argument {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Value
     )
+
+    return ('"' + ($Value -replace '"', '\"') + '"')
 }
 
 $arguments = @(
@@ -165,10 +153,7 @@ Register-ScheduledTask `
     Out-Null
 
 if ($OpenFirewall) {
-    $ruleName = (
-        "AegisGuard Analyzer mTLS "
-        + $Port
-    )
+    $ruleName = "AegisGuard Analyzer mTLS $Port"
 
     $existing = Get-NetFirewallRule `
         -DisplayName $ruleName `
@@ -188,10 +173,7 @@ if ($OpenFirewall) {
 Start-ScheduledTask `
     -TaskName $TaskName
 
-Write-Host (
-    "AegisGuard packaged Analyzer "
-    + "mTLS startup task installed."
-)
+Write-Host "AegisGuard packaged Analyzer mTLS startup task installed."
 
 Write-Host "Task: $TaskName"
 Write-Host "Executable: $AnalyzerExe"
@@ -202,11 +184,5 @@ Write-Host (
 )
 
 Write-Host ""
-Write-Host (
-    "Enrollment/recovery bootstrap secrets "
-    + "are intentionally not stored"
-)
-Write-Host (
-    "in the scheduled task command line "
-    + "or repository."
-)
+Write-Host "Enrollment/recovery bootstrap secrets are intentionally not stored"
+Write-Host "in the scheduled task command line or repository."

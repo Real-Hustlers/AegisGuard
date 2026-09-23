@@ -49,8 +49,8 @@ a = Analysis(
     binaries=[],
 
     # config.json is intentionally NOT bundled.
-    # It should stay beside the EXE so each endpoint can
-    # point to a different Analyzer URL.
+    # Frozen enterprise deployments load it from the external
+    # ProgramData runtime directory or AEGISGUARD_COLLECTOR_CONFIG.
     datas=[
         *tzdata_files,
     ],
@@ -62,6 +62,11 @@ a = Analysis(
         "backend.collector.parser",
         "backend.collector.detector",
         "backend.collector.config_loader",
+        "backend.collector.durable_runtime",
+        "backend.collector.state",
+        "backend.collector.transport",
+        "backend.collector.credential_store",
+        "backend.deployment.runtime_paths",
 
         # Networking
         "requests",

@@ -96,3 +96,106 @@ def resolve_analyzer_data_dir(
         .resolve()
         .parents[2]
     )
+
+
+COLLECTOR_CONFIG_PATH_ENV = (
+    "AEGISGUARD_COLLECTOR_CONFIG"
+)
+
+
+def resolve_collector_config_path(
+    *,
+    environ: Mapping[str, str] | None = None,
+    frozen: bool | None = None,
+    source_path: str | Path | None = None,
+) -> Path:
+    """Resolve the supported Collector config location.
+
+    Explicit configuration wins.
+
+    Frozen enterprise deployments default to the protected writable
+    ProgramData collector directory instead of the executable directory.
+
+    Source mode preserves the repository collector config used by
+    development and tests.
+    """
+
+    values = (
+        os.environ
+        if environ is None
+        else environ
+    )
+
+    configured = str(
+        values.get(
+            COLLECTOR_CONFIG_PATH_ENV,
+            "",
+        )
+        or ""
+    ).strip()
+
+    if configured:
+        configured_path = Path(
+            os.path.expandvars(
+                os.path.expanduser(
+                    configured
+                )
+            )
+        )
+
+        if not configured_path.is_absolute():
+            raise ValueError(
+                "AEGISGUARD_COLLECTOR_CONFIG "
+                "must be an absolute path"
+            )
+
+        return configured_path.resolve()
+
+    if frozen is None:
+        frozen = bool(
+            getattr(
+                sys,
+                "frozen",
+                False,
+            )
+        )
+
+    if frozen:
+        program_data = str(
+            values.get(
+                "ProgramData",
+                values.get(
+                    "PROGRAMDATA",
+                    "",
+                ),
+            )
+            or ""
+        ).strip()
+
+        if not program_data:
+            raise RuntimeError(
+                "ProgramData is required for "
+                "frozen Collector deployment "
+                "when AEGISGUARD_COLLECTOR_CONFIG "
+                "is not configured"
+            )
+
+        return (
+            Path(program_data)
+            / "AegisGuard"
+            / "Collector"
+            / "config.json"
+        ).resolve()
+
+    if source_path is not None:
+        return Path(
+            source_path
+        ).resolve()
+
+    return (
+        Path(__file__)
+        .resolve()
+        .parents[1]
+        / "collector"
+        / "config.json"
+    ).resolve()

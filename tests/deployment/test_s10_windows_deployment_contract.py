@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 from backend.deployment.windows_contract import (
     REQUIRED_DEPLOYMENT_FILES,
@@ -263,3 +263,265 @@ def test_analyzer_runtime_paths_are_externalized():
         "resolve_analyzer_data_dir"
         in app_source
     )
+
+def test_frozen_collector_config_defaults_to_programdata(tmp_path):
+    from backend.deployment.runtime_paths import (
+        resolve_collector_config_path,
+    )
+
+    result = resolve_collector_config_path(
+        environ={
+            "ProgramData": str(tmp_path),
+        },
+        frozen=True,
+    )
+
+    assert result == (
+        tmp_path
+        / "AegisGuard"
+        / "Collector"
+        / "config.json"
+    )
+
+
+def test_explicit_collector_config_path_wins(tmp_path):
+    from backend.deployment.runtime_paths import (
+        resolve_collector_config_path,
+    )
+
+    explicit = (
+        tmp_path
+        / "custom"
+        / "collector.json"
+    ).resolve()
+
+    result = resolve_collector_config_path(
+        environ={
+            "AEGISGUARD_COLLECTOR_CONFIG": str(
+                explicit
+            ),
+            "ProgramData": str(
+                tmp_path / "ignored"
+            ),
+        },
+        frozen=True,
+    )
+
+    assert result == explicit
+
+
+def test_frozen_collector_without_programdata_fails_closed():
+    import pytest
+
+    from backend.deployment.runtime_paths import (
+        resolve_collector_config_path,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="ProgramData",
+    ):
+        resolve_collector_config_path(
+            environ={},
+            frozen=True,
+        )
+
+
+def test_source_collector_config_path_is_preserved(tmp_path):
+    from backend.deployment.runtime_paths import (
+        resolve_collector_config_path,
+    )
+
+    source = (
+        tmp_path
+        / "config.json"
+    )
+
+    result = resolve_collector_config_path(
+        environ={},
+        frozen=False,
+        source_path=source,
+    )
+
+    assert result == source.resolve()
+
+
+def test_collector_installer_uses_enterprise_external_layout():
+    source = (
+        ROOT
+        / "install_collector.ps1"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    assert "ProgramFiles" in source
+    assert "ProgramData" in source
+    assert "AEGISGUARD_COLLECTOR_CONFIG" not in source
+
+    assert (
+        'raw_output_enabled = $false'
+        in source
+    )
+
+    assert (
+        'collector_auth_required = $true'
+        in source
+    )
+
+    assert (
+        'collector_mtls_required = $true'
+        in source
+    )
+
+
+def test_collector_installer_writes_all_durable_endpoints():
+    source = (
+        ROOT
+        / "install_collector.ps1"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    for endpoint in (
+        "/api/collector/v1/batches",
+        "/api/collector/v1/enroll",
+        "/api/collector/v1/heartbeat",
+        "/api/collector/v1/rotate",
+        "/api/collector/v1/recover",
+        "/api/collector/v1/certificate/rotate",
+    ):
+        assert endpoint in source
+
+    assert "must use HTTPS" in source
+
+
+def test_collector_installer_does_not_persist_bootstrap_tokens():
+    source = (
+        ROOT
+        / "install_collector.ps1"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    assert (
+        "AEGISGUARD_COLLECTOR_ENROLLMENT_TOKEN"
+        not in source
+    )
+
+    assert (
+        "AEGISGUARD_COLLECTOR_RECOVERY_TOKEN"
+        not in source
+    )
+
+
+def test_collector_runner_uses_external_config():
+    source = (
+        ROOT
+        / "deploy/windows/run_collector.ps1"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    assert (
+        "AEGISGUARD_COLLECTOR_CONFIG"
+        in source
+    )
+
+    assert "CollectorExe" in source
+    assert "ConfigPath" in source
+
+
+def test_collector_spec_contains_enterprise_runtime_modules():
+    source = (
+        ROOT
+        / "backend/collector/AegisGuardCollector.spec"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    for module in (
+        "backend.collector.durable_runtime",
+        "backend.collector.state",
+        "backend.collector.transport",
+        "backend.collector.credential_store",
+    ):
+        assert module in source
+
+
+
+
+def test_windows_deployment_powershell_scripts_parse():
+    import os
+    import shutil
+    import subprocess
+
+    import pytest
+
+    powershell = (
+        shutil.which("powershell")
+        or shutil.which("pwsh")
+    )
+
+    if powershell is None:
+        pytest.skip(
+            "PowerShell is not available on this host"
+        )
+
+    scripts = (
+        "install_collector.ps1",
+        "deploy/windows/run_collector.ps1",
+        "deploy/windows/install_analyzer_mtls.ps1",
+        "deploy/windows/run_analyzer_mtls.ps1",
+        "deploy/windows/configure_collector_mtls.ps1",
+    )
+
+    command = (
+        "$tokens=$null;"
+        "$errors=$null;"
+        "$target=$env:AEGISGUARD_PS_PARSE_TARGET;"
+        "[System.Management.Automation.Language.Parser]"
+        "::ParseFile("
+        "$target,"
+        "[ref]$tokens,"
+        "[ref]$errors"
+        ")|Out-Null;"
+        "if($errors.Count -gt 0){"
+        "$errors|ForEach-Object{"
+        "Write-Output ($_.ErrorId + ': ' + $_.Message)"
+        "};"
+        "exit 1"
+        "};"
+        "exit 0"
+    )
+
+    for relative in scripts:
+        target = str(
+            (ROOT / relative).resolve()
+        )
+
+        environment = os.environ.copy()
+        environment[
+            "AEGISGUARD_PS_PARSE_TARGET"
+        ] = target
+
+        result = subprocess.run(
+            [
+                powershell,
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                command,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env=environment,
+        )
+
+        assert result.returncode == 0, (
+            relative
+            + "\nSTDOUT:\n"
+            + result.stdout
+            + "\nSTDERR:\n"
+            + result.stderr
+        )
