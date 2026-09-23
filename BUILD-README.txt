@@ -1,35 +1,86 @@
-AegisGuard Collector Inno Setup build
+﻿AegisGuard Enterprise Windows build notes
+==========================================
 
-1. On the Windows development PC, make sure the current packaged Collector exists at:
-   C:\Users\saran\makethon\dist\AegisGuardCollector\
-   containing AegisGuardCollector.exe and _internal\.
+Run all build commands from the repository root.
 
-2. Put this installer folder at:
-   C:\Users\saran\makethon\installer\
+Analyzer
+--------
 
-   with:
-   - AegisGuardCollector.iss
-   - BUILD-INSTALLER.bat
+Build with:
 
-3. Install Inno Setup 6.
+    python -m PyInstaller app.spec
 
-4. Run BUILD-INSTALLER.bat.
+Collector
+---------
 
-5. The output installer will be created under:
-   C:\Users\saran\makethon\installer\output\
+Build with:
 
-6. The installer asks for:
-   - Analyzer URL
-   - Historical collection hours
-   - Maximum historical events
-   - Start at Windows startup (default: enabled)
+    python -m PyInstaller backend/collector/AegisGuardCollector.spec
 
-7. It writes an external config.json next to the installed EXE and creates a Scheduled Task named:
-   AegisGuard Collector
+The Collector configuration is intentionally external to the executable.
 
-8. The Collector is started immediately after installation.
+Enterprise deployment layout
+----------------------------
 
-Important prerequisites:
-- The built Collector must use a config_loader.py that reads config.json from the EXE directory when frozen.
-- Do not ship secrets or the SQLite database in the Collector installer.
-- Test the installer on a second Windows laptop before publishing it on GitHub Releases.
+Program binaries belong under:
+
+    %ProgramFiles%\AegisGuard\
+
+Writable runtime data belongs under:
+
+    %ProgramData%\AegisGuard\
+
+Analyzer runtime data includes:
+
+    Analyzer\aegisguard.db
+    Analyzer\ml_registry\
+
+Collector runtime data includes:
+
+    Collector\config.json
+    Collector\collector_state.db
+
+TLS certificates, CA material, and private-key references remain external
+runtime configuration under the protected ProgramData deployment area.
+
+Do not bundle or commit:
+
+- collector credentials
+- enrollment tokens
+- recovery tokens
+- private keys
+- production certificates
+- runtime SQLite databases
+- customer log data
+
+Current deployment helpers
+--------------------------
+
+Existing Windows deployment helpers are under:
+
+    deploy\windows\
+
+The repository currently contains:
+
+    configure_collector_mtls.ps1
+    install_analyzer_mtls.ps1
+    run_analyzer_mtls.ps1
+
+S10 hardens these existing deployment paths rather than introducing a
+parallel security or trust implementation.
+
+Validation
+----------
+
+Run:
+
+    python scripts/run_s13a_benchmark.py --help
+
+for the existing performance harness, and:
+
+    python scripts/validate_windows_deployment.py
+
+for the S10 Windows deployment-source preflight.
+
+The preflight is static. It does not install services, open firewall rules,
+generate credentials, or execute response functionality.
