@@ -359,6 +359,8 @@ app = Flask(
 # APPLICATION IMPORTS
 # ============================================================
 
+from backend.platform.data_privacy import redact_sensitive_text
+
 try:
 
     from service import (
@@ -759,11 +761,13 @@ def _ingest_live_batch(payload, collector_ip=None):
             collector_ip,
         )
     except Exception as exc:
-        debug_print(f"[INGEST] Batch failed for {machine_id}: {exc}")
+        safe_error = redact_sensitive_text(exc)
+        debug_print(
+            f"[INGEST] Batch failed for {machine_id}: {safe_error}"
+        )
         return jsonify({
             "status": "error",
             "message": "Analyzer ingestion failed",
-            "error": str(exc),
             "machine": machine_id,
             "logs_received": len(normalized),
         }), 500
