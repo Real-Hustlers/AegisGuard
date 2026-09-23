@@ -3,6 +3,8 @@ import unittest
 from pathlib import Path
 
 from backend.analyzer import app as analyzer_app
+from backend.analyzer.auth_api import AUTH_SESSION_COOKIE
+from backend.storage.user_auth import create_session, create_user
 
 
 class SoarApiTests(unittest.TestCase):
@@ -20,6 +22,28 @@ class SoarApiTests(unittest.TestCase):
             database.DB_PATH = self.path
             database._schema_initialized = False
         self.client = analyzer_app.app.test_client()
+
+        conn = analyzer_app.get_connection()
+        try:
+            user = create_user(
+                conn,
+                "soar-admin",
+                "test-password-soar-admin",
+                "ADMINISTRATOR",
+                user_id="test-soar-admin",
+            )
+            session = create_session(
+                conn,
+                user["user_id"],
+                ttl_seconds=3600,
+            )
+        finally:
+            conn.close()
+
+        self.client.set_cookie(
+            AUTH_SESSION_COOKIE,
+            session["token"],
+        )
 
     def tearDown(self):
         for database, path, initialized in self.original:

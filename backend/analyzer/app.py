@@ -471,6 +471,13 @@ except ImportError:
     from auth_api import create_auth_blueprint
 
 try:
+    from backend.analyzer.app_authorization import (
+        install_application_authorization,
+    )
+except ImportError:
+    from app_authorization import install_application_authorization
+
+try:
     from backend.analyzer.intelligence.api import create_intelligence_blueprint
 except ImportError:
     from intelligence.api import create_intelligence_blueprint
@@ -528,6 +535,12 @@ app.register_blueprint(
 
 app.register_blueprint(
     create_intelligence_blueprint(get_connection)
+)
+
+
+install_application_authorization(
+    app,
+    get_connection,
 )
 
 
