@@ -2,10 +2,22 @@ import json
 import platform
 import subprocess
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import requests
 
-from config_loader import load_config
+try:
+    from backend.collector.config_loader import load_config
+    from backend.collector.raw_output import (
+        persist_raw_logs,
+        raw_output_enabled,
+    )
+except ImportError:
+    from config_loader import load_config
+    from raw_output import (
+        persist_raw_logs,
+        raw_output_enabled,
+    )
 
 
 # ============================================================
@@ -179,11 +191,8 @@ ConvertTo-Json -Depth 4
         )
 
         print(
-            "\nRaw PowerShell output:"
-        )
-
-        print(
-            result.stdout
+            "\nRaw PowerShell output omitted because it may "
+            "contain Windows Security event data."
         )
 
         return []
@@ -195,34 +204,45 @@ ConvertTo-Json -Depth 4
 
 def save_raw_logs(
     logs,
-    filename=None
+    filename=None,
+    *,
+    enabled=None,
+    base_dir=None,
 ):
-    """
-    Save collected logs locally.
-    """
+    """Persist a local raw copy only after explicit operator opt-in."""
+
+    policy_enabled = (
+        raw_output_enabled(config)
+        if enabled is None
+        else bool(enabled)
+    )
+
+    if not policy_enabled:
+        print(
+            "Local raw-log persistence is disabled by policy."
+        )
+        return None
 
     if filename is None:
         filename = config.get(
             "raw_output_file",
-            "raw_security_logs.json"
+            "output/raw_security_logs.json",
         )
 
-    with open(
+    target = persist_raw_logs(
+        logs,
         filename,
-        "w",
-        encoding="utf-8"
-    ) as file:
-
-        json.dump(
-            logs,
-            file,
-            indent=4,
-            default=str
-        )
+        base_dir=(
+            Path.cwd()
+            if base_dir is None
+            else Path(base_dir)
+        ),
+    )
 
     print(
-        f"Raw logs saved to '{filename}'"
+        f"Raw logs saved to '{target}'"
     )
+    return target
 
 
 # ============================================================
@@ -267,17 +287,12 @@ if __name__ == "__main__":
 
     if logs:
 
-        print("First Event:\n")
-
         print(
-            json.dumps(
-                logs[0],
-                indent=4,
-                default=str
-            )
+            "Raw Security event bodies are not printed "
+            "to the console."
         )
 
-        # Save locally
+        # Optional governed local copy; disabled by default.
         save_raw_logs(logs)
 
         # Send to Analyzer
