@@ -4,6 +4,8 @@ import unittest
 from pathlib import Path
 
 from backend.analyzer import app as analyzer_app
+from backend.analyzer.auth_api import AUTH_SESSION_COOKIE
+from backend.storage.user_auth import create_session, create_user
 
 
 class LiveIngestionTests(unittest.TestCase):
@@ -32,6 +34,28 @@ class LiveIngestionTests(unittest.TestCase):
             database.DB_PATH = self.test_db_path
             database._schema_initialized = False
         self.client = analyzer_app.app.test_client()
+
+        conn = analyzer_app.get_connection()
+        try:
+            user = create_user(
+                conn,
+                "live-ingestion-viewer",
+                "test-password-live-ingestion",
+                "VIEWER",
+                user_id="test-live-ingestion-viewer",
+            )
+            session = create_session(
+                conn,
+                user["user_id"],
+                ttl_seconds=3600,
+            )
+        finally:
+            conn.close()
+
+        self.client.set_cookie(
+            AUTH_SESSION_COOKIE,
+            session["token"],
+        )
 
     def tearDown(self):
         for database, db_path, schema_state in self.original_database_state:
