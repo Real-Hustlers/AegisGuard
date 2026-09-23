@@ -17,6 +17,8 @@ _PROTECTED_READ_PREFIXES = (
     "/api/incidents",
     "/api/response-actions",
     "/api/soar",
+    "/api/collectors",
+    "/api/intelligence",
 )
 
 _FULL_TELEMETRY_ROLES = frozenset({
