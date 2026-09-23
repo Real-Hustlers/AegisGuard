@@ -1,6 +1,6 @@
 """Human-user authentication API for the AegisGuard web application."""
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
 
 from backend.storage.login_throttle import (
     DEFAULT_LOGIN_BLOCK_SECONDS,
@@ -144,6 +144,13 @@ def create_auth_blueprint(
         finally:
             conn.close()
 
+        g.aegisguard_audit_user = {
+            "user_id": user["user_id"],
+            "username": user["username"],
+            "role": user["role"],
+            "session_id": session["session_id"],
+        }
+
         response = jsonify({
             "status": "authenticated",
             "user": {
@@ -199,6 +206,21 @@ def create_auth_blueprint(
 
             conn = connection_factory()
             try:
+                try:
+                    session = authenticate_session(
+                        conn,
+                        token,
+                        idle_timeout_seconds=idle_timeout,
+                    )
+                    g.aegisguard_audit_user = {
+                        "user_id": session["user_id"],
+                        "username": session["username"],
+                        "role": session["role"],
+                        "session_id": session["session_id"],
+                    }
+                except SessionAuthenticationError:
+                    session = None
+
                 try:
                     revoke_session(conn, token)
                 except SessionAuthenticationError:

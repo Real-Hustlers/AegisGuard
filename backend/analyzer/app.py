@@ -492,6 +492,13 @@ except ImportError:
     from browser_security import install_browser_security_headers
 
 try:
+    from backend.analyzer.sensitive_audit import (
+        install_sensitive_operation_auditing,
+    )
+except ImportError:
+    from sensitive_audit import install_sensitive_operation_auditing
+
+try:
     from backend.analyzer.intelligence.api import create_intelligence_blueprint
 except ImportError:
     from intelligence.api import create_intelligence_blueprint
@@ -584,6 +591,11 @@ install_application_authorization(
             str(30 * 60),
         )
     ),
+)
+
+install_sensitive_operation_auditing(
+    app,
+    get_connection,
 )
 
 install_browser_security_headers(app)
