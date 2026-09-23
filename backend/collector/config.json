@@ -37,5 +37,6 @@
   ],
   "max_events": 500,
   "hours": 10,
-  "raw_output_file": "raw_security_logs.json"
+  "raw_output_enabled": false,
+  "raw_output_file": "output/raw_security_logs.json"
 }
