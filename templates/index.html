@@ -332,15 +332,65 @@
         </section>
 
         <section id="view-devices" class="view-section">
-            <div style="display:flex; justify-content:space-between; margin-bottom:24px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:24px; flex-wrap:wrap;">
                 <div>
-                    <h2 style="font-size:16px; letter-spacing:1px; text-transform:uppercase;">Monitored Devices</h2>
-                    <div id="deviceCountText" class="panel-subtitle" style="margin:0">Air-gapped network — 0 total devices</div>
+                    <div class="ag-intel-eyebrow">ENTERPRISE INVENTORY</div>
+                    <h2 style="font-size:16px; letter-spacing:1px; text-transform:uppercase;">
+                        Asset &amp; Collector Management
+                    </h2>
+                    <div id="deviceCountText" class="panel-subtitle" style="margin:4px 0 0;">
+                        Loading registered collectors and linked assets...
+                    </div>
+                    <div class="panel-subtitle" style="margin:6px 0 0;">
+                        Server-authoritative trust state and collector-reported operational health are displayed separately.
+                    </div>
                 </div>
-                <button id="deviceSyncBtn" class="btn-outline" style="display:flex; align-items:center; gap:5px;"><i class="ph ph-arrows-clockwise"></i> SYNC</button>
+
+                <button id="deviceSyncBtn" class="btn-outline" style="display:flex; align-items:center; gap:5px;">
+                    <i class="ph ph-arrows-clockwise"></i>
+                    REFRESH
+                </button>
             </div>
+
+            <div class="ag-intel-kpis" aria-label="Asset and collector summary">
+                <div class="ag-intel-kpi">
+                    <div class="ag-intel-kpi-label">Registered Collectors</div>
+                    <div id="assetCollectorCount" class="ag-intel-kpi-value">0</div>
+                    <div class="ag-intel-kpi-help">Server registry identities</div>
+                </div>
+
+                <div class="ag-intel-kpi">
+                    <div class="ag-intel-kpi-label">Enrolled</div>
+                    <div id="assetEnrolledCount" class="ag-intel-kpi-value">0</div>
+                    <div class="ag-intel-kpi-help">Collectors currently enrolled</div>
+                </div>
+
+                <div class="ag-intel-kpi">
+                    <div class="ag-intel-kpi-label">Revoked</div>
+                    <div id="assetRevokedCount" class="ag-intel-kpi-value">0</div>
+                    <div class="ag-intel-kpi-help">Server-side revoked identities</div>
+                </div>
+
+                <div class="ag-intel-kpi">
+                    <div class="ag-intel-kpi-label">Queue / Backlog</div>
+                    <div id="assetBacklogCount" class="ag-intel-kpi-value">0</div>
+                    <div class="ag-intel-kpi-help">Collectors with queued operational work</div>
+                </div>
+            </div>
+
+            <div class="panel" style="margin-bottom:18px;">
+                <div class="panel-title">Trust &amp; Health Interpretation</div>
+                <div class="panel-subtitle" style="margin:0;">
+                    Identity, credential, certificate, mTLS and server-observed peer state are authoritative server facts. Pending batches, checkpoints and transport status are collector-reported operational telemetry. Neither is inferred from security-event severity.
+                </div>
+            </div>
+
             <div id="deviceGrid" class="device-grid">
-                <div class="device-card"><div style="display:flex; justify-content:space-between; margin-bottom:15px;"><div class="text-white" style="font-weight:600; display:flex; align-items:center; gap:8px;"><span class="status-dot dot-green"></span> Loading devices...</div></div><div style="font-size:11px; margin-bottom:2px;">Please wait</div></div>
+                <div class="device-card">
+                    <div style="font-size:14px;color:#94a3b8;">
+                        Loading collector inventory...
+                    </div>
+                </div>
             </div>
         </section>
 

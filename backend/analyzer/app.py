@@ -499,6 +499,15 @@ except ImportError:
     from incident_service import list_incidents
 
 try:
+    from backend.analyzer.asset_api import (
+        create_asset_management_blueprint,
+    )
+except ImportError:
+    from asset_api import (
+        create_asset_management_blueprint,
+    )
+
+try:
     from backend.analyzer.browser_security import (
         install_browser_security_headers,
     )
@@ -633,6 +642,18 @@ app.register_blueprint(
 app.register_blueprint(
     create_incident_blueprint(
         get_connection,
+    )
+)
+
+app.register_blueprint(
+    create_asset_management_blueprint(
+        get_connection,
+        stale_after_seconds=float(
+            os.environ.get(
+                "AEGISGUARD_COLLECTOR_STALE_AFTER_SECONDS",
+                "90",
+            )
+        ),
     )
 )
 
