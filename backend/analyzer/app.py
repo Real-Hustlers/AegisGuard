@@ -13,6 +13,10 @@ from flask import (
     request,
 )
 
+from backend.deployment.runtime_paths import (
+    resolve_analyzer_data_dir,
+)
+
 
 # ============================================================
 # PIPELINE CONCURRENCY
@@ -163,30 +167,17 @@ def resource_path(relative_path):
 
 def app_data_path(relative_path):
     """
-    Return a writable application path.
+    Return a writable Analyzer runtime path.
 
-    Source:
-        project root
+    Source mode keeps the repository-root layout.
 
-    PyInstaller:
-        directory containing app.exe
+    Frozen enterprise deployments use AEGISGUARD_DATA_DIR or
+    %ProgramData%\\AegisGuard\\Analyzer.
     """
 
-    if getattr(sys, "frozen", False):
-
-        base_path = (
-            Path(sys.executable)
-            .resolve()
-            .parent
-        )
-
-    else:
-
-        base_path = (
-            Path(__file__)
-            .resolve()
-            .parents[2]
-        )
+    base_path = (
+        resolve_analyzer_data_dir()
+    )
 
     path = (
         base_path

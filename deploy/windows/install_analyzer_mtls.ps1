@@ -1,9 +1,9 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$PythonExe,
+    [string]$AnalyzerExe,
 
     [Parameter(Mandatory = $true)]
-    [string]$RepoRoot,
+    [string]$DataDirectory,
 
     [Parameter(Mandatory = $true)]
     [string]$ServerCertificate,
@@ -19,7 +19,9 @@ param(
     [ValidateRange(1, 65535)]
     [int]$Port = 5443,
 
-    [string]$TaskName = "AegisGuard Analyzer mTLS",
+    [string]$TaskName = (
+        "AegisGuard Analyzer mTLS"
+    ),
 
     [switch]$OpenFirewall
 )
@@ -27,7 +29,13 @@ param(
 $ErrorActionPreference = "Stop"
 
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-$principal = New-Object Security.Principal.WindowsPrincipal($identity)
+
+$principal = (
+    [Security.Principal.WindowsPrincipal]::new(
+        $identity
+    )
+)
+
 $isAdmin = $principal.IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator
 )
@@ -36,19 +44,51 @@ if (-not $isAdmin) {
     throw "Administrator privileges are required."
 }
 
-$PythonExe = (Resolve-Path $PythonExe).Path
-$RepoRoot = (Resolve-Path $RepoRoot).Path
-$ServerCertificate = (Resolve-Path $ServerCertificate).Path
-$ServerPrivateKey = (Resolve-Path $ServerPrivateKey).Path
-$ClientCa = (Resolve-Path $ClientCa).Path
+$AnalyzerExe = (
+    Resolve-Path $AnalyzerExe
+).Path
 
-$Runner = Join-Path $RepoRoot "deploy\windows\run_analyzer_mtls.ps1"
-if (-not (Test-Path $Runner -PathType Leaf)) {
+$ServerCertificate = (
+    Resolve-Path $ServerCertificate
+).Path
+
+$ServerPrivateKey = (
+    Resolve-Path $ServerPrivateKey
+).Path
+
+$ClientCa = (
+    Resolve-Path $ClientCa
+).Path
+
+$DataDirectory = (
+    [System.IO.Path]::GetFullPath(
+        $DataDirectory
+    )
+)
+
+New-Item `
+    -ItemType Directory `
+    -Force `
+    -Path $DataDirectory |
+    Out-Null
+
+$Runner = Join-Path `
+    $PSScriptRoot `
+    "run_analyzer_mtls.ps1"
+
+if (-not (
+    Test-Path $Runner -PathType Leaf
+)) {
     throw "mTLS runner was not found: $Runner"
 }
 
-function Quote-Argument([string]$Value) {
-    return '"' + ($Value -replace '"', '\"') + '"'
+function Quote-Argument {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Value
+    )
+
+    return ('"' + ($Value -replace '"', '\"') + '"')
 }
 
 $arguments = @(
@@ -57,10 +97,10 @@ $arguments = @(
     "Bypass"
     "-File"
     (Quote-Argument $Runner)
-    "-PythonExe"
-    (Quote-Argument $PythonExe)
-    "-RepoRoot"
-    (Quote-Argument $RepoRoot)
+    "-AnalyzerExe"
+    (Quote-Argument $AnalyzerExe)
+    "-DataDirectory"
+    (Quote-Argument $DataDirectory)
     "-ServerCertificate"
     (Quote-Argument $ServerCertificate)
     "-ServerPrivateKey"
@@ -76,19 +116,32 @@ $arguments = @(
 $action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
     -Argument $arguments `
-    -WorkingDirectory $RepoRoot
+    -WorkingDirectory (
+        Split-Path `
+            -Parent `
+            $AnalyzerExe
+    )
 
-$trigger = New-ScheduledTaskTrigger -AtStartup
+$trigger = (
+    New-ScheduledTaskTrigger `
+        -AtStartup
+)
 
-$taskPrincipal = New-ScheduledTaskPrincipal `
-    -UserId "SYSTEM" `
-    -LogonType ServiceAccount `
-    -RunLevel Highest
+$taskPrincipal = (
+    New-ScheduledTaskPrincipal `
+        -UserId "SYSTEM" `
+        -LogonType ServiceAccount `
+        -RunLevel Highest
+)
 
-$settings = New-ScheduledTaskSettingsSet `
-    -RestartCount 5 `
-    -RestartInterval (New-TimeSpan -Minutes 1) `
-    -StartWhenAvailable
+$settings = (
+    New-ScheduledTaskSettingsSet `
+        -RestartCount 5 `
+        -RestartInterval (
+            New-TimeSpan -Minutes 1
+        ) `
+        -StartWhenAvailable
+)
 
 Register-ScheduledTask `
     -TaskName $TaskName `
@@ -96,10 +149,12 @@ Register-ScheduledTask `
     -Trigger $trigger `
     -Principal $taskPrincipal `
     -Settings $settings `
-    -Force | Out-Null
+    -Force |
+    Out-Null
 
 if ($OpenFirewall) {
     $ruleName = "AegisGuard Analyzer mTLS $Port"
+
     $existing = Get-NetFirewallRule `
         -DisplayName $ruleName `
         -ErrorAction SilentlyContinue
@@ -110,16 +165,24 @@ if ($OpenFirewall) {
             -Direction Inbound `
             -Action Allow `
             -Protocol TCP `
-            -LocalPort $Port | Out-Null
+            -LocalPort $Port |
+            Out-Null
     }
 }
 
-Start-ScheduledTask -TaskName $TaskName
+Start-ScheduledTask `
+    -TaskName $TaskName
 
-Write-Host "AegisGuard Analyzer mTLS startup task installed."
+Write-Host "AegisGuard packaged Analyzer mTLS startup task installed."
+
 Write-Host "Task: $TaskName"
+Write-Host "Executable: $AnalyzerExe"
+Write-Host "Data directory: $DataDirectory"
 Write-Host "Port: $Port"
-Write-Host "Client certificate verification: REQUIRED"
+Write-Host (
+    "Client certificate verification: REQUIRED"
+)
+
 Write-Host ""
 Write-Host "Enrollment/recovery bootstrap secrets are intentionally not stored"
 Write-Host "in the scheduled task command line or repository."

@@ -1,4 +1,4 @@
-# -*- mode: python ; coding: utf-8 -*-
+﻿# -*- mode: python ; coding: utf-8 -*-
 
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_data_files
@@ -42,15 +42,13 @@ a = Analysis(
 
     pathex=[
         str(PROJECT_ROOT),
-        str(PROJECT_ROOT / "backend"),
-        str(COLLECTOR_DIR),
     ],
 
     binaries=[],
 
     # config.json is intentionally NOT bundled.
-    # It should stay beside the EXE so each endpoint can
-    # point to a different Analyzer URL.
+    # Frozen enterprise deployments load it from the external
+    # ProgramData runtime directory or AEGISGUARD_COLLECTOR_CONFIG.
     datas=[
         *tzdata_files,
     ],
@@ -62,8 +60,19 @@ a = Analysis(
         "backend.collector.parser",
         "backend.collector.detector",
         "backend.collector.config_loader",
+
+        # Durable authenticated Collector runtime
+        "backend.collector.durable_runtime",
+        "backend.collector.state",
+        "backend.collector.transport",
+        "backend.collector.credential_store",
+
+        # S7 privacy / diagnostics
         "backend.collector.diagnostics",
         "backend.platform.data_privacy",
+
+        # Enterprise deployment paths
+        "backend.deployment.runtime_paths",
 
         # Networking
         "requests",

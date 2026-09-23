@@ -1,32 +1,30 @@
-import json
-import sys
+﻿import json
 from pathlib import Path
+
+from backend.deployment.runtime_paths import (
+    resolve_collector_config_path,
+)
 
 
 def get_config_path():
-    """Return the one supported Collector configuration location."""
+    """Return the supported Collector configuration location."""
 
-    if getattr(sys, "frozen", False):
-        # Look for config.json next to the EXE
-        return (
-            Path(sys.executable).resolve().parent
+    return resolve_collector_config_path(
+        source_path=(
+            Path(__file__)
+            .resolve()
+            .parent
             / "config.json"
-        )
-    else:
-        # Normal Python development
-        return (
-            Path(__file__).resolve().parent
-            / "config.json"
-        )
+        ),
+    )
 
 
 def load_config():
-
     config_path = get_config_path()
 
     print(
         f"Loading config from: {config_path}",
-        flush=True
+        flush=True,
     )
 
     if not config_path.exists():
@@ -37,7 +35,6 @@ def load_config():
     with open(
         config_path,
         "r",
-        encoding="utf-8"
+        encoding="utf-8",
     ) as file:
-
         return json.load(file)
