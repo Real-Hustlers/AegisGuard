@@ -57,7 +57,7 @@ class AuditFoundationTests(unittest.TestCase):
         try:
             self.assertEqual(
                 LATEST_PLATFORM_SCHEMA_VERSION,
-                9,
+                10,
             )
             table = conn.execute(
                 """

@@ -18,6 +18,10 @@ from backend.storage.audit_log import record_audit_event
 _RESPONSE_APPROVAL_RE = re.compile(
     r"^/api/response-actions/(?P<action_id>\d+)/approve$"
 )
+_INCIDENT_WORKFLOW_RE = re.compile(
+    r"^/api/incidents/(?P<incident_id>[^/]+)/"
+    r"(?P<operation>transition|assign|notes|evidence|override)$"
+)
 
 
 def _response_json(response) -> dict[str, Any]:
@@ -159,6 +163,42 @@ def _audit_spec(response) -> Optional[dict[str, Any]]:
 
     if method != "POST":
         return None
+
+    incident_workflow = _INCIDENT_WORKFLOW_RE.fullmatch(path)
+    if incident_workflow:
+        incident_id = incident_workflow.group("incident_id")
+        operation = incident_workflow.group("operation")
+        action_map = {
+            "transition": "INCIDENT.TRANSITION",
+            "assign": "INCIDENT.ASSIGN",
+            "notes": "INCIDENT.NOTE_ADD",
+            "evidence": "INCIDENT.EVIDENCE_ADD",
+            "override": "INCIDENT.OVERRIDE",
+        }
+        if operation in {"transition", "override"}:
+            details["to_status"] = str(
+                payload.get("to_status") or ""
+            ).upper() or None
+        elif operation == "assign":
+            details["assigned_user_id"] = (
+                str(payload.get("assigned_user_id") or "").strip()
+                or None
+            )
+        elif operation == "evidence":
+            details["reference_type"] = (
+                str(payload.get("reference_type") or "").upper()
+                or None
+            )
+
+        return {
+            "actor_type": "USER",
+            "actor_user_id": user["user_id"],
+            "action": action_map[operation],
+            "outcome": outcome,
+            "target_type": "INCIDENT",
+            "target_id": incident_id,
+            "details": details,
+        }
 
     if path == "/api/incidents/settings":
         changed_keys = sorted(
