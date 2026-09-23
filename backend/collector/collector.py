@@ -271,7 +271,8 @@ if __name__ == "__main__":
     print("=" * 60)
 
     print(
-        f"\nAnalyzer URL : {ANALYZER}"
+        "\nAnalyzer URL :",
+        sanitize_url_for_diagnostics(ANALYZER),
     )
 
     print(

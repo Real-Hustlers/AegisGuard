@@ -205,7 +205,7 @@ def send_logs(parsed_logs):
 
             print(
                 "Analyzer response:",
-                response.text
+                sanitize_http_response(response),
             )
 
         except requests.ConnectTimeout:
@@ -336,21 +336,14 @@ ConvertTo-Json
     if result is None:
         return 0
 
-    print(
-        "PowerShell stdout:"
-    )
+    if result.stderr:
+        print(
+            "PowerShell stderr:"
+        )
 
-    print(
-        result.stdout
-    )
-
-    print(
-        "PowerShell stderr:"
-    )
-
-    print(
-        sanitize_diagnostic(result.stderr)
-    )
+        print(
+            sanitize_diagnostic(result.stderr)
+        )
 
     if result.returncode != 0:
         error_text = (result.stderr or "").lower()
@@ -376,7 +369,7 @@ ConvertTo-Json
 
         print(
             "Failed to parse latest RecordId JSON:",
-            e
+            sanitize_diagnostic(e),
         )
 
         return 0
