@@ -500,8 +500,14 @@ except ImportError:
 
 try:
     from backend.analyzer.intelligence.api import create_intelligence_blueprint
+    from backend.analyzer.intelligence.ml_runtime import (
+        create_configured_ml_runtime_provider,
+    )
 except ImportError:
     from intelligence.api import create_intelligence_blueprint
+    from intelligence.ml_runtime import (
+        create_configured_ml_runtime_provider,
+    )
 
 try:
     from backend.analyzer.ingest_pipeline import process_normalized_collector_logs
@@ -575,8 +581,20 @@ app.register_blueprint(
 )
 
 
+governed_ml_runtime_provider = (
+    create_configured_ml_runtime_provider(
+        default_registry_root=app_data_path(
+            "data/ml_registry"
+        ),
+    )
+)
+
+
 app.register_blueprint(
-    create_intelligence_blueprint(get_connection)
+    create_intelligence_blueprint(
+        get_connection,
+        ml_runtime_provider=governed_ml_runtime_provider,
+    )
 )
 
 
