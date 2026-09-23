@@ -145,4 +145,10 @@ def test_main_analyzer_registers_intelligence_blueprint():
     ).read_text(encoding="utf-8")
 
     assert "create_intelligence_blueprint" in app_source
-    assert "create_intelligence_blueprint(get_connection)" in app_source
+
+    compact = "".join(app_source.split())
+
+    assert (
+        "create_intelligence_blueprint(get_connection"
+        in compact
+    )

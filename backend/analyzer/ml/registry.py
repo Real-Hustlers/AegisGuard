@@ -184,9 +184,21 @@ class ModelRegistry:
         active_path = self._model_dir(model_name) / ACTIVE_FILENAME
         if not active_path.exists():
             return None
+
         with open(active_path, "r", encoding="utf-8") as handle:
             active = json.load(handle)
-        return self.read_metadata(model_name, str(active["model_version"]))
+
+        metadata = self.read_metadata(
+            model_name,
+            str(active["model_version"]),
+        )
+
+        if metadata.stage is not ModelStage.PROMOTED:
+            raise ModelRegistryError(
+                "active model metadata must be PROMOTED"
+            )
+
+        return metadata
 
     def promote(
         self,

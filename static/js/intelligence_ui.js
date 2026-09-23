@@ -11,6 +11,8 @@
         alerts: [],
         events: [],
         incidents: [],
+        governedMlRuntime: {},
+        governedMlFindings: [],
         legacyMlTelemetry: {},
         snapshotAuthoritative: false
     };
@@ -219,46 +221,182 @@
         if (!container) return;
 
         const dashboard = asObject(state.dashboard);
-        const summary = asObject(dashboard.ml_summary);
-        const prediction = String(summary.prediction || 'UNKNOWN').toUpperCase();
-        const confidence = summary.confidence == null
-            ? 'Not exposed'
-            : `${Number(summary.confidence).toFixed(1)}%`;
-        const count = summary.count == null ? 'Not exposed' : String(summary.count);
+        const legacySummary = asObject(dashboard.ml_summary);
+        const runtime = asObject(state.governedMlRuntime);
+        const governedFindings = asArray(state.governedMlFindings);
+        const primaryFinding = governedFindings.length
+            ? asObject(governedFindings[0])
+            : {};
+        const findingMetadata = asObject(primaryFinding.metadata);
 
-        const modelVersions = new Set();
-        const featureSchemas = new Set();
+        const runtimeStatus = state.snapshotAuthoritative
+            ? String(runtime.status || 'UNAVAILABLE').toUpperCase()
+            : 'WAITING';
 
-        asArray(state.incidents).forEach((incident) => {
-            const report = asObject(incident.incident_report);
-            const version = incident.model_version || report.model_version;
-            const schema = incident.feature_schema_version || report.feature_schema_version;
-            if (version) modelVersions.add(String(version));
-            if (schema) featureSchemas.add(String(schema));
-        });
+        const runtimeBadgeClass = runtimeStatus === 'AVAILABLE'
+            ? 'badge-live'
+            : runtimeStatus === 'DEGRADED'
+                ? 'badge-high'
+                : 'badge-info';
+
+        const modelName = String(
+            runtime.model_name
+            || findingMetadata.model_name
+            || 'Not configured'
+        );
+
+        const modelVersion = String(
+            runtime.model_version
+            || primaryFinding.model_version
+            || 'Not available'
+        );
+
+        const featureSchema = String(
+            runtime.feature_schema_version
+            || primaryFinding.feature_schema_version
+            || 'Not available'
+        );
+
+        const threatPrediction = String(
+            findingMetadata.prediction
+            || (
+                primaryFinding.name
+                    ? String(primaryFinding.name)
+                        .replace(/^ML detection:\s*/i, '')
+                    : 'No threat finding'
+            )
+        );
+
+        const governedConfidence = (
+            primaryFinding.confidence == null
+                ? 'No threat finding'
+                : `${(
+                    Number(primaryFinding.confidence) * 100
+                ).toFixed(1)}%`
+        );
+
+        let governedReason;
+
+        if (!state.snapshotAuthoritative) {
+            governedReason = (
+                'Waiting for authoritative intelligence snapshot.'
+            );
+        } else {
+            governedReason = String(
+                runtime.reason
+                || primaryFinding.reason
+                || (
+                    runtimeStatus === 'AVAILABLE'
+                        ? 'Verified promoted model loaded.'
+                        : 'Governed ML runtime is not available.'
+                )
+            );
+        }
+
+        const legacyPrediction = String(
+            legacySummary.prediction || 'UNKNOWN'
+        ).toUpperCase();
+
+        const legacyConfidence = (
+            legacySummary.confidence == null
+                ? 'Not exposed'
+                : `${Number(
+                    legacySummary.confidence
+                ).toFixed(1)}%`
+        );
+
+        const legacyCount = (
+            legacySummary.count == null
+                ? 'Not exposed'
+                : String(legacySummary.count)
+        );
+
+        const legacyTelemetry = asObject(
+            state.legacyMlTelemetry
+        );
+
+        const legacyIdentity = (
+            legacyTelemetry.model_identity_available
+                ? 'yes'
+                : 'no'
+        );
+
+        const legacyLimitation = String(
+            legacyTelemetry.limitation
+            || (
+                'Historical classifier telemetry is separate '
+                + 'from governed ML findings.'
+            )
+        );
 
         container.innerHTML = `
+            <div class="ag-intel-note" style="margin-top:0; padding-top:0; border-top:0;">
+                <strong>Governed ML Runtime</strong>
+                <span class="badge ${runtimeBadgeClass}" style="margin-left:8px;">
+                    ${escapeHtml(runtimeStatus)}
+                </span>
+            </div>
+
             <div class="ag-ml-grid">
                 <div class="ag-ml-field">
-                    <div class="ag-ml-field-label">Dominant Prediction</div>
-                    <div class="ag-ml-field-value">${escapeHtml(prediction)}</div>
+                    <div class="ag-ml-field-label">Promoted Model</div>
+                    <div class="ag-ml-field-value">${escapeHtml(modelName)}</div>
                 </div>
-                <div class="ag-ml-field">
-                    <div class="ag-ml-field-label">Average Confidence</div>
-                    <div class="ag-ml-field-value">${escapeHtml(confidence)}</div>
-                </div>
-                <div class="ag-ml-field">
-                    <div class="ag-ml-field-label">Observed Events</div>
-                    <div class="ag-ml-field-value">${escapeHtml(count)}</div>
-                </div>
+
                 <div class="ag-ml-field">
                     <div class="ag-ml-field-label">Model Version</div>
-                    <div class="ag-ml-field-value">${escapeHtml(modelVersions.size ? Array.from(modelVersions).join(', ') : 'Not exposed by current API')}</div>
+                    <div class="ag-ml-field-value">${escapeHtml(modelVersion)}</div>
                 </div>
+
                 <div class="ag-ml-field">
                     <div class="ag-ml-field-label">Feature Schema</div>
-                    <div class="ag-ml-field-value">${escapeHtml(featureSchemas.size ? Array.from(featureSchemas).join(', ') : 'Not exposed by current API')}</div>
+                    <div class="ag-ml-field-value">${escapeHtml(featureSchema)}</div>
                 </div>
+
+                <div class="ag-ml-field">
+                    <div class="ag-ml-field-label">Threat Prediction</div>
+                    <div class="ag-ml-field-value">${escapeHtml(threatPrediction)}</div>
+                </div>
+
+                <div class="ag-ml-field">
+                    <div class="ag-ml-field-label">Confidence</div>
+                    <div class="ag-ml-field-value">${escapeHtml(governedConfidence)}</div>
+                </div>
+            </div>
+
+            <div class="ag-intel-note">
+                ${escapeHtml(governedReason)}
+            </div>
+
+            <div class="ag-intel-note">
+                <strong>Legacy ML Telemetry</strong>
+            </div>
+
+            <div class="ag-ml-grid">
+                <div class="ag-ml-field">
+                    <div class="ag-ml-field-label">Historical Prediction</div>
+                    <div class="ag-ml-field-value">${escapeHtml(legacyPrediction)}</div>
+                </div>
+
+                <div class="ag-ml-field">
+                    <div class="ag-ml-field-label">Average Confidence</div>
+                    <div class="ag-ml-field-value">${escapeHtml(legacyConfidence)}</div>
+                </div>
+
+                <div class="ag-ml-field">
+                    <div class="ag-ml-field-label">Observed Events</div>
+                    <div class="ag-ml-field-value">${escapeHtml(legacyCount)}</div>
+                </div>
+
+                <div class="ag-ml-field">
+                    <div class="ag-ml-field-label">Governed Model Identity</div>
+                    <div class="ag-ml-field-value">${escapeHtml(legacyIdentity)}</div>
+                </div>
+            </div>
+
+            <div class="ag-intel-note">
+                <strong>Legacy persisted ML telemetry:</strong>
+                ${escapeHtml(legacyLimitation)}
             </div>
         `;
     }
@@ -353,9 +491,13 @@
         const payload = asObject(snapshot);
         const findings = asObject(payload.findings);
         const telemetry = asObject(payload.legacy_ml_telemetry);
+        const runtime = asObject(payload.governed_ml_runtime);
+        const governedFindings = asArray(findings.ml);
         const predictions = asArray(telemetry.predictions);
 
         state.snapshotAuthoritative = true;
+        state.governedMlRuntime = runtime;
+        state.governedMlFindings = governedFindings;
         state.legacyMlTelemetry = telemetry;
         state.dashboard = {
             ml_summary: {
@@ -383,13 +525,6 @@
             status.className = 'badge badge-live';
         }
 
-        const mlContainer = document.getElementById('intelMlTelemetry');
-        if (mlContainer && telemetry.limitation) {
-            mlContainer.insertAdjacentHTML(
-                'beforeend',
-                `<div class="ag-intel-note"><strong>Legacy persisted ML telemetry:</strong> ${escapeHtml(telemetry.limitation)} Model identity available: ${telemetry.model_identity_available ? 'yes' : 'no'}.</div>`
-            );
-        }
     }
 
     function renderError(error) {

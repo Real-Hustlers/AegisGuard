@@ -19,6 +19,12 @@ from backend.analyzer.correlation.engine import CorrelationEngine
 from backend.analyzer.detection.adapters import canonical_event_from_legacy
 from backend.analyzer.detection.contracts import DetectionFinding
 from backend.analyzer.detection.rule_engine import RuleEngine
+from backend.analyzer.ml import MLEngine
+
+from .ml_runtime import (
+    GovernedMLRuntime,
+    GovernedMLRuntimeStatus,
+)
 
 
 INTELLIGENCE_SNAPSHOT_VERSION = "intelligence-snapshot-v1"
@@ -116,6 +122,8 @@ def build_intelligence_snapshot(
     *,
     total_events: int | None = None,
     event_limit: int | None = None,
+    ml_engine: MLEngine | None = None,
+    ml_runtime: GovernedMLRuntime | None = None,
 ) -> dict[str, Any]:
     supplied = tuple(dict(record) for record in records)
 
@@ -130,9 +138,63 @@ def build_intelligence_snapshot(
                 "reason": str(exc),
             })
 
+    if ml_engine is not None and ml_runtime is not None:
+        raise ValueError(
+            "provide either ml_engine or ml_runtime, not both"
+        )
+
+    if ml_runtime is not None:
+        effective_ml_engine = (
+            ml_runtime.engine
+            if ml_runtime.available
+            else None
+        )
+        runtime_status = ml_runtime.to_dict()
+    elif ml_engine is not None:
+        effective_ml_engine = ml_engine
+        runtime_status = {
+            "status": GovernedMLRuntimeStatus.AVAILABLE.value,
+            "available": True,
+            "model_name": ml_engine.model_name,
+            "model_version": ml_engine.model_version,
+            "feature_schema_version": (
+                ml_engine.feature_schema_version
+            ),
+            "reason": None,
+        }
+    else:
+        effective_ml_engine = None
+        runtime_status = {
+            "status": GovernedMLRuntimeStatus.UNAVAILABLE.value,
+            "available": False,
+            "model_name": None,
+            "model_version": None,
+            "feature_schema_version": None,
+            "reason": "governed ML runtime not configured",
+        }
+
     rule_findings = RuleEngine().detect_many(canonical_events)
-    correlation_findings = CorrelationEngine().correlate(canonical_events)
-    all_findings = tuple(rule_findings) + tuple(correlation_findings)
+    correlation_findings = CorrelationEngine().correlate(
+        canonical_events
+    )
+
+    ml_finding = None
+    if effective_ml_engine is not None and canonical_events:
+        ml_finding = effective_ml_engine.detect(
+            canonical_events
+        )
+
+    ml_findings = (
+        ()
+        if ml_finding is None
+        else (ml_finding,)
+    )
+
+    all_findings = (
+        tuple(rule_findings)
+        + tuple(ml_findings)
+        + tuple(correlation_findings)
+    )
 
     story_eligible = tuple(
         finding
@@ -156,12 +218,12 @@ def build_intelligence_snapshot(
         },
         "detection_counts": {
             "RULE": len(rule_findings),
-            "ML": 0,
+            "ML": len(ml_findings),
             "CORRELATION": len(correlation_findings),
         },
         "findings": {
             "rule": [finding.to_dict() for finding in rule_findings],
-            "ml": [],
+            "ml": [finding.to_dict() for finding in ml_findings],
             "correlation": [
                 finding.to_dict() for finding in correlation_findings
             ],
@@ -171,12 +233,15 @@ def build_intelligence_snapshot(
             candidate.to_dict() for candidate in attack_stories
         ],
         "legacy_ml_telemetry": _legacy_ml_telemetry(supplied),
+        "governed_ml_runtime": runtime_status,
         "governance": {
             "read_only": True,
             "writes_database": False,
             "changes_incident_lifecycle": False,
             "executes_response_actions": False,
-            "governed_ml_findings_available": False,
+            "governed_ml_findings_available": (
+                effective_ml_engine is not None
+            ),
         },
     }
 
@@ -185,6 +250,7 @@ def get_intelligence_snapshot(
     get_connection: Callable[[], Any],
     *,
     event_limit: int | str | None = None,
+    ml_runtime: GovernedMLRuntime | None = None,
 ) -> dict[str, Any]:
     limit = normalize_event_limit(event_limit)
     conn = get_connection()
@@ -227,4 +293,5 @@ def get_intelligence_snapshot(
         records,
         total_events=total_events,
         event_limit=limit,
+        ml_runtime=ml_runtime,
     )
