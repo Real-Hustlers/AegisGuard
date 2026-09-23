@@ -6,18 +6,16 @@ import threading
 from pathlib import Path
 
 from backend.platform.sqlite_security import configure_sqlite_data_security
+from backend.deployment.runtime_paths import (
+    resolve_analyzer_data_dir,
+)
 
 
 # ============================================================
 # DATABASE PATH
 # ============================================================
 
-if getattr(sys, "frozen", False):
-    # Running from PyInstaller EXE
-    BASE_DIR = Path(sys.executable).resolve().parent
-else:
-    # Running normally from source
-    BASE_DIR = Path(__file__).resolve().parents[2]
+BASE_DIR = resolve_analyzer_data_dir()
 
 DB_PATH = BASE_DIR / "aegisguard.db"
 

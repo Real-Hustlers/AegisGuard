@@ -1,9 +1,13 @@
+# Packaged entrypoint: backend.analyzer.mtls_server
+# This runner launches the PyInstaller executable built from that
+# existing production mTLS listener; it does not implement TLS itself.
+
 param(
     [Parameter(Mandatory = $true)]
-    [string]$PythonExe,
+    [string]$AnalyzerExe,
 
     [Parameter(Mandatory = $true)]
-    [string]$RepoRoot,
+    [string]$DataDirectory,
 
     [Parameter(Mandatory = $true)]
     [string]$ServerCertificate,
@@ -22,21 +26,60 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$PythonExe = (Resolve-Path $PythonExe).Path
-$RepoRoot = (Resolve-Path $RepoRoot).Path
-$ServerCertificate = (Resolve-Path $ServerCertificate).Path
-$ServerPrivateKey = (Resolve-Path $ServerPrivateKey).Path
-$ClientCa = (Resolve-Path $ClientCa).Path
+$AnalyzerExe = (
+    Resolve-Path $AnalyzerExe
+).Path
 
-$env:PYTHONPATH = $RepoRoot
-$env:AEGISGUARD_TLS_CERT_FILE = $ServerCertificate
-$env:AEGISGUARD_TLS_KEY_FILE = $ServerPrivateKey
-$env:AEGISGUARD_TLS_CLIENT_CA_FILE = $ClientCa
-$env:AEGISGUARD_TLS_BIND_HOST = $BindHost
-$env:AEGISGUARD_TLS_PORT = [string]$Port
-$env:AEGISGUARD_COLLECTOR_MTLS_REQUIRED = "true"
+$ServerCertificate = (
+    Resolve-Path $ServerCertificate
+).Path
 
-Set-Location $RepoRoot
+$ServerPrivateKey = (
+    Resolve-Path $ServerPrivateKey
+).Path
 
-& $PythonExe -m backend.analyzer.mtls_server
+$ClientCa = (
+    Resolve-Path $ClientCa
+).Path
+
+$DataDirectory = (
+    [System.IO.Path]::GetFullPath(
+        $DataDirectory
+    )
+)
+
+New-Item `
+    -ItemType Directory `
+    -Force `
+    -Path $DataDirectory |
+    Out-Null
+
+$env:AEGISGUARD_DATA_DIR = $DataDirectory
+
+$env:AEGISGUARD_TLS_CERT_FILE = (
+    $ServerCertificate
+)
+
+$env:AEGISGUARD_TLS_KEY_FILE = (
+    $ServerPrivateKey
+)
+
+$env:AEGISGUARD_TLS_CLIENT_CA_FILE = (
+    $ClientCa
+)
+
+$env:AEGISGUARD_TLS_BIND_HOST = (
+    $BindHost
+)
+
+$env:AEGISGUARD_TLS_PORT = (
+    [string]$Port
+)
+
+$env:AEGISGUARD_COLLECTOR_MTLS_REQUIRED = (
+    "true"
+)
+
+& $AnalyzerExe
+
 exit $LASTEXITCODE

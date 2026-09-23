@@ -8,6 +8,7 @@ from pathlib import Path
 
 REQUIRED_DEPLOYMENT_FILES = (
     "app.spec",
+    "backend/analyzer/AegisGuardAnalyzerMTLS.spec",
     "backend/collector/AegisGuardCollector.spec",
     "backend/collector/config_loader.py",
     "backend/analyzer/mtls_server.py",
@@ -32,6 +33,7 @@ DEPLOYMENT_TEXT_FILES = (
 
 PACKAGING_SPEC_FILES = (
     "app.spec",
+    "backend/analyzer/AegisGuardAnalyzerMTLS.spec",
     "backend/collector/AegisGuardCollector.spec",
 )
 

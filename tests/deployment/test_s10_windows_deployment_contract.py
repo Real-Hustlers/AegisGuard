@@ -130,3 +130,136 @@ def test_repository_deployment_preflight_is_clean():
 
     assert report["ok"] is True
     assert report["issues"] == []
+
+def test_frozen_analyzer_defaults_to_programdata(tmp_path):
+    from backend.deployment.runtime_paths import (
+        resolve_analyzer_data_dir,
+    )
+
+    result = resolve_analyzer_data_dir(
+        environ={
+            "ProgramData": str(tmp_path),
+        },
+        frozen=True,
+    )
+
+    assert result == (
+        tmp_path
+        / "AegisGuard"
+        / "Analyzer"
+    )
+
+
+def test_explicit_analyzer_data_directory_wins(tmp_path):
+    from backend.deployment.runtime_paths import (
+        resolve_analyzer_data_dir,
+    )
+
+    explicit = tmp_path / "enterprise-data"
+
+    result = resolve_analyzer_data_dir(
+        environ={
+            "AEGISGUARD_DATA_DIR": str(explicit),
+            "ProgramData": str(
+                tmp_path / "ignored"
+            ),
+        },
+        frozen=True,
+    )
+
+    assert result == explicit.resolve()
+
+
+def test_frozen_analyzer_without_programdata_fails_closed():
+    import pytest
+
+    from backend.deployment.runtime_paths import (
+        resolve_analyzer_data_dir,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="ProgramData",
+    ):
+        resolve_analyzer_data_dir(
+            environ={},
+            frozen=True,
+        )
+
+
+def test_source_analyzer_retains_project_runtime_root(tmp_path):
+    from backend.deployment.runtime_paths import (
+        resolve_analyzer_data_dir,
+    )
+
+    result = resolve_analyzer_data_dir(
+        environ={},
+        frozen=False,
+        source_root=tmp_path,
+    )
+
+    assert result == tmp_path.resolve()
+
+
+def test_packaged_mtls_spec_is_part_of_deployment_contract():
+    assert (
+        ROOT
+        / "backend/analyzer/AegisGuardAnalyzerMTLS.spec"
+    ).is_file()
+
+
+def test_packaged_mtls_launcher_has_no_python_source_dependency():
+    source = (
+        ROOT
+        / "deploy/windows/run_analyzer_mtls.ps1"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    assert "AnalyzerExe" in source
+    assert "AEGISGUARD_DATA_DIR" in source
+
+    assert "PythonExe" not in source
+    assert "RepoRoot" not in source
+    assert "-m backend.analyzer.mtls_server" not in source
+
+
+def test_packaged_mtls_installer_uses_analyzer_executable():
+    source = (
+        ROOT
+        / "deploy/windows/install_analyzer_mtls.ps1"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    assert "AnalyzerExe" in source
+    assert "DataDirectory" in source
+
+    assert "PythonExe" not in source
+    assert "RepoRoot" not in source
+
+
+def test_analyzer_runtime_paths_are_externalized():
+    database_source = (
+        ROOT
+        / "backend/analyzer/database.py"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    app_source = (
+        ROOT
+        / "backend/analyzer/app.py"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    assert (
+        "resolve_analyzer_data_dir"
+        in database_source
+    )
+
+    assert (
+        "resolve_analyzer_data_dir"
+        in app_source
+    )

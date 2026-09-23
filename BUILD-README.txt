@@ -84,3 +84,30 @@ for the S10 Windows deployment-source preflight.
 
 The preflight is static. It does not install services, open firewall rules,
 generate credentials, or execute response functionality.
+
+Packaged Analyzer mTLS listener
+-------------------------------
+
+Build the dedicated collector-facing listener with:
+
+    python -m PyInstaller backend/analyzer/AegisGuardAnalyzerMTLS.spec
+
+This produces:
+
+    dist\AegisGuardAnalyzerMTLS.exe
+
+The packaged listener uses the existing AegisGuard production mTLS server.
+It does not implement a second TLS or certificate-validation path.
+
+Writable Analyzer state must live outside Program Files.
+
+Default frozen location:
+
+    %ProgramData%\AegisGuard\Analyzer
+
+Optional explicit override:
+
+    AEGISGUARD_DATA_DIR
+
+The mTLS Windows startup scripts now execute the packaged Analyzer listener
+directly and do not require Python or a source checkout on the deployed host.
