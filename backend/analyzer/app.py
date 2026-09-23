@@ -478,6 +478,13 @@ except ImportError:
     from app_authorization import install_application_authorization
 
 try:
+    from backend.analyzer.browser_security import (
+        install_browser_security_headers,
+    )
+except ImportError:
+    from browser_security import install_browser_security_headers
+
+try:
     from backend.analyzer.intelligence.api import create_intelligence_blueprint
 except ImportError:
     from intelligence.api import create_intelligence_blueprint
@@ -529,6 +536,27 @@ app.register_blueprint(
                 str(8 * 60 * 60),
             )
         ),
+        session_idle_timeout_seconds=int(
+            os.environ.get(
+                "AEGISGUARD_SESSION_IDLE_TIMEOUT_SECONDS",
+                str(30 * 60),
+            )
+        ),
+        login_failure_limit=int(
+            os.environ.get("AEGISGUARD_LOGIN_FAILURE_LIMIT", "5")
+        ),
+        login_window_seconds=int(
+            os.environ.get(
+                "AEGISGUARD_LOGIN_WINDOW_SECONDS",
+                str(5 * 60),
+            )
+        ),
+        login_block_seconds=int(
+            os.environ.get(
+                "AEGISGUARD_LOGIN_BLOCK_SECONDS",
+                str(5 * 60),
+            )
+        ),
     )
 )
 
@@ -541,7 +569,15 @@ app.register_blueprint(
 install_application_authorization(
     app,
     get_connection,
+    session_idle_timeout_seconds=int(
+        os.environ.get(
+            "AEGISGUARD_SESSION_IDLE_TIMEOUT_SECONDS",
+            str(30 * 60),
+        )
+    ),
 )
+
+install_browser_security_headers(app)
 
 
 if warm_up_classifier is not None:

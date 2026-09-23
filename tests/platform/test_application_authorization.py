@@ -13,7 +13,10 @@ from backend.analyzer.app_authorization import (
     install_application_authorization,
     required_roles_for_request,
 )
-from backend.analyzer.auth_api import create_auth_blueprint
+from backend.analyzer.auth_api import (
+    AUTH_CSRF_HEADER,
+    create_auth_blueprint,
+)
 from backend.storage.migrations import ensure_platform_schema
 from backend.storage.user_auth import create_user
 
@@ -123,7 +126,7 @@ class ApplicationAuthorizationTests(unittest.TestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
-        return response
+        return response.get_json()["csrf_token"]
 
     def test_policy_is_read_all_simulation_analyst_and_mutations_admin(self):
         self.assertEqual(
@@ -217,11 +220,12 @@ class ApplicationAuthorizationTests(unittest.TestCase):
     def test_analyst_can_simulate_but_cannot_change_admin_surfaces(self):
         self.provision("analyst", ROLE_ANALYST)
         client = self.make_app().test_client()
-        self.login(client, "analyst")
+        csrf_token = self.login(client, "analyst")
 
         simulate = client.post(
             "/api/incidents/execute",
             json={"incident_id": "inc-1"},
+            headers={AUTH_CSRF_HEADER: csrf_token},
         )
         self.assertEqual(simulate.status_code, 200)
         self.assertEqual(
@@ -245,7 +249,7 @@ class ApplicationAuthorizationTests(unittest.TestCase):
     def test_administrator_can_reach_state_changing_application_routes(self):
         self.provision("admin", ROLE_ADMINISTRATOR)
         client = self.make_app().test_client()
-        self.login(client, "admin")
+        csrf_token = self.login(client, "admin")
 
         for path in (
             "/api/incidents/execute",
@@ -257,7 +261,11 @@ class ApplicationAuthorizationTests(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 self.assertEqual(
-                    client.post(path, json={}).status_code,
+                    client.post(
+                        path,
+                        json={},
+                        headers={AUTH_CSRF_HEADER: csrf_token},
+                    ).status_code,
                     200,
                 )
 
@@ -312,11 +320,12 @@ class ApplicationAuthorizationTests(unittest.TestCase):
 
         self.provision("admin", ROLE_ADMINISTRATOR)
         admin = self.make_app().test_client()
-        self.login(admin, "admin")
+        csrf_token = self.login(admin, "admin")
         self.assertEqual(
             admin.post(
                 "/api/future-mutation",
                 json={},
+                headers={AUTH_CSRF_HEADER: csrf_token},
             ).status_code,
             200,
         )

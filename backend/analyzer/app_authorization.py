@@ -4,10 +4,15 @@ from __future__ import annotations
 
 from flask import g, jsonify, request
 
-from backend.analyzer.auth_api import AUTH_SESSION_COOKIE
+from backend.analyzer.auth_api import (
+    AUTH_CSRF_HEADER,
+    AUTH_SESSION_COOKIE,
+    DEFAULT_SESSION_IDLE_TIMEOUT_SECONDS,
+)
 from backend.storage.user_auth import (
     SessionAuthenticationError,
     authenticate_session,
+    verify_session_csrf,
 )
 
 
@@ -87,8 +92,19 @@ def required_roles_for_request(path: str, method: str):
     return frozenset({ROLE_ADMINISTRATOR})
 
 
-def install_application_authorization(app, connection_factory):
+def install_application_authorization(
+    app,
+    connection_factory,
+    *,
+    session_idle_timeout_seconds=DEFAULT_SESSION_IDLE_TIMEOUT_SECONDS,
+):
     """Install fail-closed application-session RBAC on a Flask app."""
+
+    idle_timeout = int(session_idle_timeout_seconds)
+    if idle_timeout <= 0:
+        raise ValueError(
+            "session_idle_timeout_seconds must be greater than zero"
+        )
 
     @app.before_request
     def enforce_application_authorization():
@@ -114,7 +130,11 @@ def install_application_authorization(app, connection_factory):
         conn = connection_factory()
         try:
             try:
-                session = authenticate_session(conn, token)
+                session = authenticate_session(
+                    conn,
+                    token,
+                    idle_timeout_seconds=idle_timeout,
+                )
             except SessionAuthenticationError:
                 return _json_error(
                     "authentication_required",
@@ -131,6 +151,17 @@ def install_application_authorization(app, connection_factory):
                 "insufficient role",
                 403,
             )
+
+        if request.method.upper() not in {"GET", "HEAD", "OPTIONS"}:
+            if not verify_session_csrf(
+                token,
+                request.headers.get(AUTH_CSRF_HEADER),
+            ):
+                return _json_error(
+                    "csrf_required",
+                    "valid CSRF token required",
+                    403,
+                )
 
         # Downstream application handlers may use this identity in later gates
         # (audit, incident ownership, response governance) without trusting

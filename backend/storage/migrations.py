@@ -9,7 +9,7 @@ import sqlite3
 from typing import Callable, Iterable, Tuple
 
 
-LATEST_PLATFORM_SCHEMA_VERSION = 7
+LATEST_PLATFORM_SCHEMA_VERSION = 8
 Migration = Tuple[int, str, Callable[[sqlite3.Connection], None]]
 
 
@@ -345,6 +345,28 @@ def _migration_007_collector_security_health(
         _add_column_if_missing(conn, "collectors", column, definition)
 
 
+def _migration_008_application_login_throttle(
+    conn: sqlite3.Connection,
+) -> None:
+    _execute_script_transactionally(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS auth_login_throttle (
+            username TEXT NOT NULL,
+            peer_ip TEXT NOT NULL,
+            failure_count INTEGER NOT NULL DEFAULT 0,
+            window_started_at TEXT NOT NULL,
+            blocked_until TEXT,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY(username, peer_ip)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_auth_login_throttle_blocked
+            ON auth_login_throttle(blocked_until);
+        """
+    )
+
+
 MIGRATIONS: Iterable[Migration] = (
     (1, "enterprise_foundation", _migration_001_enterprise_foundation),
     (2, "collector_ingest_queue", _migration_002_collector_ingest_queue),
@@ -372,6 +394,11 @@ MIGRATIONS: Iterable[Migration] = (
         7,
         "collector_security_health",
         _migration_007_collector_security_health,
+    ),
+    (
+        8,
+        "application_login_throttle",
+        _migration_008_application_login_throttle,
     ),
 )
 
