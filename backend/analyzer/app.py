@@ -478,6 +478,13 @@ except ImportError:
     from app_authorization import install_application_authorization
 
 try:
+    from backend.analyzer.audit_context import (
+        install_request_correlation,
+    )
+except ImportError:
+    from audit_context import install_request_correlation
+
+try:
     from backend.analyzer.browser_security import (
         install_browser_security_headers,
     )
@@ -565,6 +572,8 @@ app.register_blueprint(
     create_intelligence_blueprint(get_connection)
 )
 
+
+install_request_correlation(app)
 
 install_application_authorization(
     app,
