@@ -174,6 +174,58 @@ class SoarApiTests(unittest.TestCase):
         self.assertEqual(len(recent.get_json()), 1)
         self.assertEqual(recent.get_json()[0]["target"], "8.8.8.8")
 
+    def test_reconcile_uses_trusted_authenticated_actor_and_is_audited(self):
+        with patch.object(
+            analyzer_app.SoarEngine,
+            "reconcile",
+            return_value={
+                "id": 321,
+                "status": "EXECUTED",
+                "rollback_status": None,
+            },
+        ) as reconcile:
+            response = self.approver_client.post(
+                "/api/response-actions/321/reconcile",
+                json={
+                    "reconciled_by_user_id": "forged-client-user",
+                },
+                headers={
+                    AUTH_CSRF_HEADER: self.approver_csrf_token,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        reconcile.assert_called_once_with(
+            321,
+            reconciled_by_user_id="test-soar-approver",
+        )
+
+        conn = analyzer_app.get_connection()
+        try:
+            audit = conn.execute(
+                """
+                SELECT actor_user_id,
+                       action,
+                       outcome,
+                       target_id
+                FROM audit_events
+                WHERE action='RESPONSE.RECONCILE'
+                ORDER BY rowid DESC
+                LIMIT 1
+                """
+            ).fetchone()
+        finally:
+            conn.close()
+
+        self.assertIsNotNone(audit)
+        self.assertEqual(
+            audit["actor_user_id"],
+            "test-soar-approver",
+        )
+        self.assertEqual(audit["action"], "RESPONSE.RECONCILE")
+        self.assertEqual(audit["outcome"], "SUCCESS")
+        self.assertEqual(audit["target_id"], "321")
+
     def test_unblock_uses_trusted_authenticated_actor(self):
         with patch.object(
             analyzer_app.SoarEngine,

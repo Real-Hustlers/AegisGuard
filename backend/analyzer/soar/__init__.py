@@ -4,6 +4,14 @@ Endpoint-side response is deliberately not implemented: Collector command
 delivery is not authenticated or designed for remote administration.
 """
 
-from .engine import ApprovalDeniedError, SoarEngine
+from .engine import (
+    ApprovalDeniedError,
+    RecoveryDeniedError,
+    SoarEngine,
+)
 
-__all__ = ["ApprovalDeniedError", "SoarEngine"]
+__all__ = [
+    "ApprovalDeniedError",
+    "RecoveryDeniedError",
+    "SoarEngine",
+]
