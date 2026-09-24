@@ -30,6 +30,7 @@ class SoarApiTests(unittest.TestCase):
             database.DB_PATH = self.path
             database._schema_initialized = False
         self.client = analyzer_app.app.test_client()
+        self.approver_client = analyzer_app.app.test_client()
 
         conn = analyzer_app.get_connection()
         try:
@@ -45,6 +46,18 @@ class SoarApiTests(unittest.TestCase):
                 user["user_id"],
                 ttl_seconds=3600,
             )
+            approver_user = create_user(
+                conn,
+                "soar-approver",
+                "test-password-soar-approver",
+                "ADMINISTRATOR",
+                user_id="test-soar-approver",
+            )
+            approver_session = create_session(
+                conn,
+                approver_user["user_id"],
+                ttl_seconds=3600,
+            )
         finally:
             conn.close()
 
@@ -54,6 +67,15 @@ class SoarApiTests(unittest.TestCase):
         )
         self.csrf_token = csrf_token_for_session_token(
             session["token"]
+        )
+        self.approver_client.set_cookie(
+            AUTH_SESSION_COOKIE,
+            approver_session["token"],
+        )
+        self.approver_csrf_token = (
+            csrf_token_for_session_token(
+                approver_session["token"]
+            )
         )
 
     def tearDown(self):
@@ -82,17 +104,65 @@ class SoarApiTests(unittest.TestCase):
         self.assertIsNone(action["approved_by_user_id"])
         self.assertEqual(action["approval_required"], 1)
 
-        approved = self.client.post(
+        self_approval = self.client.post(
             f"/api/response-actions/{action['id']}/approve",
             json={},
             headers={AUTH_CSRF_HEADER: self.csrf_token},
+        )
+        self.assertEqual(self_approval.status_code, 403)
+        self.assertEqual(
+            self_approval.get_json()["error"],
+            "self_approval_forbidden",
+        )
+
+        unchanged = self.client.get(
+            f"/api/response-actions/{action['id']}"
+        )
+        self.assertEqual(unchanged.status_code, 200)
+        self.assertEqual(
+            unchanged.get_json()["status"],
+            "PENDING_APPROVAL",
+        )
+        self.assertIsNone(
+            unchanged.get_json()["approved_by_user_id"]
+        )
+
+        conn = analyzer_app.get_connection()
+        try:
+            denial = conn.execute(
+                """
+                SELECT actor_user_id,
+                       outcome,
+                       details_json
+                FROM audit_events
+                WHERE action='RESPONSE.APPROVE'
+                ORDER BY rowid DESC
+                LIMIT 1
+                """
+            ).fetchone()
+        finally:
+            conn.close()
+        self.assertIsNotNone(denial)
+        self.assertEqual(denial["actor_user_id"], "test-soar-admin")
+        self.assertEqual(denial["outcome"], "DENIED")
+        self.assertIn(
+            "self_approval_forbidden",
+            denial["details_json"],
+        )
+
+        approved = self.approver_client.post(
+            f"/api/response-actions/{action['id']}/approve",
+            json={},
+            headers={
+                AUTH_CSRF_HEADER: self.approver_csrf_token,
+            },
         )
         self.assertEqual(approved.status_code, 200)
         approved_action = approved.get_json()
         self.assertEqual(approved_action["status"], "DRY_RUN")
         self.assertEqual(
             approved_action["approved_by_user_id"],
-            "test-soar-admin",
+            "test-soar-approver",
         )
         self.assertIn(
             "AegisGuard-owned inbound Windows Firewall rule",

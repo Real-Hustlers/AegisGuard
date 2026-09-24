@@ -228,6 +228,11 @@ def _audit_spec(response) -> Optional[dict[str, Any]]:
     approval = _RESPONSE_APPROVAL_RE.fullmatch(path)
     if approval:
         action_id = approval.group("action_id")
+        denial_reason = str(
+            response_json.get("error") or ""
+        ).strip()
+        if denial_reason:
+            details["reason"] = denial_reason
         return {
             "actor_type": "USER",
             "actor_user_id": user["user_id"],
