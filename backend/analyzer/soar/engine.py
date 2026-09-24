@@ -19,6 +19,17 @@ class ApprovalDeniedError(PermissionError):
         super().__init__(str(message))
 
 
+class RecoveryDeniedError(PermissionError):
+    """Raised when interrupted-response reconciliation is not permitted."""
+
+    def __init__(self, code, message):
+        self.code = str(code)
+        super().__init__(str(message))
+
+
+RECOVERY_STALE_SECONDS = 60
+
+
 def _utc_now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -332,6 +343,393 @@ class SoarEngine:
             raise
 
         return self.get_action(action_id), claimed
+
+    @staticmethod
+    def _claim_is_stale(action):
+        raw = str(
+            action.get("updated_at")
+            or action.get("executed_at")
+            or action.get("requested_at")
+            or ""
+        ).strip()
+        if not raw:
+            return False
+        try:
+            timestamp = datetime.fromisoformat(
+                raw.replace("Z", "+00:00")
+            )
+        except ValueError:
+            return False
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+        age = (
+            datetime.now(timezone.utc)
+            - timestamp.astimezone(timezone.utc)
+        ).total_seconds()
+        return age >= RECOVERY_STALE_SECONDS
+
+    def _active_owned_rule_action(
+        self,
+        target,
+        *,
+        exclude_action_id=None,
+    ):
+        expected_rule = rule_name_for_ip(target)
+        rows = self.conn.execute("""
+            SELECT *
+            FROM response_actions
+            WHERE action_type='BLOCK_IP'
+              AND target=?
+              AND execution_scope='ANALYZER'
+              AND status='EXECUTED'
+            ORDER BY id DESC
+        """, (target,)).fetchall()
+        for row in rows:
+            action = self._row_to_dict(row)
+            if (
+                exclude_action_id is not None
+                and action["id"] == exclude_action_id
+            ):
+                continue
+            metadata = action.get("metadata") or {}
+            if str(metadata.get("result") or "").upper() != "EXECUTED":
+                continue
+            if str(metadata.get("firewall_rule") or "") != expected_rule:
+                continue
+            if str(
+                action.get("rollback_status") or ""
+            ).upper() == "ROLLED_BACK":
+                continue
+            return action
+        return None
+
+    def _recovery_metadata(self, action, actor, outcome):
+        metadata = dict(action.get("metadata") or {})
+        metadata["reconciliation"] = {
+            "by_user_id": actor,
+            "outcome": outcome,
+            "at": _utc_now(),
+        }
+        return metadata
+
+    def _finish_recovered_block(
+        self,
+        action,
+        actor,
+        *,
+        result,
+        rule_name,
+    ):
+        metadata = self._recovery_metadata(
+            action,
+            actor,
+            "BLOCK_RECONCILED",
+        )
+        metadata["result"] = result
+        metadata["firewall_rule"] = rule_name
+        now = _utc_now()
+        self.conn.execute("""
+            UPDATE response_actions
+            SET status='EXECUTED',
+                executed_at=COALESCE(executed_at, ?),
+                error=NULL,
+                metadata=?,
+                updated_at=?
+            WHERE id=?
+        """, (
+            now,
+            json.dumps(metadata, sort_keys=True),
+            now,
+            action["id"],
+        ))
+        return self.get_action(action["id"])
+
+    def _reconcile_approved_locked(self, action, actor):
+        metadata = action.get("metadata") or {}
+        approval_context = metadata.get("approval_context")
+        if (
+            isinstance(approval_context, dict)
+            and bool(approval_context.get("dry_run"))
+        ):
+            intended_rule = (
+                "AegisGuard-owned inbound Windows Firewall rule"
+            )
+            merged = self._recovery_metadata(
+                action,
+                actor,
+                "DRY_RUN_RECONCILED",
+            )
+            merged["intended_rule"] = intended_rule
+            now = _utc_now()
+            self.conn.execute("""
+                UPDATE response_actions
+                SET status='DRY_RUN',
+                    executed_at=COALESCE(executed_at, ?),
+                    error=NULL,
+                    simulation_result=?,
+                    metadata=?,
+                    updated_at=?
+                WHERE id=?
+            """, (
+                now,
+                (
+                    "DRY_RUN: "
+                    + intended_rule
+                    + " would be created"
+                ),
+                json.dumps(merged, sort_keys=True),
+                now,
+                action["id"],
+            ))
+            return self.get_action(action["id"])
+
+        try:
+            exists = self.firewall.rule_exists(action["target"])
+        except FirewallError as exc:
+            merged = self._recovery_metadata(
+                action,
+                actor,
+                "PROBE_FAILED",
+            )
+            self.conn.execute("""
+                UPDATE response_actions
+                SET error=?,
+                    metadata=?,
+                    updated_at=?
+                WHERE id=?
+            """, (
+                str(exc),
+                json.dumps(merged, sort_keys=True),
+                _utc_now(),
+                action["id"],
+            ))
+            return self.get_action(action["id"])
+
+        if exists:
+            owner = self._active_owned_rule_action(
+                action["target"],
+                exclude_action_id=action["id"],
+            )
+            result = "ALREADY_EXISTS" if owner else "EXECUTED"
+            return self._finish_recovered_block(
+                action,
+                actor,
+                result=result,
+                rule_name=rule_name_for_ip(action["target"]),
+            )
+
+        if self.policy.mode == "OFF":
+            raise RecoveryDeniedError(
+                "response_mode_off",
+                "response mode OFF forbids recovery execution",
+            )
+
+        if not isinstance(approval_context, dict):
+            raise RecoveryDeniedError(
+                "approval_context_missing",
+                "approved action has no trusted approval context",
+            )
+
+        current_context = self.policy.approval_context()
+        if approval_context != current_context:
+            raise RecoveryDeniedError(
+                "response_policy_changed",
+                "response policy changed after the action was approved",
+            )
+
+        valid, _target, validation_reason = self.policy.validate_ip(
+            action["target"]
+        )
+        if not valid:
+            merged = self._recovery_metadata(
+                action,
+                actor,
+                "BLOCKED_BY_POLICY",
+            )
+            self.conn.execute("""
+                UPDATE response_actions
+                SET status='BLOCKED_BY_POLICY',
+                    error=?,
+                    metadata=?,
+                    updated_at=?
+                WHERE id=?
+            """, (
+                validation_reason,
+                json.dumps(merged, sort_keys=True),
+                _utc_now(),
+                action["id"],
+            ))
+            return self.get_action(action["id"])
+
+        try:
+            result, rule_name = self.firewall.block_ip(
+                action["target"]
+            )
+        except FirewallError as exc:
+            merged = self._recovery_metadata(
+                action,
+                actor,
+                "EXECUTION_FAILED",
+            )
+            now = _utc_now()
+            self.conn.execute("""
+                UPDATE response_actions
+                SET status='FAILED',
+                    executed_at=COALESCE(executed_at, ?),
+                    error=?,
+                    metadata=?,
+                    updated_at=?
+                WHERE id=?
+            """, (
+                now,
+                str(exc),
+                json.dumps(merged, sort_keys=True),
+                now,
+                action["id"],
+            ))
+            return self.get_action(action["id"])
+
+        return self._finish_recovered_block(
+            action,
+            actor,
+            result=result,
+            rule_name=rule_name,
+        )
+
+    def _reconcile_rollback_locked(self, action, actor):
+        target = action["target"]
+        try:
+            exists = self.firewall.rule_exists(target)
+        except FirewallError as exc:
+            merged = self._recovery_metadata(
+                action,
+                actor,
+                "ROLLBACK_PROBE_FAILED",
+            )
+            self.conn.execute("""
+                UPDATE response_actions
+                SET rollback_status='FAILED',
+                    error=?,
+                    metadata=?,
+                    updated_at=?
+                WHERE id=?
+            """, (
+                str(exc),
+                json.dumps(merged, sort_keys=True),
+                _utc_now(),
+                action["id"],
+            ))
+            return self.get_action(action["id"])
+
+        rule_name = rule_name_for_ip(target)
+        if exists:
+            try:
+                _, rule_name = self.firewall.unblock_ip(target)
+            except FirewallError as exc:
+                merged = self._recovery_metadata(
+                    action,
+                    actor,
+                    "ROLLBACK_FAILED",
+                )
+                self.conn.execute("""
+                    UPDATE response_actions
+                    SET rollback_status='FAILED',
+                        error=?,
+                        metadata=?,
+                        updated_at=?
+                    WHERE id=?
+                """, (
+                    str(exc),
+                    json.dumps(merged, sort_keys=True),
+                    _utc_now(),
+                    action["id"],
+                ))
+                return self.get_action(action["id"])
+
+        merged = self._recovery_metadata(
+            action,
+            actor,
+            (
+                "ROLLBACK_REMOVED_RULE"
+                if exists
+                else "ROLLBACK_ALREADY_ABSENT"
+            ),
+        )
+        merged["firewall_rule"] = rule_name
+        self.conn.execute("""
+            UPDATE response_actions
+            SET status='ROLLED_BACK',
+                rollback_status='ROLLED_BACK',
+                error=NULL,
+                metadata=?,
+                updated_at=?
+            WHERE id=?
+        """, (
+            json.dumps(merged, sort_keys=True),
+            _utc_now(),
+            action["id"],
+        ))
+        return self.get_action(action["id"])
+
+    def reconcile(
+        self,
+        action_id,
+        reconciled_by_user_id=None,
+    ):
+        """Reconcile one stale claim without blindly replaying mutation."""
+        actor = (
+            str(reconciled_by_user_id or "").strip()
+            or None
+        )
+        if not actor:
+            raise RecoveryDeniedError(
+                "reconciliation_identity_required",
+                "trusted reconciliation identity is required",
+            )
+
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            action = self.get_action(action_id)
+            if not action or action["action_type"] != "BLOCK_IP":
+                self.conn.commit()
+                return None
+
+            rollback_status = str(
+                action.get("rollback_status") or ""
+            ).upper()
+            recoverable = (
+                action["status"] == "APPROVED"
+                or (
+                    action["status"] == "EXECUTED"
+                    and rollback_status == "IN_PROGRESS"
+                )
+            )
+            if not recoverable:
+                self.conn.commit()
+                return action
+
+            if not self._claim_is_stale(action):
+                raise RecoveryDeniedError(
+                    "reconciliation_not_stale",
+                    "response claim is still inside the recovery grace period",
+                )
+
+            if action["status"] == "APPROVED":
+                result = self._reconcile_approved_locked(
+                    action,
+                    actor,
+                )
+            else:
+                result = self._reconcile_rollback_locked(
+                    action,
+                    actor,
+                )
+
+            self.conn.commit()
+            return result
+        except Exception:
+            self.conn.rollback()
+            raise
 
     def _execute_block(self, action):
         if self.policy.dry_run:

@@ -452,10 +452,15 @@ except ImportError:
 try:
     from backend.analyzer.soar import (
         ApprovalDeniedError,
+        RecoveryDeniedError,
         SoarEngine,
     )
 except ImportError:
-    from soar import ApprovalDeniedError, SoarEngine
+    from soar import (
+        ApprovalDeniedError,
+        RecoveryDeniedError,
+        SoarEngine,
+    )
 
 
 try:
@@ -1637,6 +1642,38 @@ def approve_response_action(action_id):
             )
         )
     except ApprovalDeniedError as exc:
+        return jsonify({
+            "status": "error",
+            "error": exc.code,
+            "message": str(exc),
+            "action_id": action_id,
+        }), 403
+    finally:
+        conn.close()
+
+
+@app.route(
+    "/api/response-actions/<int:action_id>/reconcile",
+    methods=["POST"],
+)
+def reconcile_response_action(action_id):
+    conn = get_connection()
+    try:
+        action = SoarEngine(conn).reconcile(
+            action_id,
+            reconciled_by_user_id=_trusted_response_user_id(),
+        )
+        return (
+            (jsonify(action), 200)
+            if action
+            else (
+                jsonify({
+                    "error": "response action not found",
+                }),
+                404,
+            )
+        )
+    except RecoveryDeniedError as exc:
         return jsonify({
             "status": "error",
             "error": exc.code,

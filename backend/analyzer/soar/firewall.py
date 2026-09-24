@@ -51,12 +51,22 @@ class WindowsFirewall:
     def _powershell(script):
         return ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script]
 
+    def rule_exists(self, ip):
+        """Return whether the exact deterministic AegisGuard rule exists."""
+        name = rule_name_for_ip(ip)
+        exists = (
+            "if (Get-NetFirewallRule -DisplayName '"
+            + name
+            + "' -ErrorAction SilentlyContinue) "
+            "{ exit 0 } else { exit 1 }"
+        )
+        return self._probe(self._powershell(exists))
+
     def block_ip(self, ip):
         name = rule_name_for_ip(ip)
         # ip is parsed and canonicalized by ResponsePolicy before reaching this
         # adapter; name is a fixed prefix plus a SHA-256 hex digest.
-        exists = "if (Get-NetFirewallRule -DisplayName '" + name + "' -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }"
-        if self._probe(self._powershell(exists)):
+        if self.rule_exists(ip):
             return "ALREADY_EXISTS", name
         create = (
             "New-NetFirewallRule -DisplayName '" + name + "' -Group 'AegisGuard SOAR' "
