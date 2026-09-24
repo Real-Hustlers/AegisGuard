@@ -7,11 +7,13 @@ delivery is not authenticated or designed for remote administration.
 from .engine import (
     ApprovalDeniedError,
     RecoveryDeniedError,
+    RejectionDeniedError,
     SoarEngine,
 )
 
 __all__ = [
     "ApprovalDeniedError",
     "RecoveryDeniedError",
+    "RejectionDeniedError",
     "SoarEngine",
 ]

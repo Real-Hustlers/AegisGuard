@@ -453,12 +453,14 @@ try:
     from backend.analyzer.soar import (
         ApprovalDeniedError,
         RecoveryDeniedError,
+        RejectionDeniedError,
         SoarEngine,
     )
 except ImportError:
     from soar import (
         ApprovalDeniedError,
         RecoveryDeniedError,
+        RejectionDeniedError,
         SoarEngine,
     )
 
@@ -1648,6 +1650,48 @@ def approve_response_action(action_id):
             "message": str(exc),
             "action_id": action_id,
         }), 403
+    finally:
+        conn.close()
+
+
+@app.route(
+    "/api/response-actions/<int:action_id>/reject",
+    methods=["POST"],
+)
+def reject_response_action(action_id):
+    data = request.get_json(silent=True) or {}
+    conn = get_connection()
+    try:
+        action = SoarEngine(conn).reject(
+            action_id,
+            rejected_by_user_id=_trusted_response_user_id(),
+            reason=data.get("reason"),
+        )
+        return (
+            (jsonify(action), 200)
+            if action
+            else (
+                jsonify({
+                    "error": "response action not found",
+                }),
+                404,
+            )
+        )
+    except RejectionDeniedError as exc:
+        status_code = (
+            400
+            if exc.code in {
+                "rejection_reason_required",
+                "rejection_reason_too_long",
+            }
+            else 403
+        )
+        return jsonify({
+            "status": "error",
+            "error": exc.code,
+            "message": str(exc),
+            "action_id": action_id,
+        }), status_code
     finally:
         conn.close()
 
