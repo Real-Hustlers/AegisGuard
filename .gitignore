@@ -95,3 +95,6 @@ installer/
 *.cer
 *.pfx
 *.p12
+
+benchmark_report.json
+benchmark_report.md
