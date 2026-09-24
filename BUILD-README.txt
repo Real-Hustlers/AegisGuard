@@ -33,7 +33,7 @@ Writable runtime data belongs under:
 Analyzer runtime data includes:
 
     Analyzer\aegisguard.db
-    Analyzer\ml_registry\
+    Analyzer\data\ml_registry\
 
 Collector runtime data includes:
 

@@ -8,6 +8,7 @@ from pathlib import Path
 
 REQUIRED_DEPLOYMENT_FILES = (
     "app.spec",
+    "backend/analyzer/ui_server.py",
     "backend/analyzer/AegisGuardAnalyzerMTLS.spec",
     "backend/collector/AegisGuardCollector.spec",
     "backend/collector/config_loader.py",
@@ -17,6 +18,9 @@ REQUIRED_DEPLOYMENT_FILES = (
     "deploy/windows/configure_collector_mtls.ps1",
     "deploy/windows/install_analyzer_mtls.ps1",
     "deploy/windows/run_analyzer_mtls.ps1",
+    "deploy/windows/install_analyzer_ui.ps1",
+    "deploy/windows/run_analyzer_ui.ps1",
+    "scripts/build_windows_offline_bundle.py",
     "BUILD-README.txt",
 )
 
@@ -24,12 +28,16 @@ REQUIRED_DEPLOYMENT_FILES = (
 DEPLOYMENT_TEXT_FILES = (
     "BUILD-README.txt",
     "app.spec",
+    "backend/analyzer/ui_server.py",
+    "backend/analyzer/AegisGuardAnalyzerMTLS.spec",
     "backend/collector/AegisGuardCollector.spec",
     "install_collector.ps1",
     "deploy/windows/run_collector.ps1",
     "deploy/windows/configure_collector_mtls.ps1",
     "deploy/windows/install_analyzer_mtls.ps1",
     "deploy/windows/run_analyzer_mtls.ps1",
+    "deploy/windows/install_analyzer_ui.ps1",
+    "deploy/windows/run_analyzer_ui.ps1",
 )
 
 
@@ -96,7 +104,7 @@ def deployment_layout():
             ),
             "ml_registry": (
                 r"%ProgramData%\AegisGuard\Analyzer"
-                r"\ml_registry"
+                r"\data\ml_registry"
             ),
             "tls_directory": (
                 r"%ProgramData%\AegisGuard\Analyzer\tls"

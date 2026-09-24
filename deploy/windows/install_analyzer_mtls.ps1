@@ -1,9 +1,14 @@
-param(
+﻿param(
     [Parameter(Mandatory = $true)]
     [string]$AnalyzerExe,
 
-    [Parameter(Mandatory = $true)]
-    [string]$DataDirectory,
+    [string]$InstallDirectory = (
+        Join-Path $env:ProgramFiles "AegisGuard\Analyzer"
+    ),
+
+    [string]$DataDirectory = (
+        Join-Path $env:ProgramData "AegisGuard\Analyzer"
+    ),
 
     [Parameter(Mandatory = $true)]
     [string]$ServerCertificate,
@@ -60,6 +65,12 @@ $ClientCa = (
     Resolve-Path $ClientCa
 ).Path
 
+$InstallDirectory = (
+    [System.IO.Path]::GetFullPath(
+        $InstallDirectory
+    )
+)
+
 $DataDirectory = (
     [System.IO.Path]::GetFullPath(
         $DataDirectory
@@ -69,18 +80,42 @@ $DataDirectory = (
 New-Item `
     -ItemType Directory `
     -Force `
+    -Path $InstallDirectory |
+    Out-Null
+
+New-Item `
+    -ItemType Directory `
+    -Force `
     -Path $DataDirectory |
     Out-Null
 
-$Runner = Join-Path `
+$InstalledExe = Join-Path `
+    $InstallDirectory `
+    "AegisGuardAnalyzerMTLS.exe"
+
+Copy-Item `
+    -LiteralPath $AnalyzerExe `
+    -Destination $InstalledExe `
+    -Force
+
+$RunnerSource = Join-Path `
     $PSScriptRoot `
     "run_analyzer_mtls.ps1"
 
 if (-not (
-    Test-Path $Runner -PathType Leaf
+    Test-Path -LiteralPath $RunnerSource -PathType Leaf
 )) {
-    throw "mTLS runner was not found: $Runner"
+    throw "mTLS runner was not found: $RunnerSource"
 }
+
+$InstalledRunner = Join-Path `
+    $InstallDirectory `
+    "run_analyzer_mtls.ps1"
+
+Copy-Item `
+    -LiteralPath $RunnerSource `
+    -Destination $InstalledRunner `
+    -Force
 
 function Quote-Argument {
     param(
@@ -96,9 +131,9 @@ $arguments = @(
     "-ExecutionPolicy"
     "Bypass"
     "-File"
-    (Quote-Argument $Runner)
+    (Quote-Argument $InstalledRunner)
     "-AnalyzerExe"
-    (Quote-Argument $AnalyzerExe)
+    (Quote-Argument $InstalledExe)
     "-DataDirectory"
     (Quote-Argument $DataDirectory)
     "-ServerCertificate"
@@ -119,7 +154,7 @@ $action = New-ScheduledTaskAction `
     -WorkingDirectory (
         Split-Path `
             -Parent `
-            $AnalyzerExe
+            $InstalledExe
     )
 
 $trigger = (
@@ -176,7 +211,7 @@ Start-ScheduledTask `
 Write-Host "AegisGuard packaged Analyzer mTLS startup task installed."
 
 Write-Host "Task: $TaskName"
-Write-Host "Executable: $AnalyzerExe"
+Write-Host "Executable: $InstalledExe"
 Write-Host "Data directory: $DataDirectory"
 Write-Host "Port: $Port"
 Write-Host (

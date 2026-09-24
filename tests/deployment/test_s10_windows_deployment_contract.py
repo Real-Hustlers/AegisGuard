@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from backend.deployment.windows_contract import (
+    DEPLOYMENT_TEXT_FILES,
     REQUIRED_DEPLOYMENT_FILES,
     deployment_layout,
     find_developer_paths_in_text,
@@ -28,6 +29,11 @@ def test_layout_separates_binaries_runtime_data_and_secrets():
         "%ProgramData%"
     )
 
+    assert analyzer["ml_registry"] == (
+        r"%ProgramData%\AegisGuard\Analyzer"
+        r"\data\ml_registry"
+    )
+
     assert collector["binary"].startswith(
         "%ProgramFiles%"
     )
@@ -49,6 +55,40 @@ def test_layout_separates_binaries_runtime_data_and_secrets():
         Path(collector["binary"]).parent
         != Path(collector["state"]).parent
     )
+
+
+def test_deployment_contract_file_lists_are_unique():
+    assert len(
+        REQUIRED_DEPLOYMENT_FILES
+    ) == len(
+        set(REQUIRED_DEPLOYMENT_FILES)
+    )
+
+    assert len(
+        DEPLOYMENT_TEXT_FILES
+    ) == len(
+        set(DEPLOYMENT_TEXT_FILES)
+    )
+
+
+def test_analyzer_ui_deployment_files_are_registered_once():
+    for relative in (
+        "deploy/windows/install_analyzer_ui.ps1",
+        "deploy/windows/run_analyzer_ui.ps1",
+    ):
+        assert (
+            REQUIRED_DEPLOYMENT_FILES.count(
+                relative
+            )
+            == 1
+        )
+
+        assert (
+            DEPLOYMENT_TEXT_FILES.count(
+                relative
+            )
+            == 1
+        )
 
 
 def test_contract_lists_existing_deployment_sources():
@@ -107,6 +147,7 @@ def test_packaging_guard_rejects_runtime_and_secret_material():
 def test_current_pyinstaller_specs_do_not_bundle_sensitive_runtime_state():
     for relative in (
         "app.spec",
+        "backend/analyzer/AegisGuardAnalyzerMTLS.spec",
         "backend/collector/AegisGuardCollector.spec",
     ):
         source = (
@@ -201,6 +242,165 @@ def test_source_analyzer_retains_project_runtime_root(tmp_path):
     assert result == tmp_path.resolve()
 
 
+def test_analyzer_specs_use_project_root_only():
+    import re
+
+    for relative in (
+        "app.spec",
+        "backend/analyzer/AegisGuardAnalyzerMTLS.spec",
+    ):
+        source = (
+            ROOT / relative
+        ).read_text(
+            encoding="utf-8-sig"
+        )
+
+        match = re.search(
+            r"pathex=\[(.*?)\],",
+            source,
+            flags=re.DOTALL,
+        )
+
+        assert match is not None, relative
+
+        pathex = match.group(1)
+
+        assert "str(PROJECT_ROOT)" in pathex
+        assert '"backend"' not in pathex
+        assert "COLLECTOR_DIR" not in pathex
+
+
+def test_human_analyzer_spec_contains_enterprise_runtime_modules():
+    source = (
+        ROOT
+        / "app.spec"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    for module in (
+        "backend.analyzer.ingest_worker",
+        "backend.analyzer.ingest_pipeline",
+        "backend.analyzer.collector_api",
+        "backend.analyzer.auth_api",
+        "backend.analyzer.app_authorization",
+        "backend.analyzer.audit_context",
+        "backend.analyzer.audit_api",
+        "backend.analyzer.incident_api",
+        "backend.analyzer.incident_service",
+        "backend.analyzer.asset_api",
+        "backend.analyzer.privacy_projection",
+        "backend.analyzer.sensitive_audit",
+        "backend.analyzer.browser_security",
+        "backend.analyzer.intelligence.api",
+        "backend.analyzer.intelligence.ml_runtime",
+        "backend.analyzer.ml",
+        "backend.deployment.runtime_paths",
+        "backend.platform.data_privacy",
+        "backend.platform.sqlite_security",
+    ):
+        assert module in source
+
+
+def test_mtls_analyzer_spec_contains_enterprise_runtime_modules():
+    source = (
+        ROOT
+        / "backend/analyzer/AegisGuardAnalyzerMTLS.spec"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    for module in (
+        "backend.analyzer.mtls_server",
+        "backend.analyzer.ingest_worker",
+        "backend.analyzer.collector_api",
+        "backend.analyzer.auth_api",
+        "backend.analyzer.audit_context",
+        "backend.analyzer.incident_service",
+        "backend.analyzer.intelligence.ml_runtime",
+        "backend.deployment.runtime_paths",
+        "backend.platform.data_privacy",
+        "backend.platform.sqlite_security",
+    ):
+        assert module in source
+
+
+def test_governed_ml_registry_contract_matches_runtime():
+    layout = deployment_layout()
+
+    assert layout["analyzer"]["ml_registry"] == (
+        r"%ProgramData%\AegisGuard\Analyzer"
+        r"\data\ml_registry"
+    )
+
+    app_source = (
+        ROOT
+        / "backend/analyzer/app.py"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    readme = (
+        ROOT
+        / "BUILD-README.txt"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    assert '"data/ml_registry"' in app_source
+    assert r"Analyzer\data\ml_registry" in readme
+
+
+def test_packaged_ui_analyzer_uses_loopback_non_debug_server():
+    spec_source = (
+        ROOT
+        / "app.spec"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    server_source = (
+        ROOT
+        / "backend/analyzer/ui_server.py"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    assert "ui_server.py" in spec_source
+    assert "backend.analyzer.ui_server" in spec_source
+
+    assert "make_server" in server_source
+    assert '"127.0.0.1"' in server_source
+
+    assert "app.run(" not in server_source
+    assert "debug=True" not in server_source
+
+
+def test_packaged_ui_server_rejects_non_loopback_binding():
+    import pytest
+
+    from backend.analyzer.ui_server import (
+        load_ui_server_config,
+    )
+
+    default = load_ui_server_config(
+        {},
+    )
+
+    assert default == {
+        "host": "127.0.0.1",
+        "port": 5000,
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="loopback",
+    ):
+        load_ui_server_config({
+            "AEGISGUARD_UI_BIND_HOST": "0.0.0.0",
+        })
+
+
 def test_packaged_mtls_spec_is_part_of_deployment_contract():
     assert (
         ROOT
@@ -222,6 +422,62 @@ def test_packaged_mtls_launcher_has_no_python_source_dependency():
     assert "PythonExe" not in source
     assert "RepoRoot" not in source
     assert "-m backend.analyzer.mtls_server" not in source
+
+
+def test_analyzer_installer_copies_packaged_runtime_to_program_files():
+    source = (
+        ROOT
+        / "deploy/windows/install_analyzer_mtls.ps1"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    assert "InstallDirectory" in source
+    assert "ProgramFiles" in source
+
+    assert (
+        '"AegisGuardAnalyzerMTLS.exe"'
+        in source
+    )
+
+    assert (
+        '"run_analyzer_mtls.ps1"'
+        in source
+    )
+
+    assert "Copy-Item" in source
+
+    assert "$InstalledExe" in source
+    assert "$InstalledRunner" in source
+
+
+def test_analyzer_scheduled_task_uses_installed_paths():
+    source = (
+        ROOT
+        / "deploy/windows/install_analyzer_mtls.ps1"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    assert (
+        "(Quote-Argument $InstalledRunner)"
+        in source
+    )
+
+    assert (
+        "(Quote-Argument $InstalledExe)"
+        in source
+    )
+
+    assert (
+        "-WorkingDirectory ("
+        in source
+    )
+
+    assert (
+        "$InstalledExe"
+        in source
+    )
 
 
 def test_packaged_mtls_installer_uses_analyzer_executable():
@@ -466,6 +722,83 @@ def test_collector_spec_does_not_shadow_stdlib_platform():
     )
 
 
+def test_analyzer_ui_installer_uses_enterprise_layout():
+    source = (
+        ROOT
+        / "deploy/windows/install_analyzer_ui.ps1"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    assert "ProgramFiles" in source
+    assert "ProgramData" in source
+
+    assert '"AegisGuardAnalyzer.exe"' in source
+    assert '"run_analyzer_ui.ps1"' in source
+
+    assert "$InstalledExe" in source
+    assert "$InstalledRunner" in source
+
+    assert "Copy-Item" in source
+
+
+def test_analyzer_ui_deployment_is_loopback_only():
+    installer = (
+        ROOT
+        / "deploy/windows/install_analyzer_ui.ps1"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    runner = (
+        ROOT
+        / "deploy/windows/run_analyzer_ui.ps1"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    combined = installer + "\n" + runner
+
+    assert '"127.0.0.1"' in combined
+
+    assert (
+        "Analyzer UI BindHost must be loopback-only."
+        in combined
+    )
+
+
+def test_analyzer_ui_listener_keeps_collector_mtls_fail_closed():
+    source = (
+        ROOT
+        / "deploy/windows/run_analyzer_ui.ps1"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    assert (
+        'AEGISGUARD_COLLECTOR_MTLS_REQUIRED'
+        in source
+    )
+
+    assert (
+        '"true"'
+        in source
+    )
+
+
+def test_analyzer_ui_task_uses_system_identity():
+    source = (
+        ROOT
+        / "deploy/windows/install_analyzer_ui.ps1"
+    ).read_text(
+        encoding="utf-8-sig"
+    )
+
+    assert '-UserId "SYSTEM"' in source
+    assert "-LogonType ServiceAccount" in source
+    assert "-RunLevel Highest" in source
+
+
 def test_windows_deployment_powershell_scripts_parse():
     import os
     import shutil
@@ -488,6 +821,8 @@ def test_windows_deployment_powershell_scripts_parse():
         "deploy/windows/run_collector.ps1",
         "deploy/windows/install_analyzer_mtls.ps1",
         "deploy/windows/run_analyzer_mtls.ps1",
+        "deploy/windows/install_analyzer_ui.ps1",
+        "deploy/windows/run_analyzer_ui.ps1",
         "deploy/windows/configure_collector_mtls.ps1",
     )
 
