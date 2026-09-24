@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 
 from flask import (
     Flask,
+    g,
     jsonify,
     render_template,
     request,
@@ -1609,11 +1610,19 @@ def get_response_action(action_id):
         conn.close()
 
 
+def _trusted_response_user_id():
+    user = getattr(g, "aegisguard_user", None) or {}
+    return str(user.get("user_id") or "").strip() or None
+
+
 @app.route("/api/response-actions/<int:action_id>/approve", methods=["POST"])
 def approve_response_action(action_id):
     conn = get_connection()
     try:
-        action = SoarEngine(conn).approve(action_id)
+        action = SoarEngine(conn).approve(
+            action_id,
+            approved_by_user_id=_trusted_response_user_id(),
+        )
         return (jsonify(action), 200) if action else (jsonify({"error": "response action not found"}), 404)
     finally:
         conn.close()
@@ -1629,9 +1638,12 @@ def soar_block_ip():
         return jsonify({"error": "incident not found"}), 404
     conn = get_connection()
     try:
-        # This endpoint is the explicit operator approval; it still cannot
-        # bypass OFF mode, IP validation, allowlists, or dry-run.
-        action = SoarEngine(conn).request_block(incident, data["ip"], data.get("reason"), approved=True)
+        action = SoarEngine(conn).request_block(
+            incident,
+            data["ip"],
+            data.get("reason"),
+            requested_by_user_id=_trusted_response_user_id(),
+        )
         return jsonify(action)
     finally:
         conn.close()
