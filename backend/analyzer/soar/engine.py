@@ -300,12 +300,38 @@ class SoarEngine:
             return self._update(
                 action_id, "BLOCKED_BY_POLICY", validation_reason
             )
-        action = self._update(
+        action, claimed = self._claim_approval(
             action_id,
-            "APPROVED",
-            approved_by_user_id=approver_id,
+            approver_id,
         )
+        if not claimed:
+            return action
         return self._execute_block(action)
+
+    def _claim_approval(self, action_id, approved_by_user_id):
+        """Atomically claim one pending action for controlled execution."""
+        updated_at = _utc_now()
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            cursor = self.conn.execute("""
+                UPDATE response_actions
+                SET status='APPROVED',
+                    approved_by_user_id=?,
+                    updated_at=?
+                WHERE id=?
+                  AND status='PENDING_APPROVAL'
+            """, (
+                approved_by_user_id,
+                updated_at,
+                action_id,
+            ))
+            claimed = cursor.rowcount == 1
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
+
+        return self.get_action(action_id), claimed
 
     def _execute_block(self, action):
         if self.policy.dry_run:
@@ -345,10 +371,62 @@ class SoarEngine:
                 continue
             if str(metadata.get("firewall_rule") or "") != expected_rule:
                 continue
-            if str(action.get("rollback_status") or "").upper() == "ROLLED_BACK":
+            rollback_status = str(
+                action.get("rollback_status") or ""
+            ).upper()
+            if rollback_status in {"ROLLED_BACK", "IN_PROGRESS"}:
                 continue
             return action
         return None
+
+    def _claim_rollback(
+        self,
+        target,
+        *,
+        reason,
+        rollback_by_user_id=None,
+    ):
+        """Atomically claim one owned live block for rollback execution."""
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            action = self._rollback_candidate(target)
+            if not action:
+                self.conn.commit()
+                return None
+
+            merged_metadata = dict(action.get("metadata") or {})
+            merged_metadata["rollback_reason"] = reason
+            if rollback_by_user_id:
+                merged_metadata["rollback_requested_by_user_id"] = (
+                    rollback_by_user_id
+                )
+
+            cursor = self.conn.execute("""
+                UPDATE response_actions
+                SET rollback_status='IN_PROGRESS',
+                    error=NULL,
+                    metadata=?,
+                    updated_at=?
+                WHERE id=?
+                  AND status='EXECUTED'
+                  AND (
+                      rollback_status IS NULL
+                      OR rollback_status IN ('', 'FAILED', 'DRY_RUN')
+                  )
+            """, (
+                json.dumps(merged_metadata, sort_keys=True),
+                _utc_now(),
+                action["id"],
+            ))
+            claimed = cursor.rowcount == 1
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
+
+        if not claimed:
+            return None
+        return self.get_action(action["id"])
 
     def _record_rollback(
         self,
@@ -413,18 +491,18 @@ class SoarEngine:
                 "error": validation_reason,
             }
 
-        block = self._rollback_candidate(target)
-        if not block:
-            return {
-                "status": "SKIPPED",
-                "target": target,
-                "error": (
-                    "no active executed AegisGuard-owned "
-                    "block action found"
-                ),
-            }
-
         if self.policy.dry_run:
+            block = self._rollback_candidate(target)
+            if not block:
+                return {
+                    "status": "SKIPPED",
+                    "target": target,
+                    "error": (
+                        "no active executed AegisGuard-owned "
+                        "block action found"
+                    ),
+                }
+
             rule_name = rule_name_for_ip(target)
             return self._record_rollback(
                 block,
@@ -438,6 +516,21 @@ class SoarEngine:
                     ),
                 },
             )
+
+        block = self._claim_rollback(
+            target,
+            reason=reason,
+            rollback_by_user_id=rollback_by_user_id,
+        )
+        if not block:
+            return {
+                "status": "SKIPPED",
+                "target": target,
+                "error": (
+                    "no claimable executed AegisGuard-owned "
+                    "block action found"
+                ),
+            }
 
         try:
             _, rule_name = self.firewall.unblock_ip(target)
