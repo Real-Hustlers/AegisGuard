@@ -18,6 +18,15 @@ from backend.storage.audit_log import record_audit_event
 _RESPONSE_APPROVAL_RE = re.compile(
     r"^/api/response-actions/(?P<action_id>\d+)/approve$"
 )
+_RESPONSE_RECONCILE_RE = re.compile(
+    r"^/api/response-actions/(?P<action_id>\d+)/reconcile$"
+)
+_RESPONSE_REJECT_RE = re.compile(
+    r"^/api/response-actions/(?P<action_id>\d+)/reject$"
+)
+_RESPONSE_RETRY_RE = re.compile(
+    r"^/api/response-actions/(?P<action_id>\d+)/retry$"
+)
 _INCIDENT_WORKFLOW_RE = re.compile(
     r"^/api/incidents/(?P<incident_id>[^/]+)/"
     r"(?P<operation>transition|assign|notes|evidence|override)$"
@@ -228,10 +237,75 @@ def _audit_spec(response) -> Optional[dict[str, Any]]:
     approval = _RESPONSE_APPROVAL_RE.fullmatch(path)
     if approval:
         action_id = approval.group("action_id")
+        denial_reason = str(
+            response_json.get("error") or ""
+        ).strip()
+        if denial_reason:
+            details["reason"] = denial_reason
         return {
             "actor_type": "USER",
             "actor_user_id": user["user_id"],
             "action": "RESPONSE.APPROVE",
+            "outcome": outcome,
+            "target_type": "RESPONSE_ACTION",
+            "target_id": action_id,
+            "details": details,
+        }
+
+    retry = _RESPONSE_RETRY_RE.fullmatch(path)
+    if retry:
+        action_id = retry.group("action_id")
+        error_code = str(
+            response_json.get("error") or ""
+        ).strip()
+        if error_code:
+            details["reason"] = error_code
+        details["response_status"] = response_json.get("status")
+        return {
+            "actor_type": "USER",
+            "actor_user_id": user["user_id"],
+            "action": "RESPONSE.RETRY",
+            "outcome": outcome,
+            "target_type": "RESPONSE_ACTION",
+            "target_id": action_id,
+            "details": details,
+        }
+
+    rejection = _RESPONSE_REJECT_RE.fullmatch(path)
+    if rejection:
+        action_id = rejection.group("action_id")
+        error_code = str(
+            response_json.get("error") or ""
+        ).strip()
+        if error_code:
+            details["reason"] = error_code
+        details["response_status"] = response_json.get("status")
+        return {
+            "actor_type": "USER",
+            "actor_user_id": user["user_id"],
+            "action": "RESPONSE.REJECT",
+            "outcome": outcome,
+            "target_type": "RESPONSE_ACTION",
+            "target_id": action_id,
+            "details": details,
+        }
+
+    reconciliation = _RESPONSE_RECONCILE_RE.fullmatch(path)
+    if reconciliation:
+        action_id = reconciliation.group("action_id")
+        denial_reason = str(
+            response_json.get("error") or ""
+        ).strip()
+        if denial_reason:
+            details["reason"] = denial_reason
+        details["response_status"] = response_json.get("status")
+        details["rollback_status"] = response_json.get(
+            "rollback_status"
+        )
+        return {
+            "actor_type": "USER",
+            "actor_user_id": user["user_id"],
+            "action": "RESPONSE.RECONCILE",
             "outcome": outcome,
             "target_type": "RESPONSE_ACTION",
             "target_id": action_id,
@@ -254,6 +328,10 @@ def _audit_spec(response) -> Optional[dict[str, Any]]:
 
     if path == "/api/soar/unblock-ip":
         ip_value = str(payload.get("ip") or "").strip() or None
+        details["response_action_id"] = response_json.get("id")
+        details["rollback_status"] = response_json.get(
+            "rollback_status"
+        )
         return {
             "actor_type": "USER",
             "actor_user_id": user["user_id"],

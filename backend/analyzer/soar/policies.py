@@ -49,12 +49,19 @@ class ResponsePolicy:
                 values = str(raw or "").split(",")
         return {str(item).strip() for item in values if str(item).strip()}
 
-    def validate_ip(self, value):
+    @staticmethod
+    def canonicalize_ip(value):
         try:
             address = ipaddress.ip_address(str(value).strip())
         except ValueError:
             return False, None, "invalid or empty IP address"
-        canonical = str(address)
+        return True, str(address), "valid"
+
+    def validate_ip(self, value):
+        valid, canonical, reason = self.canonicalize_ip(value)
+        if not valid:
+            return False, canonical, reason
+        address = ipaddress.ip_address(canonical)
         if address.is_loopback or address.is_unspecified:
             return False, canonical, "loopback or unspecified address"
         if address.is_multicast or address.is_reserved or canonical == "255.255.255.255":
@@ -67,14 +74,62 @@ class ResponsePolicy:
             return False, canonical, "private address blocking is disabled"
         return True, canonical, "approved"
 
-    def auto_qualifies(self, incident):
-        severity = str(incident.get("severity") or incident.get("threat_level") or "").upper()
+    def approval_context(self):
+        """Return execution-relevant policy bound to pending approval."""
+        context = {
+            "version": 1,
+            "mode": self.mode,
+            "dry_run": bool(self.dry_run),
+        }
+        if self.mode == "AUTO":
+            context["auto_min_score"] = int(self.auto_min_score)
+        return context
+
+    def auto_qualification(self, incident):
+        severity = str(
+            incident.get("severity")
+            or incident.get("threat_level")
+            or ""
+        ).upper()
         try:
-            score = int(incident.get("threat_score") or incident.get("risk_score") or 0)
+            score = int(
+                incident.get("threat_score")
+                or incident.get("risk_score")
+                or 0
+            )
         except (TypeError, ValueError):
             score = 0
-        threat = str(incident.get("threat_type") or incident.get("attack_type") or "").lower()
+
+        threat = str(
+            incident.get("threat_type")
+            or incident.get("attack_type")
+            or ""
+        ).lower()
+
         # Correlated brute force is an allowed automatic condition, but only
         # when the correlation explicitly confirms it (not one failed login).
-        correlated_brute_force = "possible brute force attack" in threat
-        return severity == "CRITICAL" or score >= self.auto_min_score or correlated_brute_force
+        correlated_brute_force = (
+            "possible brute force attack" in threat
+        )
+
+        reasons = []
+        if severity == "CRITICAL":
+            reasons.append("critical_severity")
+        if score >= self.auto_min_score:
+            reasons.append("score_at_or_above_threshold")
+        if correlated_brute_force:
+            reasons.append("correlated_brute_force")
+
+        return {
+            "qualified": bool(reasons),
+            "severity": severity or None,
+            "score": score,
+            "minimum_score": self.auto_min_score,
+            "correlated_brute_force": correlated_brute_force,
+            "reasons": reasons,
+        }
+
+    def auto_qualifies(self, incident):
+        return bool(
+            self.auto_qualification(incident)["qualified"]
+        )

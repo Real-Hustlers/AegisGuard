@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 
 from flask import (
     Flask,
+    g,
     jsonify,
     render_template,
     request,
@@ -449,9 +450,21 @@ except ImportError:
 
 
 try:
-    from backend.analyzer.soar import SoarEngine
+    from backend.analyzer.soar import (
+        ApprovalDeniedError,
+        RecoveryDeniedError,
+        RejectionDeniedError,
+        RetryDeniedError,
+        SoarEngine,
+    )
 except ImportError:
-    from soar import SoarEngine
+    from soar import (
+        ApprovalDeniedError,
+        RecoveryDeniedError,
+        RejectionDeniedError,
+        RetryDeniedError,
+        SoarEngine,
+    )
 
 
 try:
@@ -1609,12 +1622,153 @@ def get_response_action(action_id):
         conn.close()
 
 
+def _trusted_response_user_id():
+    user = getattr(g, "aegisguard_user", None) or {}
+    return str(user.get("user_id") or "").strip() or None
+
+
 @app.route("/api/response-actions/<int:action_id>/approve", methods=["POST"])
 def approve_response_action(action_id):
     conn = get_connection()
     try:
-        action = SoarEngine(conn).approve(action_id)
-        return (jsonify(action), 200) if action else (jsonify({"error": "response action not found"}), 404)
+        action = SoarEngine(conn).approve(
+            action_id,
+            approved_by_user_id=_trusted_response_user_id(),
+        )
+        return (
+            (jsonify(action), 200)
+            if action
+            else (
+                jsonify({
+                    "error": "response action not found",
+                }),
+                404,
+            )
+        )
+    except ApprovalDeniedError as exc:
+        return jsonify({
+            "status": "error",
+            "error": exc.code,
+            "message": str(exc),
+            "action_id": action_id,
+        }), 403
+    finally:
+        conn.close()
+
+
+@app.route(
+    "/api/response-actions/<int:action_id>/retry",
+    methods=["POST"],
+)
+def retry_response_action(action_id):
+    data = request.get_json(silent=True) or {}
+    conn = get_connection()
+    try:
+        action = SoarEngine(conn).retry(
+            action_id,
+            retried_by_user_id=_trusted_response_user_id(),
+            reason=data.get("reason"),
+        )
+        return (
+            (jsonify(action), 200)
+            if action
+            else (
+                jsonify({
+                    "error": "response action not found",
+                }),
+                404,
+            )
+        )
+    except RetryDeniedError as exc:
+        if exc.code in {
+            "retry_reason_required",
+            "retry_reason_too_long",
+        }:
+            status_code = 400
+        elif exc.code == "retry_not_available":
+            status_code = 409
+        else:
+            status_code = 403
+        return jsonify({
+            "status": "error",
+            "error": exc.code,
+            "message": str(exc),
+            "action_id": action_id,
+        }), status_code
+    finally:
+        conn.close()
+
+
+@app.route(
+    "/api/response-actions/<int:action_id>/reject",
+    methods=["POST"],
+)
+def reject_response_action(action_id):
+    data = request.get_json(silent=True) or {}
+    conn = get_connection()
+    try:
+        action = SoarEngine(conn).reject(
+            action_id,
+            rejected_by_user_id=_trusted_response_user_id(),
+            reason=data.get("reason"),
+        )
+        return (
+            (jsonify(action), 200)
+            if action
+            else (
+                jsonify({
+                    "error": "response action not found",
+                }),
+                404,
+            )
+        )
+    except RejectionDeniedError as exc:
+        status_code = (
+            400
+            if exc.code in {
+                "rejection_reason_required",
+                "rejection_reason_too_long",
+            }
+            else 403
+        )
+        return jsonify({
+            "status": "error",
+            "error": exc.code,
+            "message": str(exc),
+            "action_id": action_id,
+        }), status_code
+    finally:
+        conn.close()
+
+
+@app.route(
+    "/api/response-actions/<int:action_id>/reconcile",
+    methods=["POST"],
+)
+def reconcile_response_action(action_id):
+    conn = get_connection()
+    try:
+        action = SoarEngine(conn).reconcile(
+            action_id,
+            reconciled_by_user_id=_trusted_response_user_id(),
+        )
+        return (
+            (jsonify(action), 200)
+            if action
+            else (
+                jsonify({
+                    "error": "response action not found",
+                }),
+                404,
+            )
+        )
+    except RecoveryDeniedError as exc:
+        return jsonify({
+            "status": "error",
+            "error": exc.code,
+            "message": str(exc),
+            "action_id": action_id,
+        }), 403
     finally:
         conn.close()
 
@@ -1629,9 +1783,12 @@ def soar_block_ip():
         return jsonify({"error": "incident not found"}), 404
     conn = get_connection()
     try:
-        # This endpoint is the explicit operator approval; it still cannot
-        # bypass OFF mode, IP validation, allowlists, or dry-run.
-        action = SoarEngine(conn).request_block(incident, data["ip"], data.get("reason"), approved=True)
+        action = SoarEngine(conn).request_block(
+            incident,
+            data["ip"],
+            data.get("reason"),
+            requested_by_user_id=_trusted_response_user_id(),
+        )
         return jsonify(action)
     finally:
         conn.close()
@@ -1644,7 +1801,16 @@ def soar_unblock_ip():
         return jsonify({"error": "ip is required"}), 400
     conn = get_connection()
     try:
-        return jsonify(SoarEngine(conn).unblock(data["ip"], data.get("reason", "operator requested rollback")))
+        return jsonify(
+            SoarEngine(conn).unblock(
+                data["ip"],
+                data.get(
+                    "reason",
+                    "operator requested rollback",
+                ),
+                rollback_by_user_id=_trusted_response_user_id(),
+            )
+        )
     finally:
         conn.close()
 
