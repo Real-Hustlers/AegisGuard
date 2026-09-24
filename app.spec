@@ -4,7 +4,12 @@ from pathlib import Path
 
 PROJECT_ROOT = Path.cwd()
 
-ANALYZER_APP = PROJECT_ROOT / "backend" / "analyzer" / "app.py"
+ANALYZER_APP = (
+    PROJECT_ROOT
+    / "backend"
+    / "analyzer"
+    / "ui_server.py"
+)
 
 TEMPLATES_DIR = PROJECT_ROOT / "templates"
 STATIC_DIR = PROJECT_ROOT / "static"
@@ -48,8 +53,6 @@ a = Analysis(
 
     pathex=[
         str(PROJECT_ROOT),
-        str(PROJECT_ROOT / "backend" / "analyzer"),
-        str(PROJECT_ROOT / "backend"),
     ],
 
     binaries=[],
@@ -103,59 +106,51 @@ a = Analysis(
     ],
 
     hiddenimports=[
-        # ====================================================
-        # ANALYZER
-        # ====================================================
-
         "backend.analyzer.app",
+        "backend.analyzer.ui_server",
         "backend.analyzer.database",
         "backend.analyzer.service",
         "backend.analyzer.incident_response",
         "backend.analyzer.incident_enricher",
-        "backend.analyzer.soar",
-        "backend.analyzer.soar.engine",
-        "backend.analyzer.soar.policies",
-        "backend.analyzer.soar.firewall",
-
-        # ====================================================
-        # INGESTION
-        # ====================================================
-
+        "backend.analyzer.ingest_worker",
+        "backend.analyzer.ingest_pipeline",
+        "backend.analyzer.collector_api",
+        "backend.analyzer.auth_api",
+        "backend.analyzer.app_authorization",
+        "backend.analyzer.audit_context",
+        "backend.analyzer.audit_api",
+        "backend.analyzer.incident_api",
+        "backend.analyzer.incident_service",
+        "backend.analyzer.asset_api",
+        "backend.analyzer.privacy_projection",
+        "backend.analyzer.sensitive_audit",
+        "backend.analyzer.browser_security",
+        "backend.analyzer.intelligence.api",
+        "backend.analyzer.intelligence.ml_runtime",
+        "backend.analyzer.ml",
         "backend.analyzer.ingestion",
         "backend.analyzer.ingestion.classifier",
         "backend.analyzer.ingestion.import_merge",
         "backend.analyzer.ingestion.correlation_engine",
         "backend.analyzer.ingestion.mitre_mapper",
-
-        # ====================================================
-        # DATABASE IMPORTER
-        # ====================================================
-
+        "backend.analyzer.soar",
+        "backend.analyzer.soar.engine",
+        "backend.analyzer.soar.policies",
+        "backend.analyzer.soar.firewall",
+        "backend.deployment.runtime_paths",
+        "backend.platform.data_privacy",
+        "backend.platform.sqlite_security",
         "mysql.merge_log_sql",
-
-        # ====================================================
-        # ML / DATA
-        # ====================================================
-
         "joblib",
         "pandas",
         "sklearn",
         "sklearn.ensemble",
         "sklearn.preprocessing",
-
-        # ====================================================
-        # FLASK
-        # ====================================================
-
         "flask",
         "jinja2",
-
-        # ====================================================
-        # SQLITE
-        # ====================================================
-
         "sqlite3",
     ],
+
 
     hookspath=[],
     hooksconfig={},

@@ -57,15 +57,6 @@ a = Analysis(
 
     pathex=[
         str(PROJECT_ROOT),
-        str(
-            PROJECT_ROOT
-            / "backend"
-            / "analyzer"
-        ),
-        str(
-            PROJECT_ROOT
-            / "backend"
-        ),
     ],
 
     binaries=[],
@@ -102,13 +93,17 @@ a = Analysis(
         "backend.analyzer.mtls_server",
         "backend.analyzer.database",
         "backend.analyzer.service",
+        "backend.analyzer.incident_response",
+        "backend.analyzer.incident_enricher",
         "backend.analyzer.ingest_worker",
         "backend.analyzer.ingest_pipeline",
         "backend.analyzer.collector_api",
         "backend.analyzer.auth_api",
         "backend.analyzer.app_authorization",
+        "backend.analyzer.audit_context",
         "backend.analyzer.audit_api",
         "backend.analyzer.incident_api",
+        "backend.analyzer.incident_service",
         "backend.analyzer.asset_api",
         "backend.analyzer.privacy_projection",
         "backend.analyzer.sensitive_audit",
@@ -116,10 +111,19 @@ a = Analysis(
         "backend.analyzer.intelligence.api",
         "backend.analyzer.intelligence.ml_runtime",
         "backend.analyzer.ml",
+        "backend.analyzer.ingestion",
+        "backend.analyzer.ingestion.classifier",
+        "backend.analyzer.ingestion.import_merge",
+        "backend.analyzer.ingestion.correlation_engine",
+        "backend.analyzer.ingestion.mitre_mapper",
         "backend.analyzer.soar",
+        "backend.analyzer.soar.engine",
+        "backend.analyzer.soar.policies",
+        "backend.analyzer.soar.firewall",
         "backend.deployment.runtime_paths",
         "backend.platform.data_privacy",
         "backend.platform.sqlite_security",
+        "mysql.merge_log_sql",
         "joblib",
         "pandas",
         "sklearn",
@@ -129,6 +133,7 @@ a = Analysis(
         "jinja2",
         "sqlite3",
     ],
+
 
     hookspath=[],
     hooksconfig={},
