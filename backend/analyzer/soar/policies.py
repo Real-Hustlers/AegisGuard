@@ -74,6 +74,17 @@ class ResponsePolicy:
             return False, canonical, "private address blocking is disabled"
         return True, canonical, "approved"
 
+    def approval_context(self):
+        """Return execution-relevant policy bound to pending approval."""
+        context = {
+            "version": 1,
+            "mode": self.mode,
+            "dry_run": bool(self.dry_run),
+        }
+        if self.mode == "AUTO":
+            context["auto_min_score"] = int(self.auto_min_score)
+        return context
+
     def auto_qualification(self, incident):
         severity = str(
             incident.get("severity")
