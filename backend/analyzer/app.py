@@ -567,6 +567,19 @@ except ImportError:
         validate_analyzer_startup,
     )
 
+try:
+    from backend.analyzer.operational_observability import (
+        OperationalMetrics,
+        create_operational_observability_blueprint,
+        install_operational_observability,
+    )
+except ImportError:
+    from operational_observability import (
+        OperationalMetrics,
+        create_operational_observability_blueprint,
+        install_operational_observability,
+    )
+
 app.register_blueprint(
     create_collector_blueprint(
         get_connection,
@@ -676,7 +689,30 @@ app.register_blueprint(
 )
 
 
+operational_metrics = OperationalMetrics()
+
+app.register_blueprint(
+    create_operational_observability_blueprint(
+        operational_metrics,
+        lambda: probe_analyzer_readiness(
+            get_connection,
+            get_database_path().parent,
+        ),
+        runtime_mode=(
+            "frozen"
+            if getattr(sys, "frozen", False)
+            else "source"
+        ),
+    )
+)
+
+
 install_request_correlation(app)
+
+install_operational_observability(
+    app,
+    operational_metrics,
+)
 
 install_application_authorization(
     app,

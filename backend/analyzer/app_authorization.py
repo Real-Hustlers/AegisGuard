@@ -33,6 +33,7 @@ _LEGACY_DEVICE_UPLOAD_PATH = "/api/upload_logs"
 _AUTH_API_PREFIX = "/api/auth/"
 _ADMIN_READ_PREFIXES = (
     "/api/audit/",
+    "/api/operations/",
 )
 
 # The existing endpoint is simulation-only: app.py rejects enforce=True and
