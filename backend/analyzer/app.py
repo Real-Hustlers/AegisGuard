@@ -454,6 +454,7 @@ try:
         ApprovalDeniedError,
         RecoveryDeniedError,
         RejectionDeniedError,
+        RetryDeniedError,
         SoarEngine,
     )
 except ImportError:
@@ -461,6 +462,7 @@ except ImportError:
         ApprovalDeniedError,
         RecoveryDeniedError,
         RejectionDeniedError,
+        RetryDeniedError,
         SoarEngine,
     )
 
@@ -1650,6 +1652,49 @@ def approve_response_action(action_id):
             "message": str(exc),
             "action_id": action_id,
         }), 403
+    finally:
+        conn.close()
+
+
+@app.route(
+    "/api/response-actions/<int:action_id>/retry",
+    methods=["POST"],
+)
+def retry_response_action(action_id):
+    data = request.get_json(silent=True) or {}
+    conn = get_connection()
+    try:
+        action = SoarEngine(conn).retry(
+            action_id,
+            retried_by_user_id=_trusted_response_user_id(),
+            reason=data.get("reason"),
+        )
+        return (
+            (jsonify(action), 200)
+            if action
+            else (
+                jsonify({
+                    "error": "response action not found",
+                }),
+                404,
+            )
+        )
+    except RetryDeniedError as exc:
+        if exc.code in {
+            "retry_reason_required",
+            "retry_reason_too_long",
+        }:
+            status_code = 400
+        elif exc.code == "retry_not_available":
+            status_code = 409
+        else:
+            status_code = 403
+        return jsonify({
+            "status": "error",
+            "error": exc.code,
+            "message": str(exc),
+            "action_id": action_id,
+        }), status_code
     finally:
         conn.close()
 

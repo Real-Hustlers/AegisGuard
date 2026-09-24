@@ -8,6 +8,7 @@ from .engine import (
     ApprovalDeniedError,
     RecoveryDeniedError,
     RejectionDeniedError,
+    RetryDeniedError,
     SoarEngine,
 )
 
@@ -15,5 +16,6 @@ __all__ = [
     "ApprovalDeniedError",
     "RecoveryDeniedError",
     "RejectionDeniedError",
+    "RetryDeniedError",
     "SoarEngine",
 ]
