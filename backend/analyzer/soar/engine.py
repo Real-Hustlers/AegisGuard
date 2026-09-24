@@ -159,9 +159,24 @@ class SoarEngine:
             return self._row_to_dict(existing)
 
         mode = self.policy.mode
-        qualifies = self.policy.auto_qualifies(incident)
-        LOG.info("[SOAR] Incident: %s Action: BLOCK_IP Target: %s Mode: %s",
-                 incident_id, target, mode)
+        auto_qualification = self.policy.auto_qualification(
+            incident
+        )
+        LOG.info(
+            "[SOAR] Incident: %s Action: BLOCK_IP Target: %s Mode: %s",
+            incident_id,
+            target,
+            mode,
+        )
+
+        if approved:
+            # Retained only for compatibility with older internal callers.
+            # Request-side approval is not an authorization boundary.
+            LOG.warning(
+                "[SOAR] Ignoring request-side approved flag for %s",
+                action_key,
+            )
+
         if mode == "OFF":
             return self._create(
                 action_key, incident, target, mode, "SKIPPED",
@@ -169,28 +184,53 @@ class SoarEngine:
                 requested_by_user_id=requested_by_user_id,
                 approval_required=False,
             )
-        if mode == "MANUAL" and not approved:
+
+        if mode == "AUTO":
+            if not auto_qualification["qualified"]:
+                return self._create(
+                    action_key,
+                    incident,
+                    target,
+                    mode,
+                    "BLOCKED_BY_POLICY",
+                    "automatic threshold not met",
+                    metadata={
+                        "auto_qualification": auto_qualification,
+                    },
+                    requested_by_user_id=requested_by_user_id,
+                    approval_required=False,
+                )
+
             return self._create(
-                action_key, incident, target, mode, "PENDING_APPROVAL",
-                reason or "operator approval required",
+                action_key,
+                incident,
+                target,
+                mode,
+                "PENDING_APPROVAL",
+                (
+                    reason
+                    or (
+                        "automatic qualification met; "
+                        "administrator approval required"
+                    )
+                ),
+                metadata={
+                    "auto_qualification": auto_qualification,
+                },
                 requested_by_user_id=requested_by_user_id,
                 approval_required=True,
             )
-        if mode == "AUTO" and not qualifies and not approved:
-            return self._create(
-                action_key, incident, target, mode, "BLOCKED_BY_POLICY",
-                "automatic threshold not met",
-                requested_by_user_id=requested_by_user_id,
-                approval_required=False,
-            )
 
-        action = self._create(
-            action_key, incident, target, mode, "PENDING_APPROVAL",
-            reason or "approved block request",
+        return self._create(
+            action_key,
+            incident,
+            target,
+            mode,
+            "PENDING_APPROVAL",
+            reason or "operator approval required",
             requested_by_user_id=requested_by_user_id,
-            approval_required=False,
+            approval_required=True,
         )
-        return self._execute_block(action)
 
     def approve(self, action_id, approved_by_user_id=None):
         action = self.get_action(action_id)
