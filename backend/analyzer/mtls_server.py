@@ -127,9 +127,20 @@ def main():
     os.environ["AEGISGUARD_COLLECTOR_MTLS_REQUIRED"] = "true"
 
     from backend.analyzer.app import app, debug_print
-    from backend.analyzer.database import get_connection
+    from backend.analyzer.database import (
+        get_connection,
+        get_database_path,
+    )
     from backend.analyzer.ingest_worker import (
         start_default_ingest_worker_thread,
+    )
+    from backend.analyzer.runtime_reliability import (
+        validate_analyzer_startup,
+    )
+
+    validate_analyzer_startup(
+        get_connection,
+        get_database_path().parent,
     )
 
     server = create_mtls_server(app, config)

@@ -554,6 +554,19 @@ try:
 except ImportError:
     from ingest_worker import start_default_ingest_worker_thread
 
+try:
+    from backend.analyzer.runtime_reliability import (
+        analyzer_liveness,
+        probe_analyzer_readiness,
+        validate_analyzer_startup,
+    )
+except ImportError:
+    from runtime_reliability import (
+        analyzer_liveness,
+        probe_analyzer_readiness,
+        validate_analyzer_startup,
+    )
+
 app.register_blueprint(
     create_collector_blueprint(
         get_connection,
@@ -722,6 +735,25 @@ UPLOAD_FOLDER.mkdir(
 WINDOWS_LOG_FILE = app_data_path(
     "data/windows_logs.json"
 )
+
+
+@app.route("/healthz")
+def analyzer_healthz():
+    return jsonify(analyzer_liveness()), 200
+
+
+@app.route("/readyz")
+def analyzer_readyz():
+    report = probe_analyzer_readiness(
+        get_connection,
+        get_database_path().parent,
+    )
+    status_code = (
+        200
+        if report["status"] == "ready"
+        else 503
+    )
+    return jsonify(report), status_code
 
 
 @app.after_request
@@ -2304,6 +2336,13 @@ if __name__ == "__main__":
             "collector mTLS mode cannot use the direct Flask server; "
             "start backend.analyzer.mtls_server instead"
         )
+
+    # Fail closed before starting background work or accepting requests when
+    # the canonical database or writable runtime directory is unavailable.
+    validate_analyzer_startup(
+        get_connection,
+        get_database_path().parent,
+    )
 
     # The Collector hot path performs incremental classification and SQLite
     # persistence.  Do not replay legacy JSON history at startup: it can be
