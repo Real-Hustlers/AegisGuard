@@ -27,6 +27,14 @@ class RecoveryDeniedError(PermissionError):
         super().__init__(str(message))
 
 
+class RejectionDeniedError(PermissionError):
+    """Raised when response rejection violates governance policy."""
+
+    def __init__(self, code, message):
+        self.code = str(code)
+        super().__init__(str(message))
+
+
 RECOVERY_STALE_SECONDS = 60
 
 
@@ -343,6 +351,75 @@ class SoarEngine:
             raise
 
         return self.get_action(action_id), claimed
+
+    def reject(
+        self,
+        action_id,
+        rejected_by_user_id=None,
+        reason=None,
+    ):
+        """Atomically reject one still-pending response action."""
+        action = self.get_action(action_id)
+        if not action or action["action_type"] != "BLOCK_IP":
+            return None
+        if action["status"] != "PENDING_APPROVAL":
+            return action
+
+        actor = (
+            str(rejected_by_user_id or "").strip()
+            or None
+        )
+        if not actor:
+            raise RejectionDeniedError(
+                "rejection_identity_required",
+                "trusted rejection identity is required",
+            )
+
+        rejection_reason = str(reason or "").strip()
+        if not rejection_reason:
+            raise RejectionDeniedError(
+                "rejection_reason_required",
+                "rejection reason is required",
+            )
+        if len(rejection_reason) > 500:
+            raise RejectionDeniedError(
+                "rejection_reason_too_long",
+                "rejection reason must be 500 characters or fewer",
+            )
+
+        metadata = dict(action.get("metadata") or {})
+        now = _utc_now()
+        metadata["rejection"] = {
+            "by_user_id": actor,
+            "reason": rejection_reason,
+            "at": now,
+        }
+
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            cursor = self.conn.execute("""
+                UPDATE response_actions
+                SET status='REJECTED',
+                    error=NULL,
+                    metadata=?,
+                    updated_at=?
+                WHERE id=?
+                  AND status='PENDING_APPROVAL'
+            """, (
+                json.dumps(metadata, sort_keys=True),
+                now,
+                action_id,
+            ))
+            rejected = cursor.rowcount == 1
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
+
+        current = self.get_action(action_id)
+        if not rejected:
+            return current
+        return current
 
     @staticmethod
     def _claim_is_stale(action):

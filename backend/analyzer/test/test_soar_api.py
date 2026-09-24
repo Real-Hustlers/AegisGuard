@@ -174,6 +174,78 @@ class SoarApiTests(unittest.TestCase):
         self.assertEqual(len(recent.get_json()), 1)
         self.assertEqual(recent.get_json()[0]["target"], "8.8.8.8")
 
+    def test_reject_uses_trusted_authenticated_actor_and_is_audited(self):
+        requested = self.client.post(
+            "/api/soar/block-ip",
+            json={
+                "ip": "8.8.4.4",
+                "reason": "candidate containment",
+            },
+            headers={AUTH_CSRF_HEADER: self.csrf_token},
+        )
+        self.assertEqual(requested.status_code, 200)
+        action = requested.get_json()
+        self.assertEqual(action["status"], "PENDING_APPROVAL")
+
+        rejected = self.approver_client.post(
+            f"/api/response-actions/{action['id']}/reject",
+            json={
+                "reason": "reviewer rejected containment",
+                "rejected_by_user_id": "forged-client-user",
+            },
+            headers={
+                AUTH_CSRF_HEADER: self.approver_csrf_token,
+            },
+        )
+
+        self.assertEqual(rejected.status_code, 200)
+        rejected_action = rejected.get_json()
+        self.assertEqual(rejected_action["status"], "REJECTED")
+        self.assertEqual(
+            rejected_action["metadata"]["rejection"]["by_user_id"],
+            "test-soar-approver",
+        )
+        self.assertEqual(
+            rejected_action["metadata"]["rejection"]["reason"],
+            "reviewer rejected containment",
+        )
+
+        later = self.approver_client.post(
+            f"/api/response-actions/{action['id']}/approve",
+            json={},
+            headers={
+                AUTH_CSRF_HEADER: self.approver_csrf_token,
+            },
+        )
+        self.assertEqual(later.status_code, 200)
+        self.assertEqual(later.get_json()["status"], "REJECTED")
+
+        conn = analyzer_app.get_connection()
+        try:
+            audit = conn.execute(
+                """
+                SELECT actor_user_id,
+                       action,
+                       outcome,
+                       target_id
+                FROM audit_events
+                WHERE action='RESPONSE.REJECT'
+                ORDER BY rowid DESC
+                LIMIT 1
+                """
+            ).fetchone()
+        finally:
+            conn.close()
+
+        self.assertIsNotNone(audit)
+        self.assertEqual(
+            audit["actor_user_id"],
+            "test-soar-approver",
+        )
+        self.assertEqual(audit["action"], "RESPONSE.REJECT")
+        self.assertEqual(audit["outcome"], "SUCCESS")
+        self.assertEqual(audit["target_id"], str(action["id"]))
+
     def test_reconcile_uses_trusted_authenticated_actor_and_is_audited(self):
         with patch.object(
             analyzer_app.SoarEngine,
