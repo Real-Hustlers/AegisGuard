@@ -55,80 +55,175 @@ class SoarEngine:
     def get_action(self, action_id):
         return self._row_to_dict(self.conn.execute("SELECT * FROM response_actions WHERE id = ?", (action_id,)).fetchone())
 
-    def _create(self, action_key, incident, target, mode, status, reason, action_type="BLOCK_IP", metadata=None):
+    def _create(
+        self,
+        action_key,
+        incident,
+        target,
+        mode,
+        status,
+        reason,
+        action_type="BLOCK_IP",
+        metadata=None,
+        requested_by_user_id=None,
+        approval_required=False,
+    ):
+        requested_at = _utc_now()
         values = (
-            action_key, incident.get("incident_id"), incident.get("log_id"), incident.get("hostname"),
-            action_type, target, "ANALYZER", mode, status, reason, _utc_now(), None, None, None,
-            json.dumps(metadata or {}, sort_keys=True),
+            action_key, incident.get("incident_id"), incident.get("log_id"),
+            incident.get("hostname"), action_type, target, "ANALYZER", mode,
+            status, reason, requested_at, None, None, None,
+            json.dumps(metadata or {}, sort_keys=True), requested_by_user_id,
+            None, 1 if approval_required else 0, None, requested_at,
         )
         self.conn.execute("BEGIN IMMEDIATE")
         self.conn.execute("""
             INSERT OR IGNORE INTO response_actions (
                 action_key, incident_id, log_id, hostname, action_type, target,
                 execution_scope, mode, status, reason, requested_at, executed_at,
-                error, rollback_status, metadata
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                error, rollback_status, metadata, requested_by_user_id,
+                approved_by_user_id, approval_required, simulation_result,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, values)
-        row = self.conn.execute("SELECT * FROM response_actions WHERE action_key = ?", (action_key,)).fetchone()
+        row = self.conn.execute(
+            "SELECT * FROM response_actions WHERE action_key = ?",
+            (action_key,),
+        ).fetchone()
         self.conn.commit()
         return self._row_to_dict(row)
 
-    def _update(self, action_id, status, error=None, rollback_status=None, metadata=None):
+    def _update(
+        self,
+        action_id,
+        status,
+        error=None,
+        rollback_status=None,
+        metadata=None,
+        approved_by_user_id=None,
+        simulation_result=None,
+    ):
         existing = self.get_action(action_id)
         merged_metadata = dict(existing.get("metadata") or {})
         if metadata:
             merged_metadata.update(metadata)
-        executed_at = _utc_now() if status in {"EXECUTED", "DRY_RUN", "FAILED", "ROLLED_BACK"} else None
+        updated_at = _utc_now()
+        executed_at = (
+            updated_at
+            if status in {"EXECUTED", "DRY_RUN", "FAILED", "ROLLED_BACK"}
+            else None
+        )
         self.conn.execute("""
             UPDATE response_actions
             SET status=?, executed_at=COALESCE(?, executed_at), error=?,
-                rollback_status=COALESCE(?, rollback_status), metadata=?
+                rollback_status=COALESCE(?, rollback_status), metadata=?,
+                approved_by_user_id=COALESCE(?, approved_by_user_id),
+                simulation_result=COALESCE(?, simulation_result), updated_at=?
             WHERE id=?
-        """, (status, executed_at, error, rollback_status, json.dumps(merged_metadata, sort_keys=True), action_id))
+        """, (
+            status, executed_at, error, rollback_status,
+            json.dumps(merged_metadata, sort_keys=True),
+            approved_by_user_id, simulation_result, updated_at, action_id,
+        ))
         self.conn.commit()
         return self.get_action(action_id)
 
-    def request_block(self, incident, ip=None, reason=None, approved=False):
+    def request_block(
+        self,
+        incident,
+        ip=None,
+        reason=None,
+        approved=False,
+        requested_by_user_id=None,
+    ):
         target = ip if ip is not None else incident.get("source_ip")
         valid, target, validation_reason = self.policy.validate_ip(target)
         incident_id = incident.get("incident_id") or "manual"
-        action_key = "block:%s:%s:%s" % (incident_id, "ANALYZER", target or str(ip or ""))
+        action_key = "block:%s:%s:%s" % (
+            incident_id, "ANALYZER", target or str(ip or ""),
+        )
         if not valid:
-            return self._create(action_key, incident, target or str(ip or ""), self.policy.mode,
-                                "BLOCKED_BY_POLICY", validation_reason, metadata={"validation": validation_reason})
+            return self._create(
+                action_key, incident, target or str(ip or ""), self.policy.mode,
+                "BLOCKED_BY_POLICY", validation_reason,
+                metadata={"validation": validation_reason},
+                requested_by_user_id=requested_by_user_id,
+                approval_required=False,
+            )
 
-        existing = self.conn.execute("SELECT * FROM response_actions WHERE action_key = ?", (action_key,)).fetchone()
+        existing = self.conn.execute(
+            "SELECT * FROM response_actions WHERE action_key = ?",
+            (action_key,),
+        ).fetchone()
         if existing:
             return self._row_to_dict(existing)
 
         mode = self.policy.mode
         qualifies = self.policy.auto_qualifies(incident)
-        LOG.info("[SOAR] Incident: %s Action: BLOCK_IP Target: %s Mode: %s", incident_id, target, mode)
+        LOG.info("[SOAR] Incident: %s Action: BLOCK_IP Target: %s Mode: %s",
+                 incident_id, target, mode)
         if mode == "OFF":
-            return self._create(action_key, incident, target, mode, "SKIPPED", reason or "response mode OFF")
+            return self._create(
+                action_key, incident, target, mode, "SKIPPED",
+                reason or "response mode OFF",
+                requested_by_user_id=requested_by_user_id,
+                approval_required=False,
+            )
         if mode == "MANUAL" and not approved:
-            return self._create(action_key, incident, target, mode, "PENDING_APPROVAL", reason or "operator approval required")
+            return self._create(
+                action_key, incident, target, mode, "PENDING_APPROVAL",
+                reason or "operator approval required",
+                requested_by_user_id=requested_by_user_id,
+                approval_required=True,
+            )
         if mode == "AUTO" and not qualifies and not approved:
-            return self._create(action_key, incident, target, mode, "BLOCKED_BY_POLICY", "automatic threshold not met")
+            return self._create(
+                action_key, incident, target, mode, "BLOCKED_BY_POLICY",
+                "automatic threshold not met",
+                requested_by_user_id=requested_by_user_id,
+                approval_required=False,
+            )
 
-        action = self._create(action_key, incident, target, mode, "PENDING_APPROVAL", reason or "approved block request")
+        action = self._create(
+            action_key, incident, target, mode, "PENDING_APPROVAL",
+            reason or "approved block request",
+            requested_by_user_id=requested_by_user_id,
+            approval_required=False,
+        )
         return self._execute_block(action)
 
-    def approve(self, action_id):
+    def approve(self, action_id, approved_by_user_id=None):
         action = self.get_action(action_id)
         if not action or action["action_type"] != "BLOCK_IP":
             return None
-        if action["status"] in {"EXECUTED", "DRY_RUN", "ROLLED_BACK", "FAILED"}:
+        if action["status"] != "PENDING_APPROVAL":
             return action
-        valid, target, validation_reason = self.policy.validate_ip(action["target"])
+        valid, _target, validation_reason = self.policy.validate_ip(
+            action["target"]
+        )
         if not valid:
-            return self._update(action_id, "BLOCKED_BY_POLICY", validation_reason)
+            return self._update(
+                action_id, "BLOCKED_BY_POLICY", validation_reason
+            )
+        action = self._update(
+            action_id,
+            "APPROVED",
+            approved_by_user_id=approved_by_user_id,
+        )
         return self._execute_block(action)
 
     def _execute_block(self, action):
         if self.policy.dry_run:
             LOG.info("[SOAR] Execution: DRY_RUN target=%s", action["target"])
-            return self._update(action["id"], "DRY_RUN", metadata={"intended_rule": "AegisGuard-owned inbound Windows Firewall rule"})
+            intended_rule = "AegisGuard-owned inbound Windows Firewall rule"
+            return self._update(
+                action["id"],
+                "DRY_RUN",
+                metadata={"intended_rule": intended_rule},
+                simulation_result=(
+                    "DRY_RUN: " + intended_rule + " would be created"
+                ),
+            )
         try:
             result, rule_name = self.firewall.block_ip(action["target"])
             LOG.info("[SOAR] Execution: %s target=%s", result, action["target"])

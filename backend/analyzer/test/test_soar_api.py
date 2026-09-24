@@ -68,16 +68,36 @@ class SoarApiTests(unittest.TestCase):
         settings = self.client.get("/api/incidents/settings").get_json()
         self.assertEqual(settings["soar_mode"], "MANUAL")
         self.assertTrue(settings["soar_dry_run"])
-        action = self.client.post(
+
+        requested = self.client.post(
             "/api/soar/block-ip",
-            json={
-                "ip": "8.8.8.8",
-                "reason": "controlled demo",
-            },
+            json={"ip": "8.8.8.8", "reason": "controlled demo"},
             headers={AUTH_CSRF_HEADER: self.csrf_token},
         )
-        self.assertEqual(action.status_code, 200)
-        self.assertEqual(action.get_json()["status"], "DRY_RUN")
+        self.assertEqual(requested.status_code, 200)
+        action = requested.get_json()
+        self.assertEqual(action["status"], "PENDING_APPROVAL")
+        self.assertEqual(action["requested_by_user_id"], "test-soar-admin")
+        self.assertIsNone(action["approved_by_user_id"])
+        self.assertEqual(action["approval_required"], 1)
+
+        approved = self.client.post(
+            f"/api/response-actions/{action['id']}/approve",
+            json={},
+            headers={AUTH_CSRF_HEADER: self.csrf_token},
+        )
+        self.assertEqual(approved.status_code, 200)
+        approved_action = approved.get_json()
+        self.assertEqual(approved_action["status"], "DRY_RUN")
+        self.assertEqual(
+            approved_action["approved_by_user_id"],
+            "test-soar-admin",
+        )
+        self.assertIn(
+            "AegisGuard-owned inbound Windows Firewall rule",
+            approved_action["simulation_result"],
+        )
+
         recent = self.client.get("/api/response-actions")
         self.assertEqual(recent.status_code, 200)
         self.assertEqual(len(recent.get_json()), 1)
