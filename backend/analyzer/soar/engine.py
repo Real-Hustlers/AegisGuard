@@ -11,6 +11,14 @@ from .policies import ResponsePolicy
 LOG = logging.getLogger(__name__)
 
 
+class ApprovalDeniedError(PermissionError):
+    """Raised when a response approval violates governance policy."""
+
+    def __init__(self, code, message):
+        self.code = str(code)
+        super().__init__(str(message))
+
+
 def _utc_now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -238,6 +246,27 @@ class SoarEngine:
             return None
         if action["status"] != "PENDING_APPROVAL":
             return action
+
+        approver_id = (
+            str(approved_by_user_id or "").strip()
+            or None
+        )
+        if not approver_id:
+            raise ApprovalDeniedError(
+                "approval_identity_required",
+                "trusted approver identity is required",
+            )
+
+        requester_id = (
+            str(action.get("requested_by_user_id") or "").strip()
+            or None
+        )
+        if requester_id and requester_id == approver_id:
+            raise ApprovalDeniedError(
+                "self_approval_forbidden",
+                "response requester cannot approve their own action",
+            )
+
         valid, _target, validation_reason = self.policy.validate_ip(
             action["target"]
         )
@@ -248,7 +277,7 @@ class SoarEngine:
         action = self._update(
             action_id,
             "APPROVED",
-            approved_by_user_id=approved_by_user_id,
+            approved_by_user_id=approver_id,
         )
         return self._execute_block(action)
 

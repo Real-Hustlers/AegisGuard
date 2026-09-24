@@ -450,9 +450,12 @@ except ImportError:
 
 
 try:
-    from backend.analyzer.soar import SoarEngine
+    from backend.analyzer.soar import (
+        ApprovalDeniedError,
+        SoarEngine,
+    )
 except ImportError:
-    from soar import SoarEngine
+    from soar import ApprovalDeniedError, SoarEngine
 
 
 try:
@@ -1623,7 +1626,23 @@ def approve_response_action(action_id):
             action_id,
             approved_by_user_id=_trusted_response_user_id(),
         )
-        return (jsonify(action), 200) if action else (jsonify({"error": "response action not found"}), 404)
+        return (
+            (jsonify(action), 200)
+            if action
+            else (
+                jsonify({
+                    "error": "response action not found",
+                }),
+                404,
+            )
+        )
+    except ApprovalDeniedError as exc:
+        return jsonify({
+            "status": "error",
+            "error": exc.code,
+            "message": str(exc),
+            "action_id": action_id,
+        }), 403
     finally:
         conn.close()
 
