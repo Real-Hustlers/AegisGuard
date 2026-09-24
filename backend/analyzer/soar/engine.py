@@ -167,6 +167,7 @@ class SoarEngine:
             return self._row_to_dict(existing)
 
         mode = self.policy.mode
+        approval_context = self.policy.approval_context()
         auto_qualification = self.policy.auto_qualification(
             incident
         )
@@ -224,6 +225,7 @@ class SoarEngine:
                 ),
                 metadata={
                     "auto_qualification": auto_qualification,
+                    "approval_context": approval_context,
                 },
                 requested_by_user_id=requested_by_user_id,
                 approval_required=True,
@@ -236,6 +238,9 @@ class SoarEngine:
             mode,
             "PENDING_APPROVAL",
             reason or "operator approval required",
+            metadata={
+                "approval_context": approval_context,
+            },
             requested_by_user_id=requested_by_user_id,
             approval_required=True,
         )
@@ -265,6 +270,27 @@ class SoarEngine:
             raise ApprovalDeniedError(
                 "self_approval_forbidden",
                 "response requester cannot approve their own action",
+            )
+
+        if self.policy.mode == "OFF":
+            raise ApprovalDeniedError(
+                "response_mode_off",
+                "response mode OFF forbids approval execution",
+            )
+
+        metadata = action.get("metadata") or {}
+        expected_context = metadata.get("approval_context")
+        if not isinstance(expected_context, dict):
+            raise ApprovalDeniedError(
+                "approval_context_missing",
+                "pending action has no trusted approval context",
+            )
+
+        current_context = self.policy.approval_context()
+        if expected_context != current_context:
+            raise ApprovalDeniedError(
+                "response_policy_changed",
+                "response policy changed after the action was requested",
             )
 
         valid, _target, validation_reason = self.policy.validate_ip(
