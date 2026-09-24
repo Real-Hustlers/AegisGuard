@@ -4,7 +4,7 @@ import json
 import logging
 from datetime import datetime, timezone
 
-from .firewall import FirewallError, WindowsFirewall
+from .firewall import FirewallError, WindowsFirewall, rule_name_for_ip
 from .policies import ResponsePolicy
 
 
@@ -232,21 +232,133 @@ class SoarEngine:
             LOG.warning("[SOAR] Execution: FAILED target=%s error=%s", action["target"], exc)
             return self._update(action["id"], "FAILED", str(exc))
 
-    def unblock(self, ip, reason="operator requested rollback"):
-        valid, target, validation_reason = self.policy.validate_ip(ip)
+    def _rollback_candidate(self, target):
+        expected_rule = rule_name_for_ip(target)
+        rows = self.conn.execute("""
+            SELECT *
+            FROM response_actions
+            WHERE action_type='BLOCK_IP'
+              AND target=?
+              AND execution_scope='ANALYZER'
+              AND status='EXECUTED'
+            ORDER BY id DESC
+        """, (target,)).fetchall()
+        for row in rows:
+            action = self._row_to_dict(row)
+            metadata = action.get("metadata") or {}
+            if str(metadata.get("result") or "").upper() != "EXECUTED":
+                continue
+            if str(metadata.get("firewall_rule") or "") != expected_rule:
+                continue
+            if str(action.get("rollback_status") or "").upper() == "ROLLED_BACK":
+                continue
+            return action
+        return None
+
+    def _record_rollback(
+        self,
+        action,
+        rollback_status,
+        *,
+        reason,
+        rollback_by_user_id=None,
+        error=None,
+        completed=False,
+        metadata=None,
+    ):
+        merged_metadata = dict(action.get("metadata") or {})
+        merged_metadata["rollback_reason"] = reason
+        if rollback_by_user_id:
+            merged_metadata["rollback_requested_by_user_id"] = (
+                rollback_by_user_id
+            )
+        if metadata:
+            merged_metadata.update(metadata)
+
+        status = "ROLLED_BACK" if completed else action["status"]
+        stored_error = (
+            None
+            if completed
+            else (
+                str(error)
+                if error is not None
+                else action.get("error")
+            )
+        )
+        self.conn.execute("""
+            UPDATE response_actions
+            SET status=?,
+                rollback_status=?,
+                error=?,
+                metadata=?,
+                updated_at=?
+            WHERE id=?
+        """, (
+            status,
+            rollback_status,
+            stored_error,
+            json.dumps(merged_metadata, sort_keys=True),
+            _utc_now(),
+            action["id"],
+        ))
+        self.conn.commit()
+        return self.get_action(action["id"])
+
+    def unblock(
+        self,
+        ip,
+        reason="operator requested rollback",
+        rollback_by_user_id=None,
+    ):
+        valid, target, validation_reason = self.policy.canonicalize_ip(ip)
         if not valid:
-            return {"status": "BLOCKED_BY_POLICY", "target": target or str(ip or ""), "error": validation_reason}
-        block = self.conn.execute("""
-            SELECT * FROM response_actions WHERE action_type='BLOCK_IP' AND target=?
-            AND execution_scope='ANALYZER' ORDER BY id DESC LIMIT 1
-        """, (target,)).fetchone()
+            return {
+                "status": "BLOCKED_BY_POLICY",
+                "target": target or str(ip or ""),
+                "error": validation_reason,
+            }
+
+        block = self._rollback_candidate(target)
         if not block:
-            return {"status": "SKIPPED", "target": target, "error": "no AegisGuard block action found"}
-        block = self._row_to_dict(block)
+            return {
+                "status": "SKIPPED",
+                "target": target,
+                "error": (
+                    "no active executed AegisGuard-owned "
+                    "block action found"
+                ),
+            }
+
         if self.policy.dry_run:
-            return self._update(block["id"], "ROLLED_BACK", rollback_status="DRY_RUN", metadata={"rollback_reason": reason})
+            rule_name = rule_name_for_ip(target)
+            return self._record_rollback(
+                block,
+                "DRY_RUN",
+                reason=reason,
+                rollback_by_user_id=rollback_by_user_id,
+                metadata={
+                    "rollback_simulation_result": (
+                        "DRY_RUN: would remove AegisGuard-owned "
+                        f"firewall rule {rule_name}"
+                    ),
+                },
+            )
+
         try:
             _, rule_name = self.firewall.unblock_ip(target)
-            return self._update(block["id"], "ROLLED_BACK", rollback_status="ROLLED_BACK", metadata={"firewall_rule": rule_name, "rollback_reason": reason})
+            return self._record_rollback(
+                block,
+                "ROLLED_BACK",
+                reason=reason,
+                rollback_by_user_id=rollback_by_user_id,
+                completed=True,
+                metadata={"firewall_rule": rule_name},
+            )
         except FirewallError as exc:
-            return self._update(block["id"], "FAILED", str(exc), rollback_status="FAILED")
+            return self._record_rollback(
+                block,
+                "FAILED",
+                reason=reason,
+                rollback_by_user_id=rollback_by_user_id,
+                error=exc,
+            )

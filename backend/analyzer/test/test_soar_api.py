@@ -1,6 +1,7 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from backend.analyzer import app as analyzer_app
 from backend.analyzer.auth_api import (
@@ -102,6 +103,31 @@ class SoarApiTests(unittest.TestCase):
         self.assertEqual(recent.status_code, 200)
         self.assertEqual(len(recent.get_json()), 1)
         self.assertEqual(recent.get_json()[0]["target"], "8.8.8.8")
+
+    def test_unblock_uses_trusted_authenticated_actor(self):
+        with patch.object(
+            analyzer_app.SoarEngine,
+            "unblock",
+            return_value={
+                "status": "SKIPPED",
+                "target": "8.8.8.8",
+            },
+        ) as unblock:
+            response = self.client.post(
+                "/api/soar/unblock-ip",
+                json={
+                    "ip": "8.8.8.8",
+                    "rollback_by_user_id": "forged-client-user",
+                },
+                headers={AUTH_CSRF_HEADER: self.csrf_token},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        unblock.assert_called_once_with(
+            "8.8.8.8",
+            "operator requested rollback",
+            rollback_by_user_id="test-soar-admin",
+        )
 
 
 if __name__ == "__main__":
