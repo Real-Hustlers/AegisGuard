@@ -49,12 +49,19 @@ class ResponsePolicy:
                 values = str(raw or "").split(",")
         return {str(item).strip() for item in values if str(item).strip()}
 
-    def validate_ip(self, value):
+    @staticmethod
+    def canonicalize_ip(value):
         try:
             address = ipaddress.ip_address(str(value).strip())
         except ValueError:
             return False, None, "invalid or empty IP address"
-        canonical = str(address)
+        return True, str(address), "valid"
+
+    def validate_ip(self, value):
+        valid, canonical, reason = self.canonicalize_ip(value)
+        if not valid:
+            return False, canonical, reason
+        address = ipaddress.ip_address(canonical)
         if address.is_loopback or address.is_unspecified:
             return False, canonical, "loopback or unspecified address"
         if address.is_multicast or address.is_reserved or canonical == "255.255.255.255":

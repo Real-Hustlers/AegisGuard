@@ -254,6 +254,10 @@ def _audit_spec(response) -> Optional[dict[str, Any]]:
 
     if path == "/api/soar/unblock-ip":
         ip_value = str(payload.get("ip") or "").strip() or None
+        details["response_action_id"] = response_json.get("id")
+        details["rollback_status"] = response_json.get(
+            "rollback_status"
+        )
         return {
             "actor_type": "USER",
             "actor_user_id": user["user_id"],

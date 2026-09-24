@@ -1656,7 +1656,16 @@ def soar_unblock_ip():
         return jsonify({"error": "ip is required"}), 400
     conn = get_connection()
     try:
-        return jsonify(SoarEngine(conn).unblock(data["ip"], data.get("reason", "operator requested rollback")))
+        return jsonify(
+            SoarEngine(conn).unblock(
+                data["ip"],
+                data.get(
+                    "reason",
+                    "operator requested rollback",
+                ),
+                rollback_by_user_id=_trusted_response_user_id(),
+            )
+        )
     finally:
         conn.close()
 
