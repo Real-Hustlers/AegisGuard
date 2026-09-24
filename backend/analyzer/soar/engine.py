@@ -35,6 +35,14 @@ class RejectionDeniedError(PermissionError):
         super().__init__(str(message))
 
 
+class RetryDeniedError(PermissionError):
+    """Raised when failed response execution cannot be retried."""
+
+    def __init__(self, code, message):
+        self.code = str(code)
+        super().__init__(str(message))
+
+
 RECOVERY_STALE_SECONDS = 60
 
 
@@ -351,6 +359,146 @@ class SoarEngine:
             raise
 
         return self.get_action(action_id), claimed
+
+    def _claim_retry(
+        self,
+        action_id,
+        *,
+        retried_by_user_id,
+        reason,
+    ):
+        """Atomically reclaim one failed approved action for execution."""
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            action = self.get_action(action_id)
+            if not action or action["status"] != "FAILED":
+                self.conn.commit()
+                return action, False
+
+            metadata = dict(action.get("metadata") or {})
+            history = metadata.get("retry_history")
+            if not isinstance(history, list):
+                history = []
+            history = list(history)
+            history.append({
+                "by_user_id": retried_by_user_id,
+                "reason": reason,
+                "at": _utc_now(),
+                "previous_error": action.get("error"),
+            })
+            metadata["retry_history"] = history
+            metadata["retry_count"] = len(history)
+
+            updated_at = _utc_now()
+            cursor = self.conn.execute("""
+                UPDATE response_actions
+                SET status='APPROVED',
+                    error=NULL,
+                    metadata=?,
+                    updated_at=?
+                WHERE id=?
+                  AND status='FAILED'
+                  AND approved_by_user_id IS NOT NULL
+                  AND approved_by_user_id != ''
+            """, (
+                json.dumps(metadata, sort_keys=True),
+                updated_at,
+                action_id,
+            ))
+            claimed = cursor.rowcount == 1
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
+
+        return self.get_action(action_id), claimed
+
+    def retry(
+        self,
+        action_id,
+        retried_by_user_id=None,
+        reason=None,
+    ):
+        """Retry one previously approved failed firewall execution."""
+        action = self.get_action(action_id)
+        if not action or action["action_type"] != "BLOCK_IP":
+            return None
+        if action["status"] != "FAILED":
+            raise RetryDeniedError(
+                "retry_not_available",
+                "only failed response actions can be retried",
+            )
+
+        actor = (
+            str(retried_by_user_id or "").strip()
+            or None
+        )
+        if not actor:
+            raise RetryDeniedError(
+                "retry_identity_required",
+                "trusted retry identity is required",
+            )
+
+        retry_reason = str(reason or "").strip()
+        if not retry_reason:
+            raise RetryDeniedError(
+                "retry_reason_required",
+                "retry reason is required",
+            )
+        if len(retry_reason) > 500:
+            raise RetryDeniedError(
+                "retry_reason_too_long",
+                "retry reason must be 500 characters or fewer",
+            )
+
+        original_approver = (
+            str(action.get("approved_by_user_id") or "").strip()
+            or None
+        )
+        if not original_approver:
+            raise RetryDeniedError(
+                "retry_approval_missing",
+                "failed action has no trusted original approval",
+            )
+
+        if self.policy.mode == "OFF":
+            raise RetryDeniedError(
+                "response_mode_off",
+                "response mode OFF forbids retry execution",
+            )
+
+        metadata = action.get("metadata") or {}
+        expected_context = metadata.get("approval_context")
+        if not isinstance(expected_context, dict):
+            raise RetryDeniedError(
+                "approval_context_missing",
+                "failed action has no trusted approval context",
+            )
+
+        current_context = self.policy.approval_context()
+        if expected_context != current_context:
+            raise RetryDeniedError(
+                "response_policy_changed",
+                "response policy changed after the action was approved",
+            )
+
+        valid, _target, validation_reason = self.policy.validate_ip(
+            action["target"]
+        )
+        if not valid:
+            raise RetryDeniedError(
+                "retry_target_blocked",
+                validation_reason,
+            )
+
+        claimed_action, claimed = self._claim_retry(
+            action_id,
+            retried_by_user_id=actor,
+            reason=retry_reason,
+        )
+        if not claimed:
+            return claimed_action
+        return self._execute_block(claimed_action)
 
     def reject(
         self,

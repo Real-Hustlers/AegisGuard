@@ -24,6 +24,9 @@ _RESPONSE_RECONCILE_RE = re.compile(
 _RESPONSE_REJECT_RE = re.compile(
     r"^/api/response-actions/(?P<action_id>\d+)/reject$"
 )
+_RESPONSE_RETRY_RE = re.compile(
+    r"^/api/response-actions/(?P<action_id>\d+)/retry$"
+)
 _INCIDENT_WORKFLOW_RE = re.compile(
     r"^/api/incidents/(?P<incident_id>[^/]+)/"
     r"(?P<operation>transition|assign|notes|evidence|override)$"
@@ -243,6 +246,25 @@ def _audit_spec(response) -> Optional[dict[str, Any]]:
             "actor_type": "USER",
             "actor_user_id": user["user_id"],
             "action": "RESPONSE.APPROVE",
+            "outcome": outcome,
+            "target_type": "RESPONSE_ACTION",
+            "target_id": action_id,
+            "details": details,
+        }
+
+    retry = _RESPONSE_RETRY_RE.fullmatch(path)
+    if retry:
+        action_id = retry.group("action_id")
+        error_code = str(
+            response_json.get("error") or ""
+        ).strip()
+        if error_code:
+            details["reason"] = error_code
+        details["response_status"] = response_json.get("status")
+        return {
+            "actor_type": "USER",
+            "actor_user_id": user["user_id"],
+            "action": "RESPONSE.RETRY",
             "outcome": outcome,
             "target_type": "RESPONSE_ACTION",
             "target_id": action_id,

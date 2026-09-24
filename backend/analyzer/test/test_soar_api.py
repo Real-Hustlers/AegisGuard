@@ -174,6 +174,60 @@ class SoarApiTests(unittest.TestCase):
         self.assertEqual(len(recent.get_json()), 1)
         self.assertEqual(recent.get_json()[0]["target"], "8.8.8.8")
 
+    def test_retry_uses_trusted_authenticated_actor_and_is_audited(self):
+        with patch.object(
+            analyzer_app.SoarEngine,
+            "retry",
+            return_value={
+                "id": 654,
+                "status": "EXECUTED",
+                "rollback_status": None,
+            },
+        ) as retry:
+            response = self.approver_client.post(
+                "/api/response-actions/654/retry",
+                json={
+                    "reason": "transient firewall service recovered",
+                    "retried_by_user_id": "forged-client-user",
+                },
+                headers={
+                    AUTH_CSRF_HEADER: self.approver_csrf_token,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        retry.assert_called_once_with(
+            654,
+            retried_by_user_id="test-soar-approver",
+            reason="transient firewall service recovered",
+        )
+
+        conn = analyzer_app.get_connection()
+        try:
+            audit = conn.execute(
+                """
+                SELECT actor_user_id,
+                       action,
+                       outcome,
+                       target_id
+                FROM audit_events
+                WHERE action='RESPONSE.RETRY'
+                ORDER BY rowid DESC
+                LIMIT 1
+                """
+            ).fetchone()
+        finally:
+            conn.close()
+
+        self.assertIsNotNone(audit)
+        self.assertEqual(
+            audit["actor_user_id"],
+            "test-soar-approver",
+        )
+        self.assertEqual(audit["action"], "RESPONSE.RETRY")
+        self.assertEqual(audit["outcome"], "SUCCESS")
+        self.assertEqual(audit["target_id"], "654")
+
     def test_reject_uses_trusted_authenticated_actor_and_is_audited(self):
         requested = self.client.post(
             "/api/soar/block-ip",
