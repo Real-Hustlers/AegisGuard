@@ -68,11 +68,15 @@ class S8BRollbackGovernanceTests(unittest.TestCase):
         )
 
     def execute_block(self, incident_id="INC-S8B", ip="8.8.8.8"):
-        return self.engine().request_block(
+        engine = self.engine()
+        requested = engine.request_block(
             incident(incident_id=incident_id, source_ip=ip),
             ip,
-            approved=True,
             requested_by_user_id="requester",
+        )
+        return engine.approve(
+            requested["id"],
+            approved_by_user_id="approver",
         )
 
     def test_pending_policy_blocked_and_dry_run_actions_are_not_rollback_owners(self):
@@ -88,10 +92,14 @@ class S8BRollbackGovernanceTests(unittest.TestCase):
         )
         self.assertEqual(blocked["status"], "BLOCKED_BY_POLICY")
 
-        dry = self.engine(soar_dry_run="true").request_block(
+        dry_engine = self.engine(soar_dry_run="true")
+        dry_requested = dry_engine.request_block(
             incident("INC-DRY"),
-            approved=True,
             requested_by_user_id="requester",
+        )
+        dry = dry_engine.approve(
+            dry_requested["id"],
+            approved_by_user_id="approver",
         )
         self.assertEqual(dry["status"], "DRY_RUN")
 
@@ -170,12 +178,16 @@ class S8BRollbackGovernanceTests(unittest.TestCase):
         self.assertEqual(self.firewall.unblocks, ["8.8.8.8"])
 
     def test_rollback_is_allowed_after_block_policy_becomes_more_restrictive(self):
-        executed = self.engine(
+        private_engine = self.engine(
             soar_allow_private_ip_blocking="true"
-        ).request_block(
+        )
+        private_requested = private_engine.request_block(
             incident("INC-PRIVATE", "10.0.0.5"),
             "10.0.0.5",
-            approved=True,
+        )
+        executed = private_engine.approve(
+            private_requested["id"],
+            approved_by_user_id="approver",
         )
         self.assertEqual(executed["status"], "EXECUTED")
 

@@ -53,95 +53,222 @@ class SoarEngineTests(unittest.TestCase):
         self.conn.close()
 
     def engine(self, **settings):
-        values = {"soar_mode": "MANUAL", "soar_dry_run": "false", "soar_auto_min_score": "90",
-                  "soar_allow_private_ip_blocking": "false", "soar_allowlist": "[]"}
+        values = {
+            "soar_mode": "MANUAL",
+            "soar_dry_run": "false",
+            "soar_auto_min_score": "90",
+            "soar_allow_private_ip_blocking": "false",
+            "soar_allowlist": "[]",
+        }
         values.update(settings)
-        return SoarEngine(self.conn, self.firewall, ResponsePolicy(values, self_ips={"198.51.100.7"}))
+        return SoarEngine(
+            self.conn,
+            self.firewall,
+            ResponsePolicy(
+                values,
+                self_ips={"198.51.100.7"},
+            ),
+        )
+
+    def request_and_approve(self, engine, event, ip=None):
+        requested = engine.request_block(event, ip)
+        self.assertEqual(requested["status"], "PENDING_APPROVAL")
+        return engine.approve(
+            requested["id"],
+            approved_by_user_id="test-approver",
+        )
 
     def test_valid_public_ip_blocks_and_is_persisted(self):
-        action = self.engine().request_block(incident(), approved=True)
+        engine = self.engine()
+        action = self.request_and_approve(engine, incident())
         self.assertEqual(action["status"], "EXECUTED")
         self.assertEqual(self.firewall.blocks, ["8.8.8.8"])
-        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM response_actions").fetchone()[0], 1)
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT COUNT(*) FROM response_actions"
+            ).fetchone()[0],
+            1,
+        )
 
     def test_invalid_loopback_self_allowlist_and_private_targets_are_denied(self):
-        cases = [("not-an-ip", "invalid"), ("127.0.0.1", "loopback"), ("::1", "loopback"),
-                 ("198.51.100.7", "Analyzer"), ("10.0.0.5", "private")]
+        cases = [
+            ("not-an-ip", "invalid"),
+            ("127.0.0.1", "loopback"),
+            ("::1", "loopback"),
+            ("198.51.100.7", "Analyzer"),
+            ("10.0.0.5", "private"),
+        ]
         for index, (target, reason) in enumerate(cases):
-            action = self.engine().request_block(incident(incident_id=f"INC-{index}"), target, approved=True)
+            action = self.engine().request_block(
+                incident(incident_id=f"INC-{index}"),
+                target,
+            )
             self.assertEqual(action["status"], "BLOCKED_BY_POLICY")
-            self.assertIn(reason.lower(), action["reason"].lower())
-        allowlisted = self.engine(soar_allowlist='["8.8.4.4"]')
-        action = allowlisted.request_block(incident(incident_id="INC-allow"), "8.8.4.4", approved=True)
+            self.assertIn(
+                reason.lower(),
+                action["reason"].lower(),
+            )
+        allowlisted = self.engine(
+            soar_allowlist='["8.8.4.4"]'
+        )
+        action = allowlisted.request_block(
+            incident(incident_id="INC-allow"),
+            "8.8.4.4",
+        )
         self.assertEqual(action["status"], "BLOCKED_BY_POLICY")
         self.assertEqual(self.firewall.blocks, [])
 
     def test_private_target_can_be_enabled_explicitly(self):
-        action = self.engine(soar_allow_private_ip_blocking="true").request_block(
-            incident(), "10.0.0.5", approved=True
+        engine = self.engine(
+            soar_allow_private_ip_blocking="true"
+        )
+        action = self.request_and_approve(
+            engine,
+            incident(),
+            "10.0.0.5",
         )
         self.assertEqual(action["status"], "EXECUTED")
 
     def test_block_idempotency_does_not_execute_twice(self):
         engine = self.engine()
-        first = engine.request_block(incident(), approved=True)
-        second = engine.request_block(incident(), approved=True)
+        first = engine.request_block(incident())
+        second = engine.request_block(incident())
         self.assertEqual(first["id"], second["id"])
+        self.assertEqual(self.firewall.blocks, [])
+
+        executed = engine.approve(
+            first["id"],
+            approved_by_user_id="test-approver",
+        )
+        repeated = engine.request_block(incident())
+
+        self.assertEqual(executed["status"], "EXECUTED")
+        self.assertEqual(repeated["id"], executed["id"])
+        self.assertEqual(repeated["status"], "EXECUTED")
         self.assertEqual(self.firewall.blocks, ["8.8.8.8"])
 
     def test_manual_creates_pending_without_firewall_call(self):
-        action = self.engine().request_block(incident())
+        action = self.engine().request_block(
+            incident(),
+            approved=True,
+        )
         self.assertEqual(action["status"], "PENDING_APPROVAL")
         self.assertEqual(self.firewall.blocks, [])
 
-    def test_auto_executes_only_qualifying_incident(self):
+    def test_auto_qualifies_but_requires_approval(self):
         auto = self.engine(soar_mode="AUTO")
         denied = auto.request_block(incident())
         self.assertEqual(denied["status"], "BLOCKED_BY_POLICY")
-        action = auto.request_block(incident(incident_id="INC-critical", severity="CRITICAL"))
-        self.assertEqual(action["status"], "EXECUTED")
+
+        requested = auto.request_block(
+            incident(
+                incident_id="INC-critical",
+                severity="CRITICAL",
+            )
+        )
+        self.assertEqual(requested["status"], "PENDING_APPROVAL")
+        self.assertTrue(
+            requested["metadata"]["auto_qualification"]["qualified"]
+        )
+        self.assertEqual(self.firewall.blocks, [])
+
+        executed = auto.approve(
+            requested["id"],
+            approved_by_user_id="test-approver",
+        )
+        self.assertEqual(executed["status"], "EXECUTED")
         self.assertEqual(self.firewall.blocks, ["8.8.8.8"])
 
     def test_off_never_executes_and_dry_run_never_calls_firewall(self):
         off = self.engine(soar_mode="OFF")
-        self.assertEqual(off.request_block(incident())["status"], "SKIPPED")
+        self.assertEqual(
+            off.request_block(incident())["status"],
+            "SKIPPED",
+        )
+
         dry = self.engine(soar_dry_run="true")
-        action = dry.request_block(incident(incident_id="INC-dry"), approved=True)
+        requested = dry.request_block(
+            incident(incident_id="INC-dry"),
+        )
+        action = dry.approve(
+            requested["id"],
+            approved_by_user_id="test-approver",
+        )
         self.assertEqual(action["status"], "DRY_RUN")
         self.assertEqual(self.firewall.blocks, [])
 
     def test_unblock_rolls_back_only_the_owned_action(self):
         engine = self.engine()
-        engine.request_block(incident(), approved=True)
+        self.request_and_approve(engine, incident())
         result = engine.unblock("8.8.8.8")
         self.assertEqual(result["status"], "ROLLED_BACK")
-        self.assertEqual(result["rollback_status"], "ROLLED_BACK")
+        self.assertEqual(
+            result["rollback_status"],
+            "ROLLED_BACK",
+        )
         self.assertEqual(self.firewall.unblocks, ["8.8.8.8"])
 
     def test_firewall_failure_is_recorded_not_raised(self):
+        engine = self.engine()
+        requested = engine.request_block(incident())
         self.firewall.fail = True
-        action = self.engine().request_block(incident(), approved=True)
+        action = engine.approve(
+            requested["id"],
+            approved_by_user_id="test-approver",
+        )
         self.assertEqual(action["status"], "FAILED")
-        self.assertIn("mock firewall failure", action["error"])
+        self.assertIn(
+            "mock firewall failure",
+            action["error"],
+        )
 
     def test_windows_adapter_uses_exact_owned_rule_name(self):
         calls = []
+
         class Result:
             def __init__(self, returncode):
-                self.returncode, self.stdout, self.stderr = returncode, "", ""
+                self.returncode = returncode
+                self.stdout = ""
+                self.stderr = ""
+
         def runner(command, **kwargs):
             calls.append(command)
-            return Result(1 if "Get-NetFirewallRule" in command[-1] else 0)
-        firewall = WindowsFirewall(runner=runner, platform="win32")
+            return Result(
+                1
+                if "Get-NetFirewallRule" in command[-1]
+                else 0
+            )
+
+        firewall = WindowsFirewall(
+            runner=runner,
+            platform="win32",
+        )
         firewall.block_ip("8.8.8.8")
         firewall.unblock_ip("8.8.8.8")
         name = rule_name_for_ip("8.8.8.8")
-        self.assertTrue(all(name in call[-1] for call in calls))
-        self.assertTrue(any("Remove-NetFirewallRule -DisplayName '" + name + "'" in call[-1] for call in calls))
-        self.assertFalse(any("*" in call[-1] for call in calls))
+        self.assertTrue(
+            all(name in call[-1] for call in calls)
+        )
+        self.assertTrue(
+            any(
+                (
+                    "Remove-NetFirewallRule -DisplayName '"
+                    + name
+                    + "'"
+                )
+                in call[-1]
+                for call in calls
+            )
+        )
+        self.assertFalse(
+            any("*" in call[-1] for call in calls)
+        )
 
     def test_concurrent_duplicate_requests_create_one_action(self):
-        db_path = Path.cwd() / ".aegisguard_soar_concurrency_test.db"
+        db_path = (
+            Path.cwd()
+            / ".aegisguard_soar_concurrency_test.db"
+        )
         for suffix in ("", "-wal", "-shm"):
             candidate = Path(str(db_path) + suffix)
             if candidate.exists():
@@ -151,21 +278,43 @@ class SoarEngineTests(unittest.TestCase):
             setup.row_factory = sqlite3.Row
             ensure_schema(setup)
             setup.close()
-            results, failures = [], []
+            results = []
+            failures = []
 
             def request_from_collector():
                 try:
-                    conn = sqlite3.connect(db_path, timeout=5)
+                    conn = sqlite3.connect(
+                        db_path,
+                        timeout=5,
+                    )
                     conn.row_factory = sqlite3.Row
-                    engine = SoarEngine(conn, FakeFirewall(), ResponsePolicy({
-                        "soar_mode": "MANUAL", "soar_dry_run": "true", "soar_allowlist": "[]"
-                    }, self_ips=set()))
-                    results.append(engine.request_block(incident(), approved=True)["id"])
+                    engine = SoarEngine(
+                        conn,
+                        FakeFirewall(),
+                        ResponsePolicy(
+                            {
+                                "soar_mode": "MANUAL",
+                                "soar_dry_run": "true",
+                                "soar_allowlist": "[]",
+                            },
+                            self_ips=set(),
+                        ),
+                    )
+                    results.append(
+                        engine.request_block(
+                            incident()
+                        )["id"]
+                    )
                     conn.close()
-                except Exception as exc:  # test reports a concurrent lock as failure
+                except Exception as exc:
                     failures.append(exc)
 
-            threads = [threading.Thread(target=request_from_collector) for _ in range(2)]
+            threads = [
+                threading.Thread(
+                    target=request_from_collector
+                )
+                for _ in range(2)
+            ]
             for thread in threads:
                 thread.start()
             for thread in threads:
@@ -174,7 +323,9 @@ class SoarEngineTests(unittest.TestCase):
             self.assertEqual(len(set(results)), 1)
         finally:
             for suffix in ("", "-wal", "-shm"):
-                candidate = Path(str(db_path) + suffix)
+                candidate = Path(
+                    str(db_path) + suffix
+                )
                 if candidate.exists():
                     candidate.unlink()
 
