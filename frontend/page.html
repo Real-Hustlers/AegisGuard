@@ -46,7 +46,7 @@
         .text-orange { color: var(--orange); }
         .text-green { color: var(--green); }
         .text-white { color: var(--text-light); }
-        
+
         .badge {
             padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;
             text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid transparent;
@@ -57,7 +57,7 @@
         .badge-medium { background: rgba(255, 211, 42, 0.1); color: #ffd32a; border-color: #ffd32a; }
         .badge-low { background: rgba(30, 144, 255, 0.1); color: #1e90ff; border-color: #1e90ff; }
         .badge-info { border-color: var(--text-main); color: var(--text-main); }
-        
+
         .btn-outline {
             background: transparent; border: 1px solid var(--border-color); color: var(--cyan);
             padding: 6px 12px; border-radius: 4px; font-size: 11px; font-weight: 600;
@@ -78,7 +78,7 @@
         .system-time { padding: 20px; }
         .system-time .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
         .system-time .time { font-size: 20px; font-weight: 700; color: var(--cyan); font-family: var(--font-mono); }
-        
+
         .nav-menu { list-style: none; flex: 1; }
         .nav-item { padding: 12px 20px; display: flex; align-items: center; gap: 12px; cursor: pointer; color: var(--text-light); border-left: 3px solid transparent; }
         .nav-item:hover { background-color: var(--bg-panel); }
@@ -92,20 +92,20 @@
         .breadcrumbs { font-size: 12px; letter-spacing: 0.5px; text-transform: uppercase;}
         .breadcrumbs span { color: var(--text-light); margin-right: 8px;}
         .breadcrumbs .current { color: var(--text-main); }
-        
+
         .topbar-actions { display: flex; align-items: center; gap: 20px; }
         .status-indicators { display: flex; gap: 15px; font-size: 11px; font-weight: 600; }
         .status-dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
         .dot-green { background-color: var(--green); box-shadow: 0 0 8px var(--green); }
         .dot-orange { background-color: var(--orange); }
-        
+
         .user-profile { display: flex; align-items: center; gap: 10px; border-left: 1px solid var(--border-color); padding-left: 20px;}
         .avatar { width: 32px; height: 32px; background: #1e293b; color: var(--cyan); display: flex; align-items: center; justify-content: center; border-radius: 4px; font-weight: 600; }
 
         /* Shared Panel Styles */
         .view-section { display: none; flex: 1; overflow-y: auto; padding: 24px; }
         .view-section.active { display: block; }
-        
+
         .panel { background-color: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; padding: 20px; margin-bottom: 24px; }
         .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
         .panel-title { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-light); margin-bottom: 4px; }
@@ -115,13 +115,13 @@
         table { width: 100%; border-collapse: collapse; text-align: left; }
         th { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-main); padding: 12px 0; border-bottom: 1px solid var(--border-color); }
         td { padding: 14px 0; border-bottom: 1px solid var(--border-color); font-size: 13px; }
-        
+
         /* View 1: Dashboard */
         .grid-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 24px; }
         .stat-value { font-size: 32px; font-weight: 600; font-family: var(--font-mono); margin-bottom: 5px; }
         .stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
         .grid-main { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 24px; }
-        
+
         .alert-card { background-color: var(--bg-base); border: 1px solid var(--border-color); padding: 15px; border-radius: 6px; position: relative; margin-bottom: 12px;}
         .alert-card.critical { border-color: var(--red-dim); }
         .alert-card.high { border-color: var(--orange-dim); }
@@ -131,7 +131,7 @@
         .threat-box { background: var(--bg-panel); border: 1px solid var(--border-color); padding: 20px; border-radius: 6px; display: flex; align-items: center; gap: 15px;}
         .threat-box.critical { border-color: var(--red-dim); }
         .threat-row { display: flex; align-items: center; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid var(--border-color); }
-        
+
         /* View 4: Devices */
         .device-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
         .device-card { background: var(--bg-panel); border: 1px solid var(--border-color); border-top: 3px solid var(--green); border-radius: 6px; padding: 15px; }
@@ -156,7 +156,7 @@
 
     <aside class="sidebar">
         <div class="brand"><i class="ph ph-shield-check"></i> AEGISGUARD</div>
-        
+
         <div class="sys-status-small">
             <span><i class="ph ph-wifi-slash"></i> AIR-GAPPED</span>
             <span>• OFFLINE</span>
@@ -266,7 +266,7 @@
                     <span class="badge" style="border-color:var(--border-color)">HIGH</span>
                 </div>
             </div>
-            
+
             <div class="panel">
                 <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px; color:var(--text-main)">
                     <i class="ph ph-magnifying-glass"></i>
@@ -291,7 +291,145 @@
             </div>
         </section>
 
-        <section id="view-threats" class="view-section">
+
+<section id="view-soc" class="view-section">
+
+<h2 style="font-size:16px;letter-spacing:1px;text-transform:uppercase;">
+SOC Analyst Operations
+</h2>
+
+<div class="panel-subtitle">
+Live monitoring, detection analysis, MITRE mapping and evidence tracking
+</div>
+
+<div class="grid-stats">
+
+<div class="panel" style="margin:0">
+<div class="stat-value text-cyan">1,284</div>
+<div class="stat-label">Live Events</div>
+</div>
+
+<div class="panel" style="margin:0">
+<div class="stat-value text-red">7</div>
+<div class="stat-label">Active Incidents</div>
+</div>
+
+<div class="panel" style="margin:0">
+<div class="stat-value text-orange">12</div>
+<div class="stat-label">MITRE Techniques</div>
+</div>
+
+<div class="panel" style="margin:0">
+<div class="stat-value text-green">PASS</div>
+<div class="stat-label">Evidence Integrity</div>
+</div>
+
+</div>
+
+
+<div class="panel">
+
+<div class="panel-title">
+Detection Timeline
+</div>
+
+<table>
+
+<thead>
+<tr>
+<th>TIME</th>
+<th>EVENT</th>
+<th>MITRE</th>
+<th>STATUS</th>
+</tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td class="mono">14:32:07</td>
+<td>SSH Brute Force Detection</td>
+<td>Credential Access</td>
+<td><span class="badge badge-critical">ACTIVE</span></td>
+</tr>
+
+<tr>
+<td class="mono">14:31:44</td>
+<td>Port Scan Detection</td>
+<td>Discovery</td>
+<td><span class="badge badge-high">REVIEW</span></td>
+</tr>
+
+</tbody>
+
+</table>
+
+</div>
+
+</section>
+
+
+<section id="view-incidents" class="view-section">
+
+<h2 style="font-size:16px;letter-spacing:1px;text-transform:uppercase;">
+Incident Workspace
+</h2>
+
+<div class="panel-subtitle">
+Detection to audit lifecycle
+</div>
+
+<div class="panel">
+
+<div style="
+display:flex;
+justify-content:space-around;
+text-align:center;
+">
+
+<div>
+Detection
+<br>
+<i class="ph ph-warning-circle text-red"></i>
+</div>
+
+<div>
+Evidence
+<br>
+<i class="ph ph-folder-open text-cyan"></i>
+</div>
+
+<div>
+Analysis
+<br>
+<i class="ph ph-magnifying-glass text-orange"></i>
+</div>
+
+<div>
+Approval
+<br>
+<i class="ph ph-check-circle text-green"></i>
+</div>
+
+<div>
+Response
+<br>
+<i class="ph ph-shield-check text-cyan"></i>
+</div>
+
+<div>
+Audit
+<br>
+<i class="ph ph-clock-counter-clockwise"></i>
+</div>
+
+</div>
+
+</div>
+
+</section>
+
+<section id="view-threats" class="view-section">
             <h2 style="font-size:16px; letter-spacing:1px; text-transform:uppercase;">Threat Intelligence</h2>
             <div class="panel-subtitle">Active threats requiring immediate attention</div>
 
@@ -312,7 +450,7 @@
 
             <div class="panel">
                 <div class="panel-title" style="margin-bottom:15px;">Critical & High Severity Events</div>
-                
+
                 <div class="threat-row">
                     <div style="display:flex; gap:15px; align-items:flex-start;">
                         <i class="ph ph-x-circle text-red" style="font-size:18px; margin-top:2px;"></i>
@@ -324,7 +462,7 @@
                     </div>
                     <button class="btn-outline">INVESTIGATE</button>
                 </div>
-                
+
                 <div class="threat-row">
                     <div style="display:flex; gap:15px; align-items:flex-start;">
                         <i class="ph ph-warning-circle text-orange" style="font-size:18px; margin-top:2px;"></i>
@@ -423,7 +561,7 @@
                     <div style="display:flex; align-items:center; gap:15px;"><span class="mono text-cyan">Regex + ML Heuristics</span> <span class="badge" style="border:1px solid var(--border-color); cursor:pointer;">EDIT</span></div>
                 </div>
             </div>
-            
+
         </section>
 
     </main>
