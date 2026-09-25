@@ -4,9 +4,9 @@
 
 Product: AegisGuard Enterprise
 
-Release Stage: Production Candidate
+Release Stage: Release Candidate
 
-Version: v1.0.0
+Version: v0.1.0
 
 This document summarizes current implementation readiness, validation evidence,
 security controls, recovery coverage, and known boundaries.
@@ -120,6 +120,43 @@ S14 adds and validates:
 
 ---
 
+## Product / Deployment Release-Candidate Evidence
+
+S12-B product and deployment validation is merged into the release-candidate
+baseline.
+
+Validated installed-product evidence includes:
+
+- source-free Windows Analyzer UI;
+- source-free mTLS Analyzer;
+- source-free Windows Collector;
+- source-free recovery utility;
+- source-free UserAdmin utility;
+- Program Files / ProgramData separation;
+- initial administrator provisioning without password command-line exposure;
+- authenticated UI access after reinstall;
+- real Collector enrollment through mTLS;
+- stable Collector identity across restart;
+- SYSTEM-owned protected Collector credential continuity;
+- Collector state `ENROLLED`, liveness `CURRENT`, and transport `HEALTHY`;
+- server-observed mTLS verification;
+- Collector checkpoint advancement from `4179545` to `4179824`;
+- 26 processed Collector batches with zero failed batches;
+- 180 real Windows Security events analyzed;
+- `/healthz` HTTP 200;
+- `/readyz` HTTP 200;
+- UI, mTLS Analyzer, and Collector tasks running simultaneously.
+
+The validation activity intentionally did not manufacture detections.
+Incidents, response actions, MITRE mappings, rule findings, correlation
+findings, and governed-ML findings remained empty for the observed activity.
+Governed ML reported `UNAVAILABLE` because no promoted model was installed.
+
+S12-B evidence is recorded in:
+
+`docs/S12_PRODUCT_E2E_VALIDATION.md`
+
+---
 ## Security Release Sign-off
 
 S16 security sign-off was executed against integration baseline:
@@ -170,7 +207,7 @@ docs/SECURITY_RELEASE_SIGNOFF.md
 
 ## Release Position
 
-AegisGuard Enterprise remains a **Production Candidate**.
+AegisGuard Enterprise is prepared as a **v0.1.0 Release Candidate**.
 
 The S16 security release-candidate gate is PASS for the baseline recorded above.
 

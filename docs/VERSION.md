@@ -1,4 +1,4 @@
-﻿# AegisGuard Version Information
+# AegisGuard Version Information
 
 ## Product
 
@@ -6,11 +6,11 @@ AegisGuard Enterprise
 
 ## Current Version
 
-v1.0.0
+v0.1.0
 
 ## Release Type
 
-Production Candidate
+Release Candidate
 
 ## Release Date
 
@@ -18,6 +18,14 @@ September 2026
 
 ---
 
+## Release-Candidate Baseline
+
+The v0.1.0 Release Candidate is based on the latest integrated product state,
+including S12-B product/deployment validation, S12-A backend/security E2E
+validation, S14 backup/recovery closure, and S16 security release sign-off.
+
+Release publication and repository tagging remain maintainer/release-owner
+actions.
 # Version Components
 
 ## Detection Engine

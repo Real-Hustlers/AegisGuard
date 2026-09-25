@@ -1,270 +1,115 @@
-\# AegisGuard Deployment Architecture
+# AegisGuard Enterprise Deployment Architecture
 
+## Release
 
+Version: v0.1.0 Release Candidate
 
-\## Overview
+## Validated Windows deployment
 
+The release-candidate deployment separates packaged executables from mutable
+runtime state.
 
-
-AegisGuard supports multiple deployment models based on organization size, log volume, and operational requirements.
-
-
-
-\---
-
-
-
-\# Deployment Models
-
-
-
-\## 1. Single Server Deployment
-
-
-
-Suitable for:
-
-
-
-\- Small organizations
-
-\- Testing environments
-
-\- Limited log sources
-
-
-
-
-
-Architecture:
-
-
-
-
-
-Users
-
+Windows Host
 |
-
-v
-
-AegisGuard UI
-
++-- Program Files
+|   |
+|   +-- Analyzer UI
+|   +-- mTLS Analyzer
+|   +-- Collector
+|   +-- Recovery utility
+|   +-- UserAdmin utility
 |
-
-v
-
-Backend Services
-
-|
-
-+-------------+
-
-| |
-
-Detection Storage
-
-Engine
-
-|
-
-Collectors
-
-
-
-
-
-\---
-
-
-
-\## 2. Enterprise Server Deployment
-
-
-
-Suitable for:
-
-
-
-\- SOC environments
-
-\- Multiple security devices
-
-\- Continuous monitoring
-
-
-
-
-
-Architecture:
-
-
-
-
-
-Security Devices
-
-|
-
-v
-
-Collectors
-
-|
-
-v
-
-Processing Layer
-
-|
-
-+----------------+
-
-| |
-
-Detection Engine Storage
-
-|
-
-v
-
-SOC Dashboard
-
-
-
-
-
-\---
-
-
-
-\## 3. Distributed Deployment
-
-
-
-Suitable for:
-
-
-
-\- Large environments
-
-\- Multiple collection points
-
-
-
-
-
-Architecture:
-
-
-
-
-
-Collector Node 1 ----
-
-Collector Node 2 -----
-
-Collector Node 3 ------> Processing Cluster
-
-Collector Node N -----/
-
-
-
-&#x20;        |
-
-&#x20;        v
-
-
-
-&#x20;  Central Storage
-
-
-
-&#x20;        |
-
-&#x20;        v
-
-
-
-&#x20;  SOC Dashboard
-
-
-
-\---
-
-
-
-\# Air-Gapped Deployment
-
-
-
-AegisGuard supports controlled offline environments.
-
-
-
-Characteristics:
-
-
-
-\- No external cloud dependency
-
-\- Internal network operation
-
-\- Local data processing
-
-\- Local evidence storage
-
-
-
-\---
-
-
-
-\# Data Flow
-
-
-
-
-
-Input Logs
-
-
-
-&#x20;|
-
-
-
-Collectors
-
-
-
-&#x20;|
-
-
-
-Processing Pipeline
-
-
-
-&#x20;|
-
-
-
-Detection Engine
-
-
-
-&#x20;|
-
-
-
-Incident Management
-
-
-
-&#x20;|
-
-
-
-SOC Analyst
-
++-- ProgramData
+    |
+    +-- Analyzer database/state
+    +-- governed ML registry
+    +-- Collector configuration/state
+    +-- protected TLS material
+
+## Product data flow
+
+Windows Security Events
+        |
+        v
+Packaged Collector
+        |
+        | HTTPS + mTLS
+        v
+Collector-facing Analyzer
+        |
+        v
+Durable Analyzer State
+        |
+        +--------------------+
+        |                    |
+        v                    v
+Detection / Intelligence   Incident / Response Governance
+        |                    |
+        +----------+---------+
+                   |
+                   v
+            Authenticated SOC UI
+
+## Human UI boundary
+
+The validated local human UI is loopback-only.
+
+The UI consumes authenticated product APIs for:
+
+- events;
+- alerts;
+- Collector inventory;
+- intelligence;
+- incidents;
+- response actions;
+- operational health.
+
+## Collector trust boundary
+
+Collector transport uses:
+
+- authenticated enrollment;
+- per-Collector credential state;
+- mTLS certificate verification;
+- server-derived Collector liveness;
+- durable ingest acknowledgement.
+
+Collector-reported operational state is not treated as the sole security
+authority.
+
+## Air-gapped deployment
+
+Normal local operation can run without an external cloud dependency.
+
+Air-gapped deployment requires controlled local provisioning of:
+
+- release media;
+- trusted release hashes/pins;
+- certificates and CA material;
+- one-time enrollment bootstrap;
+- backup media.
+
+## Multiple Collectors
+
+The platform supports Collector identities and centralized Analyzer inventory.
+
+Actual capacity depends on event rate and hardware and must be benchmarked for
+the target environment.
+
+## Not claimed by this release candidate
+
+The v0.1.0 Release Candidate does not claim:
+
+- arbitrary distributed Analyzer clustering;
+- managed cloud orchestration;
+- remote-remediation orchestration across arbitrary third-party products;
+- remote backup replication;
+- publisher-signature non-repudiation.
+
+## Runtime state
+
+Mutable runtime state remains under ProgramData and is preserved by the
+supported upgrade/reinstall path.
+
+Release bundles must not contain customer logs, runtime databases, private keys,
+production certificates, or Collector credentials.
