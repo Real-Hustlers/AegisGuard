@@ -34,6 +34,10 @@ BUNDLE_PAYLOAD = (
         "dist/AegisGuardRecovery.exe",
     ),
     (
+        "bin/AegisGuardUserAdmin.exe",
+        "dist/AegisGuardUserAdmin.exe",
+    ),
+    (
         "install_collector.ps1",
         "install_collector.ps1",
     ),
