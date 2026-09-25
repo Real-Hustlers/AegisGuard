@@ -20,6 +20,7 @@ REQUIRED_DEPLOYMENT_FILES = (
     "deploy/windows/run_analyzer_mtls.ps1",
     "deploy/windows/install_analyzer_ui.ps1",
     "deploy/windows/run_analyzer_ui.ps1",
+    "deploy/windows/upgrade_enterprise.ps1",
     "scripts/build_windows_offline_bundle.py",
     "BUILD-README.txt",
 )
@@ -38,6 +39,7 @@ DEPLOYMENT_TEXT_FILES = (
     "deploy/windows/run_analyzer_mtls.ps1",
     "deploy/windows/install_analyzer_ui.ps1",
     "deploy/windows/run_analyzer_ui.ps1",
+    "deploy/windows/upgrade_enterprise.ps1",
 )
 
 

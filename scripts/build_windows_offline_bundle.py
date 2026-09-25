@@ -58,6 +58,10 @@ BUNDLE_PAYLOAD = (
         "deploy/windows/configure_collector_mtls.ps1",
     ),
     (
+        "deploy/windows/upgrade_enterprise.ps1",
+        "deploy/windows/upgrade_enterprise.ps1",
+    ),
+    (
         "BUILD-README.txt",
         "BUILD-README.txt",
     ),
