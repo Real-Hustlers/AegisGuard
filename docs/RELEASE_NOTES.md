@@ -1,4 +1,4 @@
-# AegisGuard Enterprise Release Notes
+﻿# AegisGuard Enterprise Release Notes
 
 ## Version
 
@@ -47,6 +47,16 @@ AegisGuard Enterprise provides security monitoring, threat analysis, incident in
 - Audit trail support
 
 
+
+## Operational Hardening
+
+- Read-only asset and collector visibility
+- Server-derived collector liveness
+- Health and readiness endpoints
+- Runtime dependency preflight
+- Bounded administrator-only operational metrics and diagnostics
+- Final S9 operational-hardening closure validation
+- S9.3-S9.6 retained as supplemental validation foundations
 ## Enterprise Deployment
 
 - Deployment architecture support
@@ -85,3 +95,4 @@ AegisGuard Enterprise provides security monitoring, threat analysis, incident in
 - Additional third-party integrations may require future development.
 - Deployment capacity depends on infrastructure resources.
 - Environment-specific configurations may be required.
+- Supplemental S9.3-S9.6 validation foundations do not constitute full orchestration, disaster recovery, or remote remediation services.
