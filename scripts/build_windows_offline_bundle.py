@@ -30,6 +30,10 @@ BUNDLE_PAYLOAD = (
         "dist/AegisGuardCollector.exe",
     ),
     (
+        "bin/AegisGuardRecovery.exe",
+        "dist/AegisGuardRecovery.exe",
+    ),
+    (
         "install_collector.ps1",
         "install_collector.ps1",
     ),
