@@ -2,11 +2,11 @@
 
 ## Version
 
-v1.0.0
+v0.1.0
 
 ## Release Type
 
-Production Candidate
+Release Candidate
 
 ## Overview
 
@@ -98,6 +98,32 @@ customer-export artifacts.
 
 Trusted pins do not constitute publisher-signature non-repudiation.
 
+## S12-B Product / Deployment Validation
+
+The v0.1.0 Release Candidate includes installed-product validation from the
+source-free Windows package.
+
+Validated evidence includes:
+
+- packaged Analyzer UI, mTLS Analyzer, Collector, Recovery, and UserAdmin;
+- source-free administrator provisioning;
+- authenticated UI access after reinstall;
+- ProgramData state preservation across reinstall;
+- real Collector enrollment through mTLS;
+- Collector credential continuity after SYSTEM scheduled-task restart;
+- Collector state `ENROLLED`, `CURRENT`, and `HEALTHY`;
+- server-observed mTLS verification;
+- 26 processed Collector batches with zero failed batches;
+- 180 real Windows Security events analyzed;
+- `/healthz` and `/readyz` HTTP 200.
+
+No live response mutation was performed during S12-B validation.
+No incident, MITRE, rule, correlation, or governed-ML finding was fabricated
+to manufacture release evidence.
+
+See `docs/S12_PRODUCT_E2E_VALIDATION.md`.
+
+---
 ## S16 Security Release Sign-off
 
 Security sign-off was completed against:

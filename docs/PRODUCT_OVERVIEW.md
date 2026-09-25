@@ -1,4 +1,4 @@
-﻿# AegisGuard Enterprise Product Overview
+# AegisGuard Enterprise Product Overview
 
 ## Introduction
 
@@ -57,6 +57,20 @@ Provides controlled response workflows with authorization and audit tracking.
 
 ---
 
+## Enterprise Windows Deployment
+
+The v0.1.0 Release Candidate supports a source-free Windows deployment model
+with packaged Analyzer UI, mTLS Analyzer, Collector, Recovery, and local
+UserAdmin executables.
+
+Installed binaries are separated from mutable runtime state:
+
+- binaries under `%ProgramFiles%\AegisGuard\`;
+- runtime data under `%ProgramData%\AegisGuard\`.
+
+Collector-to-Analyzer transport uses the existing authenticated Collector
+protocol with mTLS. Bootstrap enrollment secrets are not stored in packaged
+Collector configuration.
 # Target Users
 
 ## Security Analysts
