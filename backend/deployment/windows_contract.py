@@ -11,6 +11,9 @@ REQUIRED_DEPLOYMENT_FILES = (
     "backend/analyzer/ui_server.py",
     "backend/analyzer/AegisGuardAnalyzerMTLS.spec",
     "backend/collector/AegisGuardCollector.spec",
+    "backend/deployment/AegisGuardRecovery.spec",
+    "backend/deployment/recovery_cli.py",
+    "backend/deployment/enterprise_recovery.py",
     "backend/collector/config_loader.py",
     "backend/analyzer/mtls_server.py",
     "install_collector.ps1",
@@ -49,6 +52,7 @@ PACKAGING_SPEC_FILES = (
     "app.spec",
     "backend/analyzer/AegisGuardAnalyzerMTLS.spec",
     "backend/collector/AegisGuardCollector.spec",
+    "backend/deployment/AegisGuardRecovery.spec",
 )
 
 
