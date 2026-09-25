@@ -23,6 +23,14 @@ _CHECKSUM_LINE = re.compile(
     r"^([0-9A-Fa-f]{64})  (.+)$"
 )
 
+_SHA256 = re.compile(
+    r"^[0-9A-Fa-f]{64}$"
+)
+
+_GIT_SHA = re.compile(
+    r"^[0-9A-Fa-f]{40}$"
+)
+
 _REQUIRED_SECURITY_FLAGS = {
     "contains_runtime_database": False,
     "contains_private_keys": False,
@@ -47,6 +55,42 @@ def sha256_file(path: Path) -> str:
             digest.update(block)
 
     return digest.hexdigest().upper()
+
+
+def _normalize_sha256(
+    value: str | None,
+    *,
+    field_name: str,
+) -> str | None:
+    if value is None:
+        return None
+
+    normalized = str(value).strip().upper()
+
+    if not _SHA256.fullmatch(normalized):
+        raise BundleVerificationError(
+            f"{field_name} must be a 64-character SHA-256 value."
+        )
+
+    return normalized
+
+
+def _normalize_git_sha(
+    value: str | None,
+    *,
+    field_name: str,
+) -> str | None:
+    if value is None:
+        return None
+
+    normalized = str(value).strip().lower()
+
+    if not _GIT_SHA.fullmatch(normalized):
+        raise BundleVerificationError(
+            f"{field_name} must be a 40-character Git commit SHA."
+        )
+
+    return normalized
 
 
 def _safe_relative_path(value: str) -> str:
@@ -161,10 +205,7 @@ def _validate_manifest(
 
     if (
         not isinstance(source_commit, str)
-        or not re.fullmatch(
-            r"[0-9A-Fa-f]{40}",
-            source_commit,
-        )
+        or not _GIT_SHA.fullmatch(source_commit)
     ):
         raise BundleVerificationError(
             "Manifest source_commit must be a 40-character Git SHA."
@@ -369,10 +410,7 @@ def verify_bundle_directory(
 
         if (
             not isinstance(digest, str)
-            or not re.fullmatch(
-                r"[0-9A-Fa-f]{64}",
-                digest,
-            )
+            or not _SHA256.fullmatch(digest)
         ):
             raise BundleVerificationError(
                 f"Invalid manifest SHA-256: {relative}"
@@ -519,33 +557,77 @@ def verify_bundle(
     path: Path,
     *,
     allow_dirty_source: bool = False,
+    expected_archive_sha256: str | None = None,
+    expected_source_commit: str | None = None,
 ) -> dict[str, object]:
     path = Path(path)
 
+    archive_pin = _normalize_sha256(
+        expected_archive_sha256,
+        field_name="expected_archive_sha256",
+    )
+    commit_pin = _normalize_git_sha(
+        expected_source_commit,
+        field_name="expected_source_commit",
+    )
+
     if path.is_dir():
+        if archive_pin is not None:
+            raise BundleVerificationError(
+                "Archive SHA-256 pin requires ZIP archive verification."
+            )
+
         result = verify_bundle_directory(
             path,
             allow_dirty_source=allow_dirty_source,
         )
         result["archive_sha256"] = None
-        return result
 
-    archive_sha256 = sha256_file(path)
+    else:
+        archive_sha256 = sha256_file(path)
 
-    with _verified_zip_extraction(path) as root:
-        result = verify_bundle_directory(
-            root,
-            allow_dirty_source=allow_dirty_source,
+        if (
+            archive_pin is not None
+            and archive_sha256 != archive_pin
+        ):
+            raise BundleVerificationError(
+                "Archive SHA-256 does not match trusted release pin."
+            )
+
+        with _verified_zip_extraction(path) as root:
+            result = verify_bundle_directory(
+                root,
+                allow_dirty_source=allow_dirty_source,
+            )
+
+        result["archive_sha256"] = archive_sha256
+
+    source_commit = str(
+        result["source_commit"]
+    ).lower()
+
+    if (
+        commit_pin is not None
+        and source_commit != commit_pin
+    ):
+        raise BundleVerificationError(
+            "Manifest source commit does not match trusted release pin."
         )
 
-    result["archive_sha256"] = archive_sha256
+    result["archive_pin_verified"] = (
+        archive_pin is not None
+    )
+    result["source_commit_pin_verified"] = (
+        commit_pin is not None
+    )
+
     return result
 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Verify the integrity and manifest contract of an "
+            "Verify the integrity and trusted release pins of an "
             "AegisGuard Windows enterprise offline bundle."
         )
     )
@@ -568,6 +650,22 @@ def main(argv=None) -> int:
     )
 
     parser.add_argument(
+        "--expected-archive-sha256",
+        help=(
+            "Trusted out-of-band SHA-256 pin for the ZIP archive. "
+            "Requires ZIP archive input."
+        ),
+    )
+
+    parser.add_argument(
+        "--expected-source-commit",
+        help=(
+            "Trusted out-of-band 40-character Git commit SHA expected "
+            "in manifest.json."
+        ),
+    )
+
+    parser.add_argument(
         "--json",
         action="store_true",
         dest="json_output",
@@ -579,6 +677,8 @@ def main(argv=None) -> int:
         result = verify_bundle(
             Path(args.bundle),
             allow_dirty_source=args.allow_dirty_source,
+            expected_archive_sha256=args.expected_archive_sha256,
+            expected_source_commit=args.expected_source_commit,
         )
     except (
         OSError,
@@ -628,6 +728,15 @@ def main(argv=None) -> int:
                 "ARCHIVE_SHA256 = "
                 f"{result['archive_sha256']}"
             )
+
+        print(
+            "ARCHIVE_PIN_VERIFIED = "
+            f"{result['archive_pin_verified']}"
+        )
+        print(
+            "SOURCE_COMMIT_PIN_VERIFIED = "
+            f"{result['source_commit_pin_verified']}"
+        )
 
     return 0
 
