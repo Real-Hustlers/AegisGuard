@@ -1,16 +1,20 @@
-﻿# AegisGuard Enterprise Release Notes
+# AegisGuard Enterprise Release Notes
 
 ## Version
 
 v1.0.0
 
+## Release Type
+
+Production Candidate
+
 ## Overview
 
-AegisGuard Enterprise provides security monitoring, threat analysis, incident investigation, and governed response capabilities through an integrated security operations platform.
+AegisGuard Enterprise provides security monitoring, threat analysis, incident
+investigation, governed response, operational hardening, and controlled
+enterprise recovery through an integrated security operations platform.
 
 ---
-
-# New Features
 
 ## Detection Engine
 
@@ -18,13 +22,12 @@ AegisGuard Enterprise provides security monitoring, threat analysis, incident in
 - Threat identification workflow
 - Detection classification
 
-
 ## Machine Learning Analysis
 
-- ML-assisted security insights
+- Governed ML-assisted security insights
 - Feature extraction support
 - Threat prediction capabilities
-
+- Explicit available/degraded runtime behavior
 
 ## MITRE ATT&CK Integration
 
@@ -32,67 +35,115 @@ AegisGuard Enterprise provides security monitoring, threat analysis, incident in
 - Security context enrichment
 - Investigation assistance
 
-
 ## Incident Management
 
-- Incident workflow management
+- Persistent incident workflow
 - Evidence-based investigation
-- Security case tracking
+- Lifecycle tracking
+- RBAC-protected analyst/admin mutations
 
-
-## SOAR Governance
+## Response Governance
 
 - Approval-based response workflow
-- Controlled execution lifecycle
+- Separation of duties
+- Controlled simulation/dry-run
+- Rejection/retry/reconciliation
+- Governed rollback
 - Audit trail support
-
-
 
 ## Operational Hardening
 
-- Read-only asset and collector visibility
-- Server-derived collector liveness
+- Read-only asset and Collector visibility
+- Server-derived Collector liveness
 - Health and readiness endpoints
 - Runtime dependency preflight
 - Bounded administrator-only operational metrics and diagnostics
 - Final S9 operational-hardening closure validation
-- S9.3-S9.6 retained as supplemental validation foundations
-## Enterprise Deployment
 
-- Deployment architecture support
-- System requirement documentation
-- Administration guidance
+S9.3-S9.6 remain supplemental validation foundations.
 
+## Enterprise Security E2E Validation
 
-## Scalability
+S12-A adds deterministic end-to-end evidence across Collector authentication,
+durable ingestion, detection, governed ML, correlation, MITRE mapping,
+incident persistence, response governance, RBAC/privacy, attribution, restart
+recovery, and audit integrity.
 
-- Benchmark framework
-- Performance measurement
-- Processing capacity analysis
+## Backup / Restore / Disaster Recovery
 
+S14 adds:
 
-## SOC Product Interface
+- verified Analyzer-state backup;
+- sanitized Collector configuration;
+- safe Collector identity/checkpoint projection;
+- governed ML registry recovery;
+- SHA-256 manifest verification;
+- transactional restore;
+- interrupted-restore recovery;
+- post-restore integrity and governance checks;
+- source-free Windows `AegisGuardRecovery.exe` packaging contract.
 
-- Enterprise dashboard experience
-- Security operations views
-- Incident investigation workspace
+Portable recovery media excludes transient sessions, Collector credentials,
+queued Collector event payloads, TLS/private-key/certificate files, and
+customer-export artifacts.
+
+## Release Integrity and Lifecycle
+
+- source-free Windows enterprise bundle;
+- bundle manifest/checksum verification;
+- trusted archive/source-commit pinning;
+- transactional upgrade;
+- automatic failed-upgrade rollback;
+- governed operator rollback.
+
+Trusted pins do not constitute publisher-signature non-repudiation.
+
+## S16 Security Release Sign-off
+
+Security sign-off was completed against:
+
+```text
+6dda1d2fe7c06c89e2c4af371103e898371321cb
+```
+
+Validation evidence:
+
+```text
+tests:                 604 passed, 23 subtests passed
+Analyzer:               37 passed, 10 subtests passed
+Live Collector:          8 passed
+Root security/ops:        8 passed
+Repository hygiene:      PASS
+git diff --check:        PASS
+```
+
+See `docs/SECURITY_RELEASE_SIGNOFF.md`.
 
 ---
 
-# Documentation Added
+## Documentation
 
 - Installation Guide
 - Deployment Architecture
 - Administrator Guide
 - User Guide
 - System Requirements
-- Release Readiness Documentation
+- Backup / Recovery Guide
+- Disaster Recovery Procedure
+- Release Readiness
+- Security Release Sign-off
 
 ---
 
-# Known Limitations
+## Known Limitations
 
 - Additional third-party integrations may require future development.
-- Deployment capacity depends on infrastructure resources.
-- Environment-specific configurations may be required.
-- Supplemental S9.3-S9.6 validation foundations do not constitute full orchestration, disaster recovery, or remote remediation services.
+- Deployment capacity depends on infrastructure resources and event volume.
+- Environment-specific configuration may be required.
+- S14 does not implement remote replication, HSM/key escrow, or automatic
+  backup-storage encryption.
+- TLS/private-key material and Collector credentials are intentionally excluded
+  from portable backups and require governed re-provisioning.
+- S11 trusted pins do not provide publisher-signature non-repudiation.
+- Collector-local queued event bodies cannot be reconstructed from S14 backup
+  media if the Collector disk is lost before delivery.
