@@ -10,6 +10,29 @@ Build with:
 
     python -m PyInstaller app.spec
 
+Source-free user administration
+-------------------------------
+
+Build the existing local application-user provisioning CLI with:
+
+    python -m PyInstaller backend/deployment/AegisGuardUserAdmin.spec
+
+This produces:
+
+    dist\AegisGuardUserAdmin.exe
+
+The CLI reuses the existing AegisGuard user-authentication storage and
+validation implementation. It prompts for the password securely and does not
+accept the password as a command-line argument.
+
+For the default installed Analyzer data location, run from an elevated
+operator shell:
+
+    AegisGuardUserAdmin.exe <username> --role ADMINISTRATOR
+
+The Analyzer UI installer accepts -UserAdminExe to copy this source-free
+operator CLI alongside AegisGuardAnalyzer.exe under Program Files.
+
 Collector
 ---------
 

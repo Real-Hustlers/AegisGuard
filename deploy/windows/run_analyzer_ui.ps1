@@ -43,6 +43,12 @@ $env:AEGISGUARD_DATA_DIR = $DataDirectory
 $env:AEGISGUARD_UI_BIND_HOST = $BindHost
 $env:AEGISGUARD_UI_PORT = [string]$Port
 
+# This listener is intentionally HTTP and loopback-only.
+# Secure cookies are not returned over this HTTP deployment path.
+# Keep the application default secure for every other deployment;
+# only this local loopback runner opts out.
+$env:AEGISGUARD_SESSION_COOKIE_SECURE = "false"
+
 # The human UI listener is never an alternate Collector ingress path.
 # Collector endpoints loaded by the shared Flask application remain
 # fail-closed unless a verified mTLS client certificate is present.

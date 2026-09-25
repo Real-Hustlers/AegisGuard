@@ -2,6 +2,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$AnalyzerExe,
 
+    [string]$UserAdminExe = "",
+
     [string]$InstallDirectory = (
         Join-Path $env:ProgramFiles "AegisGuard\Analyzer"
     ),
@@ -54,6 +56,13 @@ $AnalyzerExe = (
     Resolve-Path -LiteralPath $AnalyzerExe
 ).Path
 
+$ResolvedUserAdminExe = $null
+if ($UserAdminExe) {
+    $ResolvedUserAdminExe = (
+        Resolve-Path -LiteralPath $UserAdminExe
+    ).Path
+}
+
 $InstallDirectory = (
     [System.IO.Path]::GetFullPath(
         $InstallDirectory
@@ -86,6 +95,18 @@ Copy-Item `
     -LiteralPath $AnalyzerExe `
     -Destination $InstalledExe `
     -Force
+
+$InstalledUserAdmin = $null
+if ($ResolvedUserAdminExe) {
+    $InstalledUserAdmin = Join-Path `
+        $InstallDirectory `
+        "AegisGuardUserAdmin.exe"
+
+    Copy-Item `
+        -LiteralPath $ResolvedUserAdminExe `
+        -Destination $InstalledUserAdmin `
+        -Force
+}
 
 $RunnerSource = Join-Path `
     $PSScriptRoot `
@@ -172,6 +193,9 @@ Start-ScheduledTask `
 Write-Host ""
 Write-Host "AegisGuard Analyzer UI installation completed."
 Write-Host "Executable: $InstalledExe"
+if ($InstalledUserAdmin) {
+    Write-Host "User administration: $InstalledUserAdmin"
+}
 Write-Host "Runtime data: $DataDirectory"
 Write-Host "Task: $TaskName"
 Write-Host "UI: http://$BindHost`:$Port"

@@ -12,8 +12,10 @@ REQUIRED_DEPLOYMENT_FILES = (
     "backend/analyzer/AegisGuardAnalyzerMTLS.spec",
     "backend/collector/AegisGuardCollector.spec",
     "backend/deployment/AegisGuardRecovery.spec",
+    "backend/deployment/AegisGuardUserAdmin.spec",
     "backend/deployment/recovery_cli.py",
     "backend/deployment/enterprise_recovery.py",
+    "backend/analyzer/user_admin.py",
     "backend/collector/config_loader.py",
     "backend/analyzer/mtls_server.py",
     "install_collector.ps1",
@@ -36,6 +38,7 @@ DEPLOYMENT_TEXT_FILES = (
     "backend/analyzer/ui_server.py",
     "backend/analyzer/AegisGuardAnalyzerMTLS.spec",
     "backend/collector/AegisGuardCollector.spec",
+    "backend/deployment/AegisGuardUserAdmin.spec",
     "install_collector.ps1",
     "deploy/windows/run_collector.ps1",
     "deploy/windows/configure_collector_mtls.ps1",
@@ -53,6 +56,7 @@ PACKAGING_SPEC_FILES = (
     "backend/analyzer/AegisGuardAnalyzerMTLS.spec",
     "backend/collector/AegisGuardCollector.spec",
     "backend/deployment/AegisGuardRecovery.spec",
+    "backend/deployment/AegisGuardUserAdmin.spec",
 )
 
 
@@ -102,6 +106,10 @@ def deployment_layout():
             "binary": (
                 r"%ProgramFiles%\AegisGuard\Analyzer"
                 r"\AegisGuardAnalyzer.exe"
+            ),
+            "user_admin_binary": (
+                r"%ProgramFiles%\AegisGuard\Analyzer"
+                r"\AegisGuardUserAdmin.exe"
             ),
             "data_directory": (
                 r"%ProgramData%\AegisGuard\Analyzer"
