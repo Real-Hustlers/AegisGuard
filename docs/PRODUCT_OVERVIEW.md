@@ -1,4 +1,4 @@
-# AegisGuard Enterprise Product Overview
+﻿# AegisGuard Enterprise Product Overview
 
 ## Introduction
 
@@ -47,6 +47,10 @@ Provides security analysts with incident context, evidence, and investigation in
 
 Maps security findings with MITRE ATT&CK techniques for better understanding.
 
+
+## Operational Reliability
+
+Provides read-only collector and asset visibility, server-derived liveness, health/readiness checks, and bounded administrator-only operational diagnostics.
 ## Response Governance
 
 Provides controlled response workflows with authorization and audit tracking.
