@@ -62,6 +62,10 @@ BUNDLE_PAYLOAD = (
         "deploy/windows/upgrade_enterprise.ps1",
     ),
     (
+        "deploy/windows/rollback_enterprise.ps1",
+        "deploy/windows/rollback_enterprise.ps1",
+    ),
+    (
         "BUILD-README.txt",
         "BUILD-README.txt",
     ),
