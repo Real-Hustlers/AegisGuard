@@ -144,38 +144,79 @@ Record the actual values below. Do not fill them from assumptions.
 
 | Evidence | Required result | Recorded result |
 |---|---|---|
-| Base integration SHA | Exact commit used to build | PENDING |
-| Bundle archive | Source-free Windows ZIP | PENDING |
-| Bundle SHA-256 | 64-hex digest | PENDING |
-| Manifest source commit | Matches trusted source commit | PENDING |
-| Bundle verifier | PASS | PENDING |
-| Program Files Analyzer path | Present | PENDING |
-| Program Files Collector path | Present | PENDING |
-| ProgramData Analyzer path | Present | PENDING |
-| ProgramData Collector path | Present | PENDING |
-| Analyzer startup | Starts from installed package | PENDING |
-| Collector startup | Starts from installed package | PENDING |
-| Python/source checkout required | No | PENDING |
-| `/healthz` | Healthy | PENDING |
-| `/readyz` | Ready when dependencies are healthy | PENDING |
-| UI load | Installed product UI loads | PENDING |
-| Initial administrator provisioning | Source-free CLI; password not on command line | PENDING |
-| Collector inventory | Real server-authoritative data renders | PENDING |
-| Intelligence snapshot | Real API response renders | PENDING |
-| Incident workspace | Real incident data renders | PENDING |
-| MITRE | Structured mapping visible when present | PENDING |
-| Governed ML | Runtime/model identity visible when available | PENDING |
-| Response governance | State understandable | PENDING |
-| SIMULATED vs EXECUTED | Unambiguous | PENDING |
-| Empty/error state | Does not fake telemetry success | PENDING |
-| Restart | Required state survives | PENDING |
-| Upgrade/reinstall | ProgramData state preserved as supported | PENDING |
-| Sensitive release scan | No forbidden material | PENDING |
-| Supported widths | Usable | PENDING |
+| Base integration SHA | Exact commit used to build | `5831b4fd2f3c95cde21cd1e6135e1e7687d17b86` |
+| Bundle archive | Source-free Windows ZIP | `AegisGuard-Windows-Enterprise.zip` |
+| Bundle SHA-256 | 64-hex digest | `70DCB7CB28024E8D985C9DD9828D597E95E53C942D8DAF8E4305485BC48B49BD` |
+| Manifest source commit | Matches trusted source commit | `428fb376b469a6525ed4a048818595232b6ede4e` |
+| Bundle verifier | PASS | `PASS`; archive pin and source-commit pin verified |
+| Program Files Analyzer path | Present | `C:\Program Files\AegisGuard\S12B\Analyzer`; present |
+| Program Files Collector path | Present | `C:\Program Files\AegisGuard\S12B\Collector`; present |
+| ProgramData Analyzer path | Present | `C:\ProgramData\AegisGuard\S12B\Analyzer`; present |
+| ProgramData Collector path | Present | `C:\ProgramData\AegisGuard\S12B\Collector`; present |
+| Analyzer startup | Starts from installed package | `PASS`; installed UI and mTLS tasks started |
+| Collector startup | Starts from installed package | `PASS`; installed scheduled task started |
+| Python/source checkout required | No | `No`; installed packaged binaries/scripts used |
+| `/healthz` | Healthy | `HTTP 200` |
+| `/readyz` | Ready when dependencies are healthy | `HTTP 200`; database and data-directory checks healthy |
+| UI load | Installed product UI loads | `HTTP 200` from installed loopback UI |
+| Initial administrator provisioning | Source-free CLI; password not on command line | `PASS`; packaged UserAdmin CLI with prompted password |
+| Collector inventory | Real server-authoritative data renders | `1`; ENROLLED, CURRENT, HEALTHY, mTLS verified |
+| Intelligence snapshot | Real API response renders | `180` real Windows Security events analyzed |
+| Incident workspace | Real incident data renders | `0 incidents`; authenticated real empty state |
+| MITRE | Structured mapping visible when present | `0 mappings`; honest empty state because no findings were produced |
+| Governed ML | Runtime/model identity visible when available | `UNAVAILABLE`; no promoted model installed |
+| Response governance | State understandable | `0 actions`; authenticated real empty state; no live mutation performed |
+| SIMULATED vs EXECUTED | Unambiguous | `PASS` via frontend contract; no live action manufactured |
+| Empty/error state | Does not fake telemetry success | `PASS`; empty product states remain explicit |
+| Restart | Required state survives | `PASS`; collector identity and protected credential survived scheduled-task restart |
+| Upgrade/reinstall | ProgramData state preserved as supported | `PASS`; ProgramData database and existing administrator survived reinstall |
+| Sensitive release scan | No forbidden material | `PASS`; source, databases, keys/certificates, logs, and runtime state excluded from bundle |
+| Supported widths | Usable | `PASS` via frontend regression; no screenshot claim |
+
+## Recorded installed-product evidence
+
+Windows installed-product validation was performed from the source-free
+bundle built from commit
+`428fb376b469a6525ed4a048818595232b6ede4e`, based on integration
+`5831b4fd2f3c95cde21cd1e6135e1e7687d17b86`.
+
+The verified archive SHA-256 was
+`70DCB7CB28024E8D985C9DD9828D597E95E53C942D8DAF8E4305485BC48B49BD`.
+The bundle verifier confirmed both the archive pin and source-commit pin.
+
+The packaged Analyzer UI, mTLS Analyzer, Collector, Recovery utility, and
+UserAdmin utility were exercised without requiring a Python runtime or source
+checkout at the installed-product boundary.
+
+The source-free administrator account survived reinstall through preserved
+ProgramData state. After reinstall, authenticated API access succeeded.
+
+A real Windows Collector enrolled through the mTLS boundary and remained
+ENROLLED, CURRENT, and HEALTHY. Server-observed mTLS verification succeeded.
+After the temporary one-time enrollment bootstrap was removed, the normal
+SYSTEM scheduled tasks restarted successfully and reused the protected
+collector credential.
+
+The live Collector checkpoint advanced from `4179545` to `4179824`.
+The Analyzer processed 26 collector batches with zero failed batches and the
+Intelligence API analyzed 180 real Windows Security events.
+
+The validation activity produced no incident, MITRE, rule, correlation, or
+governed-ML findings. These are recorded as real empty states rather than
+manufactured detections. Governed ML reported `UNAVAILABLE` because no
+promoted model was installed.
+
+No live response mutation was performed. Response-action state remained
+empty, while SIMULATED versus EXECUTED presentation semantics remain covered
+by the frontend regression contract.
+
+The installed `/healthz` and `/readyz` endpoints both returned HTTP 200.
+The UI, mTLS Analyzer, and Collector scheduled tasks were simultaneously
+RUNNING during the final product check.
 
 ## Evidence collection commands
 
-Run from a clean S12-B branch after building the four Windows executables
+Run from a clean S12-B branch after building the five Windows executables
 required by the current merged bundle contract.
 
 ```text
