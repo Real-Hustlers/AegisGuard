@@ -541,3 +541,4 @@ Developed as a Final Year Cybersecurity Project.
 # 📄 License
 
 This project is intended for **educational and research purposes**. Ensure all security testing and log collection are performed only on systems you own or are authorized to assess.
+> **A lightweight, portable cybersecurity platform that enables offline log collection, threat detection, event correlation, incident generation, and response simulation for air-gapped and restricted environments.**-ommurugan
